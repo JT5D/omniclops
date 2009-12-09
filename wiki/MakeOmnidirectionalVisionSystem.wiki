@@ -1,7 +1,7 @@
 #labels computervision,omnidirectionalvision
 = Introduction =
 
-Here's how you can make an omnidirectional vision system using a webcam and easily available materials.
+Here's how you can make an inexpensive omnidirectional vision system using a webcam and easily available materials.
 
 = Parts =
 
