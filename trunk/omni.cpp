@@ -668,34 +668,166 @@ void omni::calibrate(
     int img_height,
     int bytes_per_pixel,
     int inner_radius_percent,
-    int outer_radius_percent)
+    int outer_radius_percent,
+    std::string direction)
 {
-	const int no_of_radii = img_width;
-	int* response = new int[no_of_radii];
-
 	int max_radius = outer_radius_percent * img_width / 200;
 	int min_radius = inner_radius_percent * img_width / 200;
+	int* response = new int[max_radius];
+	int* edge = new int[30];
+	int no_of_edges = 0;
+	int mean = 0;
 
-	int x,y,dx,dy,r,dist,n=0,col;
+	int x,y,dx,dy,r,n,col,xx,yy;
 	int cx = img_width/2;
 	int cy = img_height/2;
-	for (y = 0; y < img_height; y++) {
-		dy = y - cy;
-		for (x = 0; x < img_width; x++,n+=bytes_per_pixel) {
-			dx = x - cx;
-			r = dx*dx + dy*dy;
+	int max = 1;
 
-			/* integer square root */
-			for (dist = 0; r >= (2* dist ) + 1; r -= (2 * dist++) + 1);
+	int end_x = cx;
+	int end_y = 0;
 
-			if ((dist > min_radius) && (dist < max_radius)) {
-                for (col = 0; col < bytes_per_pixel; col++) {
-                	response[dist] += img[n+col];
+	memset((void*)response, '\0', max_radius*sizeof(int));
+
+	if ((direction == "N") || (direction == "n")) {
+		end_x = cx;
+		end_y = 0;
+	}
+
+	if ((direction == "S") || (direction == "s")) {
+		end_x = cx;
+		end_y = img_height-1;
+	}
+
+	if ((direction == "E") || (direction == "e")) {
+		end_x = img_width-1;
+		end_y = cy;
+	}
+
+	if ((direction == "W") || (direction == "w")) {
+		end_x = 0;
+		end_y = cy;
+	}
+
+	if ((direction == "NE") || (direction == "ne")) {
+		end_x = img_width-1;
+		end_y = 0;
+	}
+
+	if ((direction == "NW") || (direction == "nw")) {
+		end_x = 0;
+		end_y = 0;
+	}
+
+	if ((direction == "SE") || (direction == "se")) {
+		end_x = img_width-1;
+		end_y = img_height-1;
+	}
+
+	if ((direction == "SW") || (direction == "sw")) {
+		end_x = 0;
+		end_y = img_height-1;
+	}
+
+	dx = end_x - cx;
+	dy = end_y - cy;
+
+	for (r = min_radius; r < max_radius; r++) {
+        x = cx + (r * dx / max_radius);
+        y = cy + (r * dy / max_radius);
+
+        if ((x > 0) && (x < img_width-1) &&
+        	(y > 0) && (y < img_height-1)) {
+			for (yy = y-1; yy <= y+1; yy++) {
+				for (xx = x-1; xx <= x+1; xx++) {
+					n = ((yy * img_width) + xx) * bytes_per_pixel;
+					for (col = 0; col < bytes_per_pixel; col++) {
+						response[r] += img[n+col];
+					}
+				}
+			}
+			if (response[r] > max) max = response[r];
+			mean += response[r];
+        }
+	}
+	mean /= (max_radius - min_radius);
+
+	drawing::drawLine(img, img_width,img_height,cx,cy,end_x,end_y,255,0,0,0,false);
+
+	int tx=0,ty,bx=img_width,by;
+
+	if (end_y > cy) {
+		ty = 0;
+		by = cy/2;
+	}
+	else {
+		ty = cy + (cy/2);
+		by = img_height;
+	}
+
+	max = max * 120/100;
+	int mean_y = by-1-(mean * (by-ty) / max);
+	int prev_yy = mean_y;
+	int prev_cross_x = 0;
+	int width,prev_width=9999;
+
+	for (x = tx; x < bx; x++) {
+		r = min_radius + ((x - tx) * (max_radius - min_radius) / (bx - tx));
+		yy = by-1-(response[r] * (by-ty) / max);
+		for (y = by-1; y >= ty; y--) {
+        	n = ((y * img_width) + x) * bytes_per_pixel;
+        	for (col = 0; col < 3; col++) {
+                if (y > yy) {
+            		img[n+col] = 255;
+            	}
+                else {
+                	img[n+col] = 0;
                 }
+            }
+		}
+		if (x > tx+20) {
+			if ((prev_yy <= mean_y) && (yy >= mean_y)) {
+				width = x - prev_cross_x;
+				if (width > 5) {
+                    if (no_of_edges < 30) {
+                        drawing::drawSpot(img, img_width, img_height,x,mean_y,2,255,0,0);
+                        edge[no_of_edges++] = r;
+                        prev_width = width;
+                    }
+
+				}
+				prev_cross_x = x;
+			}
+			if ((prev_yy >= mean_y) && (yy <= mean_y)) {
+				width = x - prev_cross_x;
+				if (width > 5) {
+                    if (no_of_edges < 30) {
+                        drawing::drawSpot(img, img_width, img_height,x,mean_y,2,255,0,0);
+                        edge[no_of_edges++] = r;
+                        prev_width = width;
+                    }
+
+				}
+				prev_cross_x = x;
 			}
 		}
+		prev_yy = yy;
 	}
+
+	drawing::drawLine(img, img_width,img_height,tx,mean_y,bx,mean_y,0,255,0,0,false);
+
+	if (no_of_edges > 1) {
+		prev_width = edge[1] - edge[0];
+	    for (r = 1; r < no_of_edges; r++) {
+		    width = edge[r] - edge[r-1];
+		    printf("diff = %d\n", width);
+		    prev_width = width;
+	    }
+	}
+
+	printf("\n\n");
+
 	delete[] response;
+	delete[] edge;
 }
 
 void omni::get_calibration_image(
@@ -703,20 +835,26 @@ void omni::get_calibration_image(
 	int img_width,
 	int img_height)
 {
-	int i,r;
-	int line_width = 2;
-    int initial_radius = img_width/20;
-    int radius_increment = 30;
-    int cx = img_width/2;
-    int cy = -img_height/5;
+	int x,y;
+	int squares_across = 10;
+	int squares_down = 7;
+	int state0,state1,n=0;
 
-    for (i = 0; i < img_width*img_height*3; i++) {
-    	img[i] = 255;
-    }
-
-    r = initial_radius;
-    while (r < img_width*2) {
-    	drawing::drawCircle(img, img_width,img_height,cx,cy,r,0,0,0,line_width);
-        r += radius_increment;
-    }
+	for (y = 0; y < img_height; y++) {
+		state0 = (y * squares_down / img_height) % 2;
+		for (x = 0; x < img_width; x++,n+=3) {
+			state1 = (x * squares_across / img_width) % 2;
+			if (state0 != 0) state1 = 1-state1;
+			if (state1 == 0) {
+				img[n] = 0;
+				img[n+1] = 0;
+				img[n+2] = 0;
+			}
+			else {
+				img[n] = 255;
+				img[n+1] = 255;
+				img[n+2] = 255;
+			}
+		}
+	}
 }

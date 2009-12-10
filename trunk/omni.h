@@ -28,8 +28,7 @@
 #include "polynomial.h"
 #include "linefit.h"
 
-#define OMNI_MAX_FEATURES         2000
-#define OMNI_MAX_MATCHES          2000
+#define OMNI_MAX_FEATURES         4000
 #define OMNI_MAX_IMAGE_WIDTH      1024
 #define OMNI_MAX_IMAGE_HEIGHT     1024
 #define OMNI_VERTICAL_SAMPLING    2
@@ -95,7 +94,8 @@ public:
         int img_height,
         int bytes_per_pixel,
         int inner_radius_percent,
-        int outer_radius_percent);
+        int outer_radius_percent,
+        std::string direction);
 
     omni(int width, int height);
     ~omni();

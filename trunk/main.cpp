@@ -43,8 +43,8 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-  int ww = 320;
-  int hh = 240;
+  int ww = 640;
+  int hh = 480;
   int skip_frames = 1;
   bool show_FAST = false;
   bool show_features = false;
@@ -156,9 +156,10 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
-  bool calibrate_offsets = false;
+  bool calibrate = false;
   if( opt->getFlag( "calibrate" ) ) {
 	  show_FAST = false;
+	  calibrate = true;
   }
 
   if( opt->getFlag( "features" ) ) {
@@ -305,18 +306,18 @@ int main(int argc, char* argv[]) {
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
-	no_of_feats = lcam->get_features_vertical(
-        l_,
-        inhibition_radius,
-        minimum_response,0,0, (int)outer_radius, (int)inner_radius);
-
-	no_of_feats_horizontal = lcam->get_features_horizontal(
-		l_,
-		inhibition_radius,
-		minimum_response,0,0, (int)outer_radius, (int)inner_radius);
-
 	/* display the features */
 	if (show_features) {
+
+		no_of_feats = lcam->get_features_vertical(
+			l_,
+			inhibition_radius,
+			minimum_response,0,0, (int)outer_radius, (int)inner_radius);
+
+		no_of_feats_horizontal = lcam->get_features_horizontal(
+			l_,
+			inhibition_radius,
+			minimum_response,0,0, (int)outer_radius, (int)inner_radius);
 
 		/* vertically oriented features */
 		int row = 0;
@@ -357,8 +358,14 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (calibration_image_filename != "") {
-		lcam->get_calibration_image(l_, ww, hh);
-		cvSaveImage(calibration_image_filename.c_str(), l);
+		const int calibration_image_width = 640*2;
+		const int calibration_image_height = 480*2;
+	    IplImage *calib = cvCreateImage(cvSize(calibration_image_width, calibration_image_height), 8, 3);
+		unsigned char *calib_=(unsigned char *)calib->imageData;
+
+		lcam->get_calibration_image(calib_, calibration_image_width, calibration_image_height);
+		cvSaveImage(calibration_image_filename.c_str(), calib);
+	    cvReleaseImage(&calib);
 		printf("Camera calibration image saved to %s\n", calibration_image_filename.c_str());
 		break;
 	}
@@ -381,6 +388,10 @@ int main(int argc, char* argv[]) {
 		/* locate corner features in the image */
 		corners->update(l_,ww,hh, desired_corner_features,1);
 		corners->show(l_,ww,hh,1);
+	}
+
+	if (calibrate) {
+		lcam->calibrate(l_, ww, hh, 3, (int)inner_radius, (int)outer_radius, "E");
 	}
 
     /*
