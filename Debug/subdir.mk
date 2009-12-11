@@ -12,7 +12,8 @@ CPP_SRCS += \
 ../main.cpp \
 ../motionmodel.cpp \
 ../omni.cpp \
-../polynomial.cpp 
+../polynomial.cpp \
+../unwarp.cpp 
 
 OBJS += \
 ./anyoption.o \
@@ -23,7 +24,8 @@ OBJS += \
 ./main.o \
 ./motionmodel.o \
 ./omni.o \
-./polynomial.o 
+./polynomial.o \
+./unwarp.o 
 
 CPP_DEPS += \
 ./anyoption.d \
@@ -34,7 +36,8 @@ CPP_DEPS += \
 ./main.d \
 ./motionmodel.d \
 ./omni.d \
-./polynomial.d 
+./polynomial.d \
+./unwarp.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
