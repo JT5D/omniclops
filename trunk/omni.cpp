@@ -29,6 +29,7 @@ omni::omni(int width, int height) {
 	feature_y = new short int[OMNI_MAX_FEATURES];
 
 	calibration_map = NULL;
+	calibration_map2 = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -42,6 +43,9 @@ omni::omni(int width, int height) {
 	/* buffer used to find peaks in edge space */
 	row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
 	temp_row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
+
+	epipole=0;
+	img_buffer = NULL;
 }
 
 omni::~omni() {
@@ -49,8 +53,12 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
-	if (calibration_map != NULL)
+	if (calibration_map != NULL) {
 		delete[] calibration_map;
+		delete[] calibration_map2;
+	}
+	if (img_buffer != NULL)
+		delete[] img_buffer;
 }
 
 /* Updates sliding sums and edge response values along a single row or column
@@ -213,26 +221,33 @@ int inner_radius_percent)
 					dx = x - cx + calibration_offset_x;
 					r = dx*dx + dy*dy;
 					if ((r < max_radius) && (r > min_radius)) {
-						mid_x = prev_x + ((x - prev_x)/2);
 
-						feature_x[no_of_features] = (short int) (x + calibration_offset_x)*OMNI_SUB_PIXEL;
+						int n = ((y * imgWidth) + x - 2)*3;
+						int n2 = ((y * imgWidth) + x + 2)*3;
+						if ((!((rectified_frame_buf[n]==0) && (rectified_frame_buf[n+1]==0) && (rectified_frame_buf[n+2]==0))) &&
+							(!((rectified_frame_buf[n2]==0) && (rectified_frame_buf[n2+1]==0) && (rectified_frame_buf[n2+2]==0)))) {
 
-						/* parabolic sub-pixel interpolation */
-						int denom = 2 * ((int)temp_row_peaks[x-1] - (2*(int)temp_row_peaks[x]) + (int)temp_row_peaks[x+1]);
-						if (denom != 0) {
-							int num = (int)temp_row_peaks[x-1] - (int)temp_row_peaks[x+1];
-							feature_x[no_of_features] += (num*OMNI_SUB_PIXEL)/denom;
+							mid_x = prev_x + ((x - prev_x)/2);
+
+							feature_x[no_of_features] = (short int) (x + calibration_offset_x)*OMNI_SUB_PIXEL;
+
+							/* parabolic sub-pixel interpolation */
+							int denom = 2 * ((int)temp_row_peaks[x-1] - (2*(int)temp_row_peaks[x]) + (int)temp_row_peaks[x+1]);
+							if (denom != 0) {
+								int num = (int)temp_row_peaks[x-1] - (int)temp_row_peaks[x+1];
+								feature_x[no_of_features] += (num*OMNI_SUB_PIXEL)/denom;
+							}
+
+							no_of_features++;
+
+							no_of_feats++;
+							if (no_of_features == OMNI_MAX_FEATURES) {
+								y = imgHeight;
+								printf("feature buffer full\n");
+								break;
+							}
+							prev_x = x;
 						}
-
-						no_of_features++;
-
-						no_of_feats++;
-						if (no_of_features == OMNI_MAX_FEATURES) {
-							y = imgHeight;
-							printf("feature buffer full\n");
-							break;
-						}
-						prev_x = x;
 					}
 				}
 			}
@@ -305,21 +320,28 @@ int inner_radius_percent)
 					dy = y - cy;
 					r = dx*dx + dy*dy;
 					if ((r < max_radius) && (r > min_radius)) {
-						feature_y[no_of_features] = (short int) (y + calibration_offset_y)*OMNI_SUB_PIXEL;
 
-						/* parabolic sub-pixel interpolation */
-						int denom = 2 * ((int)temp_row_peaks[y-1] - (2*(int)temp_row_peaks[y]) + (int)temp_row_peaks[y+1]);
-						if (denom != 0) {
-							int num = (int)temp_row_peaks[y-1] - (int)temp_row_peaks[y+1];
-							feature_y[no_of_features] += (num*OMNI_SUB_PIXEL)/denom;
-						}
-						no_of_features++;
+						int n = ((y * imgWidth) + x - 2)*3;
+						int n2 = ((y * imgWidth) + x + 2)*3;
+						if ((!((rectified_frame_buf[n]==0) && (rectified_frame_buf[n+1]==0) && (rectified_frame_buf[n+2]==0))) &&
+							(!((rectified_frame_buf[n2]==0) && (rectified_frame_buf[n2+1]==0) && (rectified_frame_buf[n2+2]==0)))) {
 
-						no_of_feats++;
-						if (no_of_features == OMNI_MAX_FEATURES) {
-							x = imgWidth;
-							printf("feature buffer full\n");
-							break;
+							feature_y[no_of_features] = (short int) (y + calibration_offset_y)*OMNI_SUB_PIXEL;
+
+							/* parabolic sub-pixel interpolation */
+							int denom = 2 * ((int)temp_row_peaks[y-1] - (2*(int)temp_row_peaks[y]) + (int)temp_row_peaks[y+1]);
+							if (denom != 0) {
+								int num = (int)temp_row_peaks[y-1] - (int)temp_row_peaks[y+1];
+								feature_y[no_of_features] += (num*OMNI_SUB_PIXEL)/denom;
+							}
+							no_of_features++;
+
+							no_of_feats++;
+							if (no_of_features == OMNI_MAX_FEATURES) {
+								x = imgWidth;
+								printf("feature buffer full\n");
+								break;
+							}
 						}
 					}
 				}
@@ -784,7 +806,7 @@ void omni::calibrate(
                 }
             }
 		}
-		if (x > tx+20) {
+		if ((x > tx+20) && (x < img_width*8/10)) {
 			if ((prev_yy <= mean_y) && (yy >= mean_y)) {
 				width = x - prev_cross_x;
 				if (width > 5) {
@@ -815,16 +837,104 @@ void omni::calibrate(
 
 	drawing::drawLine(img, img_width,img_height,tx,mean_y,bx,mean_y,0,255,0,0,false);
 
+	int threshold = 2000;
 	if (no_of_edges > 1) {
 		prev_width = edge[1] - edge[0];
+		int dx2 = dx/8;
+		int dy2 = dy/8;
+		int i,x2,y2,v;
 	    for (r = 1; r < no_of_edges; r++) {
+	    	int r2 = edge[r-1] + ((edge[r] - edge[r-1])/2);
+	    	int max_i = max_radius/4;
+	    	int centre_v = 0;
+	    	for (i = 0; i < max_i; i++) {
+	    		x2 = cx + (r2 * dx / max_radius) + (i * dy2 / max_i);
+	    		y2 = cy + (r2 * dy / max_radius) + (i * dx2 / max_i);
+	    		v = 0;
+	    		for (yy = y2-1; yy <= y2+1; yy++) {
+	    			if ((yy > -1) && (yy < img_height)) {
+						for (xx = x2-1; xx <= x2+1; xx++) {
+							if ((xx > -1) && (xx < img_width)) {
+								n = ((yy * img_width) + xx)*bytes_per_pixel;
+								for (col = 0; col < bytes_per_pixel; col++) {
+									v += img[n+col];
+								}
+							}
+						}
+	    			}
+	    		}
+	    		if (i == 0) {
+	    			centre_v = v;
+	    		}
+	    		else {
+	    			if (abs(centre_v-v) > threshold) {
+	    			    drawing::drawSpot(img, img_width, img_height,x2,y2,2,255,255,0);
+	    			    break;
+	    			}
+	    		}
+	    	}
+
+	    	for (i = 0; i < max_i; i++) {
+	    		x2 = cx + (r2 * dx / max_radius) - (i * dy2 / max_i);
+	    		y2 = cy + (r2 * dy / max_radius) - (i * dx2 / max_i);
+	    		v = 0;
+	    		for (yy = y2-1; yy <= y2+1; yy++) {
+	    			if ((yy > -1) && (yy < img_height)) {
+						for (xx = x2-1; xx <= x2+1; xx++) {
+							if ((xx > -1) && (xx < img_width)) {
+								n = ((yy * img_width) + xx)*bytes_per_pixel;
+								for (col = 0; col < bytes_per_pixel; col++) {
+									v += img[n+col];
+								}
+							}
+						}
+	    			}
+	    		}
+	    		if (i == 0) {
+	    			centre_v = v;
+	    		}
+	    		else {
+	    			if (abs(centre_v-v) > threshold) {
+	    			    drawing::drawSpot(img, img_width, img_height,x2,y2,2,255,255,0);
+	    			    break;
+	    			}
+	    		}
+	    	}
+
+	    }
+
+		int epipole_r = 0;
+		int epipole_r_hits = 0;
+		prev_width = edge[1] - edge[0];
+	    for (r = 2; r < no_of_edges; r++) {
 		    width = edge[r] - edge[r-1];
-		    printf("diff = %d\n", width);
+
+		    if (prev_width > width) {
+		    	int w = width;
+		    	int r2 = edge[r];
+		    	while (w > 0) {
+		    	    r2 += w;
+		    	    w -= (prev_width-width);
+		    	}
+		    	epipole_r += r2;
+		    	epipole_r_hits++;
+		    }
 		    prev_width = width;
 	    }
-	}
+	    if (epipole_r_hits > 0) {
+	    	epipole_r /= epipole_r_hits;
+	    	//if (epipole > 0)
+	    		//epipole = ((epipole*90) + (epipole_r*10))/100;
+	    	//else
+	    		//epipole = epipole_r;
+	    	x = tx + (epipole * (bx-tx) / max_radius);
+		    drawing::drawSpot(img, img_width, img_height,x,mean_y,2,255,255,0);
 
-	printf("\n\n");
+	        x = cx + (epipole * dx / max_radius);
+	        y = cy + (epipole * dy / max_radius);
+		    drawing::drawCircle(img, img_width, img_height,x,y,3,255,0,0,0);
+	    }
+	}
 
 	delete[] response;
 	delete[] edge;
@@ -857,4 +967,255 @@ void omni::get_calibration_image(
 			}
 		}
 	}
+}
+
+
+/*!
+ * \brief does the line intersect with the given line?
+ * \param x0 first line top x
+ * \param y0 first line top y
+ * \param x1 first line bottom x
+ * \param y1 first line bottom y
+ * \param x2 second line top x
+ * \param y2 second line top y
+ * \param x3 second line bottom x
+ * \param y3 second line bottom y
+ * \param xi intersection x coordinate
+ * \param yi intersection y coordinate
+ * \return true if the lines intersect
+ */
+bool omni::intersection(
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float x2,
+    float y2,
+    float x3,
+    float y3,
+    float& xi,
+    float& yi)
+{
+    float a1, b1, c1,         //constants of linear equations
+          a2, b2, c2,
+          det_inv,            //the inverse of the determinant of the coefficient
+          m1, m2, dm;         //the gradients of each line
+    bool insideLine = false;  //is the intersection along the lines given, or outside them
+    float tx, ty, bx, by;
+
+    //compute gradients, note the cludge for infinity, however, this will
+    //be close enough
+    if ((x1 - x0) != 0)
+        m1 = (y1 - y0) / (x1 - x0);
+    else
+        m1 = (float)1e+10;   //close, but no cigar
+
+    if ((x3 - x2) != 0)
+        m2 = (y3 - y2) / (x3 - x2);
+    else
+        m2 = (float)1e+10;   //close, but no cigar
+
+    dm = (float)ABS(m1 - m2);
+    if (dm > 0.000001f)
+    {
+        //compute constants
+        a1 = m1;
+        a2 = m2;
+
+        b1 = -1;
+        b2 = -1;
+
+        c1 = (y0 - m1 * x0);
+        c2 = (y2 - m2 * x2);
+
+        //compute the inverse of the determinate
+        det_inv = 1 / (a1 * b2 - a2 * b1);
+
+        //use Kramers rule to compute xi and yi
+        xi = ((b1 * c2 - b2 * c1) * det_inv);
+        yi = ((a2 * c1 - a1 * c2) * det_inv);
+
+        //is the intersection inside the line or outside it?
+        if (x0 < x1) { tx = x0; bx = x1; } else { tx = x1; bx = x0; }
+        if (y0 < y1) { ty = y0; by = y1; } else { ty = y1; by = y0; }
+        if ((xi >= tx) && (xi <= bx) && (yi >= ty) && (yi <= by))
+        {
+            if (x2 < x3) { tx = x2; bx = x3; } else { tx = x3; bx = x2; }
+            if (y2 < y3) { ty = y2; by = y3; } else { ty = y3; by = y2; }
+            if ((xi >= tx) && (xi <= bx) && (yi >= ty) && (yi <= by))
+            {
+                insideLine = true;
+            }
+        }
+    }
+    else
+    {
+        //parallel (or parallelish) lines, return some indicative value
+        xi = 9999;
+    }
+
+    return (insideLine);
+}
+
+
+void omni::create_calibration_map(
+	float mirror_diameter,
+	float dist_to_mirror,
+	float focal_length,
+	float outer_radius_percent,
+    int img_width,
+    int img_height)
+{
+	if (calibration_map == NULL) {
+		calibration_map = new int[img_width*img_height];
+		calibration_map2 = new int[img_width*img_height];
+	}
+
+	float half_pi = 3.1415927f/2;
+	float dist_to_mirror_centre = focal_length + dist_to_mirror + (mirror_diameter * 0.5f);
+	float ang_incr = 3.1415927f / (180*100);
+	float outer_radius_pixels = outer_radius_percent * img_width / 200;
+    float sphere_x = (float)fabs(mirror_diameter*0.5f*sin(half_pi*50/100));
+    float sphere_y = dist_to_mirror_centre - (float)(mirror_diameter*0.5f*cos(half_pi*50/100));
+    float max_viewing_angle = (float)atan(sphere_x / sphere_y);
+    float pixel_x = 0;
+    epipole = 0;
+    int max_index = (int)(half_pi / ang_incr);
+    float* lookup_pixel_x = new float[max_index];
+    float* lookup_angle = new float[max_index];
+    memset((void*)lookup_pixel_x,'\0',max_index*sizeof(float));
+    memset((void*)lookup_angle,'\0',max_index*sizeof(float));
+    float angle=0;
+    float max_angle=0;
+    float min_angle=99999;
+    int i = 0;
+	for (float ang = ang_incr; ang < half_pi*50/100; ang += ang_incr, i++) {
+        sphere_x = (float)fabs(mirror_diameter*0.5f*sin(ang));
+        sphere_y = dist_to_mirror_centre - (float)fabs(mirror_diameter*0.5f*cos(ang));
+        float viewing_angle = (float)atan(sphere_x / sphere_y);
+        pixel_x = viewing_angle * outer_radius_pixels / max_viewing_angle;
+        float ang2 = viewing_angle + (ang*2);
+        if (ang2 >= 3.1415927f/2) {
+        	if (epipole == 0) {
+        		epipole = (int)pixel_x;
+        	}
+        	//break;
+        }
+
+        //float ix=0,iy=0;
+        //intersection(0,dist_to_mirror_centre - (mirror_diameter*0.5f), (mirror_diameter*0.5f), dist_to_mirror_centre, sphere_x,sphere_y,sphere_x+(float)tan(ang2),sphere_y-1,ix,iy);
+        //float dx = ix;
+        //float dy = iy - (dist_to_mirror_centre - (mirror_diameter*0.5f));
+        //float d1 = (float)sqrt(dx*dx+dy*dy);
+
+        //float d1 = dist_to_mirror_centre - (mirror_diameter*0.5f) + (sphere_x / (float)tan(ang2));
+        //if (d1 > max_angle) max_angle = d1;
+        //if (d1 < min_angle) min_angle = d1;
+
+        //float d = sphere_x + (sphere_y * (float)tan(ang2));
+        //printf("d1 = %f\n", d1);
+        //printf("%f,%f,\n", pixel_x, ang2/3.1415927f*180);
+        lookup_pixel_x[i] = pixel_x;
+        angle = ang2/3.1415927f*180;
+        lookup_angle[i] = angle;
+        if (angle < min_angle) min_angle = angle;
+	}
+	max_angle = angle;
+
+	/*
+	max_angle = 0;
+	min_angle = 99999;
+	for (int j = 0; j < i; j++) {
+		lookup_angle[j] *= (float)cos((i-j) * (3.1415927f/3) / i);
+		if (lookup_angle[j] > max_angle) max_angle = lookup_angle[j];
+		if (lookup_angle[j] < min_angle) min_angle = lookup_angle[j];
+	}
+	*/
+
+	int prev_rectified = 0;
+	float prev_x = 0;
+	float *calibration_radius = new float[img_width*2];
+	memset((void*)calibration_radius,'\0', img_width*sizeof(float));
+    for (int j = 0; j < i; j++) {
+    	if (lookup_angle[j] > 0) {
+			//int rectified = outer_radius_pixels-(int)((lookup_angle[j]-min_angle) * outer_radius_pixels / (max_angle-min_angle));
+			int rectified = (int)((lookup_angle[j]-min_angle) * outer_radius_pixels / (max_angle-min_angle));
+			//printf("rect = %d\n",rectified);
+			if ((rectified > prev_rectified) &&
+				(lookup_pixel_x[j] > 0)) {
+				for (int k = prev_rectified; k <= rectified; k++) {
+				   calibration_radius[k] = (prev_x + (((k-prev_rectified) * (lookup_pixel_x[j] - prev_x)) / (float)(rectified-prev_rectified)));
+				}
+				prev_rectified = rectified;
+				prev_x = lookup_pixel_x[j];
+			}
+    	}
+    }
+    memset((void*)calibration_map,'\0', img_width*img_height*sizeof(int));
+    memset((void*)calibration_map2,'\0', img_width*img_height*sizeof(int));
+    int cx = img_width/2;
+    int cy = img_height/2;
+    for (int y = 0; y < img_height; y++) {
+    	int dy = y - cy;
+        for (int x = 0; x < img_width; x++) {
+        	int dx = x - cx;
+            int n = (y * img_width) + x;
+            int r = (int)sqrt(dx*dx + dy*dy);
+            if (r > 0) {
+            	if (calibration_radius[r] > 0) {
+					int x2 = cx + (int)(calibration_radius[r] * dx / r);
+					int y2 = cy + (int)(calibration_radius[r] * dy / r);
+					if ((x2 > -1) && (x2 < img_width) &&
+						(y2 > -1) && (y2 < img_height)) {
+						int n2 = (y2 * img_width) + x2;
+						calibration_map[n] = n2;
+
+						float angle = (float)acos(dy/(float)r);
+						if (dx < 0) angle = (3.1415927f*2) - angle;
+						int x3 = (int)(angle / (3.1415927f*2) * (img_width-1));
+						int n3 = ((img_height-1-r) * img_width) + x3;
+						if ((n3 > 0) && (n3 < img_width*img_height)) {
+							calibration_map2[n3] = n2;
+						}
+					}
+            	}
+            }
+        }
+    }
+
+    delete[] calibration_radius;
+    delete[] lookup_pixel_x;
+    delete[] lookup_angle;
+}
+
+void omni::rectify(
+	int img_width,
+	int img_height,
+	int bytes_per_pixel,
+	unsigned char* img_raw,
+	unsigned char* img_rectified)
+{
+	int col,n2,n = 0;
+	for (int i = 0; i < img_width * img_height*bytes_per_pixel; i+= bytes_per_pixel, n++) {
+        if (calibration_map[n] > 0) {
+        	n2 = calibration_map[n] * bytes_per_pixel;
+        	for (col = 0; col < 3; col++) {
+        	    img_rectified[i+col] = img_raw[n2+col];
+        	}
+        }
+	}
+}
+
+void omni::rectify(
+	int img_width,
+	int img_height,
+	int bytes_per_pixel,
+	unsigned char* img)
+{
+	if (img_buffer == NULL) {
+		img_buffer = new unsigned char[img_width*img_height*bytes_per_pixel];
+	}
+
+	rectify(img_width, img_height, bytes_per_pixel, img, img_buffer);
+	memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 }

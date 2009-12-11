@@ -34,6 +34,7 @@
 #include "anyoption.h"
 #include "drawing.h"
 #include "omni.h"
+#include "unwarp.h"
 //#include "motionmodel.h"
 #include "fast.h"
 #include "libcam.h"
@@ -48,6 +49,7 @@ int main(int argc, char* argv[]) {
   int skip_frames = 1;
   bool show_FAST = false;
   bool show_features = false;
+  float outer_radius = 115;
   int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
@@ -78,6 +80,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
   opt->addUsage( "     --flip                 Flip the image");
+  opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
   opt->addUsage( "     --help                 Show help");
@@ -97,6 +100,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "fov" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
+  opt->setFlag(  "unwarp" );
   opt->setFlag(  "calibrate" );
   opt->setFlag(  "version", 'V' );
   opt->setFlag(  "stream"  );
@@ -136,6 +140,12 @@ int main(int argc, char* argv[]) {
 	  flip_image = true;
   }
 
+  bool unwarp_image = false;
+  if( opt->getFlag( "unwarp" ) )
+  {
+	  unwarp_image = true;
+  }
+
   bool save_image = false;
   std::string save_filename = "";
   if( opt->getValue( "save" ) != NULL  ) {
@@ -167,7 +177,6 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
   }
 
-  float outer_radius = 100;
   if( opt->getValue( "radius" ) != NULL  ) {
 	  outer_radius = atoi(opt->getValue("radius"));
   }
@@ -222,6 +231,7 @@ int main(int argc, char* argv[]) {
   Camera c(dev.c_str(), ww, hh, fps);
 
   std::string image_title = "Image";
+  if (unwarp_image) image_title = "Unwarped";
   if (show_FAST) image_title = "FAST corners";
   if (show_features) image_title = "Image features";
 
@@ -237,7 +247,9 @@ int main(int argc, char* argv[]) {
   }
 
   IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
+  IplImage *unwarped=cvCreateImage(cvSize(ww, hh), 8, 3);
   unsigned char *l_=(unsigned char *)l->imageData;
+  unsigned char *unwarped_=(unsigned char *)unwarped->imageData;
 
   /* feature detection params */
   int inhibition_radius = 6;
@@ -291,6 +303,16 @@ int main(int argc, char* argv[]) {
 	}
   }
 
+  float mirror_diameter = 60;
+  float dist_to_mirror = 50;
+  float focal_length = 3.6f;
+  lcam->create_calibration_map(
+      	mirror_diameter,
+      	dist_to_mirror,
+      	focal_length,
+      	outer_radius,
+        ww, hh);
+
   while(1){
 
     while(c.Get()==0) usleep(100);
@@ -303,21 +325,43 @@ int main(int argc, char* argv[]) {
 
     lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
+    if (unwarp_image) {
+        unwarp::update(
+			ww/2, hh/2,
+			(int)(inner_radius*ww/200),
+			(int)(outer_radius*ww/200),
+			false,
+			false,
+			false,
+			0.28,
+			1.5,
+			l,
+			unwarped);
+		memcpy((void*)l_,(void*)unwarped_,ww*hh*3);
+    }
+
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
 	/* display the features */
 	if (show_features) {
 
+		int inner = (int)inner_radius;
+		int outer = (int)outer_radius;
+		if (unwarp_image) {
+			inner = 0;
+			outer = 9999;
+		}
+
 		no_of_feats = lcam->get_features_vertical(
 			l_,
 			inhibition_radius,
-			minimum_response,0,0, (int)outer_radius, (int)inner_radius);
+			minimum_response,0,0, outer, inner);
 
 		no_of_feats_horizontal = lcam->get_features_horizontal(
 			l_,
 			inhibition_radius,
-			minimum_response,0,0, (int)outer_radius, (int)inner_radius);
+			minimum_response,0,0, outer, inner);
 
 		/* vertically oriented features */
 		int row = 0;
@@ -424,6 +468,7 @@ int main(int argc, char* argv[]) {
 	  cvDestroyWindow(image_title.c_str());
   }
   cvReleaseImage(&l);
+  cvReleaseImage(&unwarped);
 
   delete lcam;
   //delete motion;

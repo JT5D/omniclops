@@ -62,9 +62,23 @@ public:
 
     /* maps raw image pixels to rectified pixels */
     int* calibration_map;
+    int* calibration_map2;
 
     unsigned int av_peaks;
 
+    int epipole;
+
+    bool intersection(
+        float x0,
+        float y0,
+        float x1,
+        float y1,
+        float x2,
+        float y2,
+        float x3,
+        float y3,
+        float& xi,
+        float& yi);
     int update_sums(int cols, int y, unsigned char* rectified_frame_buf);
     void non_max(int cols, int inhibition_radius, unsigned int min_response);
     int get_features_horizontal(unsigned char* rectified_frame_buf, int inhibition_radius, unsigned int minimum_response, int calibration_offset_x, int calibration_offset_y, int outer_radius_percent, int inner_radius_percent);
@@ -96,6 +110,26 @@ public:
         int inner_radius_percent,
         int outer_radius_percent,
         std::string direction);
+
+    unsigned char* img_buffer;
+    void create_calibration_map(
+    	float mirror_diameter,
+    	float dist_to_mirror,
+    	float focal_length,
+    	float outer_radius_percent,
+        int img_width,
+        int img_height);
+    void rectify(
+    	int img_width,
+    	int img_height,
+    	int bytes_per_pixel,
+    	unsigned char* img_raw,
+    	unsigned char* img_rectified);
+    void rectify(
+    	int img_width,
+    	int img_height,
+    	int bytes_per_pixel,
+    	unsigned char* img);
 
     omni(int width, int height);
     ~omni();
