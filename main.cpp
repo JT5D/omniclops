@@ -69,7 +69,6 @@ int main(int argc, char* argv[]) {
   opt->addUsage( " -h  --height               Image height in pixels");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
   opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
-  opt->addUsage( "     --calibrate            Calibrate offsets");
   opt->addUsage( "     --features             Show stereo features");
   opt->addUsage( "     --fast                 Show FAST corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
@@ -79,6 +78,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( " -V  --version              Show version number");
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
+  opt->addUsage( "     --saveedges            Save edges to file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --stream               Stream output using gstreamer");
@@ -92,6 +92,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "descriptors" );
   opt->setOption(  "save" );
   opt->setOption(  "savecalib" );
+  opt->setOption(  "saveedges" );
   opt->setOption(  "fps", 'f' );
   opt->setOption(  "dev" );
   opt->setOption(  "width", 'w' );
@@ -101,7 +102,6 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
-  opt->setFlag(  "calibrate" );
   opt->setFlag(  "version", 'V' );
   opt->setFlag(  "stream"  );
   opt->setFlag(  "headless"  );
@@ -160,16 +160,16 @@ int main(int argc, char* argv[]) {
   	  if (calibration_image_filename == "") calibration_image_filename = "calibration.jpg";
   }
 
+  std::string edges_filename = "";
+  if( opt->getValue( "saveedges" ) != NULL  ) {
+	  edges_filename = opt->getValue("saveedges");
+  	  if (edges_filename == "") edges_filename = "edges.dat";
+  }
+
   if( opt->getFlag( "help" ) ) {
       opt->printUsage();
       delete opt;
       return(0);
-  }
-
-  bool calibrate = false;
-  if( opt->getFlag( "calibrate" ) ) {
-	  show_FAST = false;
-	  calibrate = true;
   }
 
   if( opt->getFlag( "features" ) ) {
@@ -303,6 +303,7 @@ int main(int argc, char* argv[]) {
 	}
   }
 
+  /*
   float mirror_diameter = 60;
   float dist_to_mirror = 50;
   float focal_length = 3.6f;
@@ -312,6 +313,7 @@ int main(int argc, char* argv[]) {
       	focal_length,
       	outer_radius,
         ww, hh);
+  */
 
   while(1){
 
@@ -326,6 +328,8 @@ int main(int argc, char* argv[]) {
     lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
     if (unwarp_image) {
+    	//lcam->rectify(ww,hh,3,l_);
+
         unwarp::update(
 			ww/2, hh/2,
 			(int)(inner_radius*ww/200),
@@ -338,13 +342,14 @@ int main(int argc, char* argv[]) {
 			l,
 			unwarped);
 		memcpy((void*)l_,(void*)unwarped_,ww*hh*3);
+
     }
 
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
 	/* display the features */
-	if (show_features) {
+	if ((show_features) || (edges_filename != "")) {
 
 		int inner = (int)inner_radius;
 		int outer = (int)outer_radius;
@@ -415,6 +420,11 @@ int main(int argc, char* argv[]) {
 	}
 
 
+	if (edges_filename != "") {
+		lcam->save_edges(edges_filename, no_of_feats, no_of_feats_horizontal);
+		break;
+	}
+
 	if (skip_frames == 0) {
 
 		/* save image to file, then quit */
@@ -432,10 +442,6 @@ int main(int argc, char* argv[]) {
 		/* locate corner features in the image */
 		corners->update(l_,ww,hh, desired_corner_features,1);
 		corners->show(l_,ww,hh,1);
-	}
-
-	if (calibrate) {
-		lcam->calibrate(l_, ww, hh, 3, (int)inner_radius, (int)outer_radius, "E");
 	}
 
     /*
