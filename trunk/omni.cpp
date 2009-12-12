@@ -1344,13 +1344,19 @@ void omni::show_ground_plane(
 		for (int x = 0; x < img_width; x++, n += 6) {
 			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
 				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
-				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
-				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
-				int n2 = ((yy * img_width) + xx)*3;
+				int xx = (ray_map[n+3] - min_x) * (img_width-1) / (max_x-min_x);
+				int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
+				int xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
+				int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
 				int n0 = ((y * img_width) + x)*3;
-				img_buffer[n2] = img[n0];
-				img_buffer[n2+1] = img[n0+1];
-				img_buffer[n2+2] = img[n0+2];
+				for (int yyy = yy; yyy <= yy2; yyy++) {
+					for (int xxx = xx; xxx <= xx2; xxx++) {
+						int n2 = ((yyy * img_width) + xxx)*3;
+						img_buffer[n2] = img[n0];
+						img_buffer[n2+1] = img[n0+1];
+						img_buffer[n2+2] = img[n0+2];
+					}
+				}
 			}
 		}
 	}
