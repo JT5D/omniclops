@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
 	  focal_length = atof(opt->getValue("focal"));
   }
 
-  float camera_height = 10;
+  float camera_height = 150;
   if( opt->getValue( "height" ) != NULL  ) {
 	  camera_height = atof(opt->getValue("height"));
   }
