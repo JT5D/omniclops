@@ -442,7 +442,7 @@ void drawing::drawLine(
         if (x2 >= x1) step_x = 1; else step_x = -1;
         if (y2 >= y1) step_y = 1; else step_y = -1;
 
-        if ((w < img_width + 2000) && (h < img_height + 2000))
+        if ((w < img_width + 20000) && (h < img_height + 20000))
         {
 
             if (w > h)
