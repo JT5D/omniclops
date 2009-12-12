@@ -49,6 +49,8 @@ int main(int argc, char* argv[]) {
   int skip_frames = 1;
   bool show_FAST = false;
   bool show_features = false;
+  bool show_ground_features = false;
+  bool show_ground = false;
   float outer_radius = 115;
   int FOV_degrees = 50;
 
@@ -67,11 +69,19 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --dev                  Video device to be used");
   opt->addUsage( " -w  --width                Image width in pixels");
   opt->addUsage( " -h  --height               Image height in pixels");
+  opt->addUsage( "     --diam                 Diameter of the spherical mirror in millimetres");
+  opt->addUsage( "     --dist                 Distance from camera lens to nearest point on the mirror surface in millimetres");
+  opt->addUsage( "     --focal                Focal length in millimetres");
+  opt->addUsage( "     --height               Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
   opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
-  opt->addUsage( "     --features             Show stereo features");
+  opt->addUsage( "     --features             Show edge features");
+  opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
+  opt->addUsage( "     --ground               Show ground plane");
   opt->addUsage( "     --fast                 Show FAST corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
+  opt->addUsage( "     --raypaths             Saves image showing ray paths");
+  opt->addUsage( "     --rays                 Saves file containing rays for each observed edge feature");
   opt->addUsage( "     --fov                  Field of view in degrees");
   opt->addUsage( " -f  --fps                  Frames per second");
   opt->addUsage( " -s  --skip                 Skip this number of frames");
@@ -87,6 +97,12 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "" );
 
   opt->setOption(  "fast" );
+  opt->setOption(  "diam" );
+  opt->setOption(  "dist" );
+  opt->setOption(  "focal" );
+  opt->setOption(  "height" );
+  opt->setOption(  "raypaths" );
+  opt->setOption(  "rays" );
   opt->setOption(  "radius" );
   opt->setOption(  "inner" );
   opt->setOption(  "descriptors" );
@@ -106,6 +122,8 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "stream"  );
   opt->setFlag(  "headless"  );
   opt->setFlag(  "features" );
+  opt->setFlag(  "groundfeatures" );
+  opt->setFlag(  "ground" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -172,9 +190,57 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
+  if( opt->getFlag( "ground" ) ) {
+	  show_ground = true;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+  }
+
   if( opt->getFlag( "features" ) ) {
+	  show_ground = false;
+	  show_ground_features = false;
 	  show_features = true;
 	  show_FAST = false;
+  }
+
+  if( opt->getFlag( "groundfeatures" ) ) {
+	  show_ground = false;
+	  show_ground_features = true;
+	  show_features = false;
+	  show_FAST = false;
+  }
+
+  float focal_length = 3.6f;
+  if( opt->getValue( "focal" ) != NULL  ) {
+	  focal_length = atof(opt->getValue("focal"));
+  }
+
+  float camera_height = 10;
+  if( opt->getValue( "height" ) != NULL  ) {
+	  camera_height = atof(opt->getValue("height"));
+  }
+
+  std::string save_ray_paths_image = "";
+  if( opt->getValue( "raypaths" ) != NULL  ) {
+	  save_ray_paths_image = opt->getValue("raypaths");
+	  if (save_ray_paths_image == "") save_ray_paths_image = "ray_paths.jpg";
+  }
+
+  std::string save_rays = "";
+  if( opt->getValue( "rays" ) != NULL  ) {
+	  save_rays = opt->getValue("rays");
+	  if (save_rays == "") save_rays = "rays.dat";
+  }
+
+  float mirror_diameter = 60;
+  if( opt->getValue( "diam" ) != NULL  ) {
+	  mirror_diameter = atof(opt->getValue("diam"));
+  }
+
+  float dist_to_mirror = 50;
+  if( opt->getValue( "dist" ) != NULL  ) {
+	  dist_to_mirror = atof(opt->getValue("dist"));
   }
 
   if( opt->getValue( "radius" ) != NULL  ) {
@@ -188,6 +254,8 @@ int main(int argc, char* argv[]) {
 
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
+	  show_ground = false;
+	  show_ground_features = false;
 	  show_FAST = true;
 	  show_features = false;
 	  desired_corner_features = atoi(opt->getValue("fast"));
@@ -303,17 +371,13 @@ int main(int argc, char* argv[]) {
 	}
   }
 
-  /*
-  float mirror_diameter = 60;
-  float dist_to_mirror = 50;
-  float focal_length = 3.6f;
-  lcam->create_calibration_map(
+  lcam->create_ray_map(
       	mirror_diameter,
       	dist_to_mirror,
       	focal_length,
       	outer_radius,
+      	camera_height,
         ww, hh);
-  */
 
   while(1){
 
@@ -328,28 +392,27 @@ int main(int argc, char* argv[]) {
     lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
     if (unwarp_image) {
-    	//lcam->rectify(ww,hh,3,l_);
 
         unwarp::update(
 			ww/2, hh/2,
 			(int)(inner_radius*ww/200),
 			(int)(outer_radius*ww/200),
-			false,
-			false,
-			false,
+			false, false, false,
 			0.28,
 			1.5,
 			l,
 			unwarped);
 		memcpy((void*)l_,(void*)unwarped_,ww*hh*3);
-
     }
 
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
 	/* display the features */
-	if ((show_features) || (edges_filename != "")) {
+	if ((show_features) ||
+		(edges_filename != "") ||
+		(save_rays != "") ||
+		(show_ground_features)) {
 
 		int inner = (int)inner_radius;
 		int outer = (int)outer_radius;
@@ -419,9 +482,15 @@ int main(int argc, char* argv[]) {
 		break;
 	}
 
-
 	if (edges_filename != "") {
 		lcam->save_edges(edges_filename, no_of_feats, no_of_feats_horizontal);
+		printf("Edges saved to %s\n", edges_filename.c_str());
+		break;
+	}
+
+	if (save_rays != "") {
+		lcam->save_rays(save_rays, no_of_feats, no_of_feats_horizontal);
+		printf("Rays saved to %s\n", save_rays.c_str());
 		break;
 	}
 
@@ -442,6 +511,22 @@ int main(int argc, char* argv[]) {
 		/* locate corner features in the image */
 		corners->update(l_,ww,hh, desired_corner_features,1);
 		corners->show(l_,ww,hh,1);
+	}
+
+	if (show_ground) {
+	    lcam->show_ground_plane(l_,ww,hh,500);
+	}
+
+	if (show_ground_features) {
+	    lcam->show_ground_plane_features(l_,ww,hh,500,no_of_feats,no_of_feats_horizontal);
+	}
+
+	if (save_ray_paths_image != "") {
+	    lcam->show_ray_map_side(
+		    l_, ww,hh,(int)((camera_height+focal_length+dist_to_mirror+(mirror_diameter*0.5f))*1.1f),(int)focal_length, (int)camera_height);
+	    cvSaveImage(save_ray_paths_image.c_str(), l);
+		printf("Ray paths saved to %s\n", save_ray_paths_image.c_str());
+	    break;
 	}
 
     /*

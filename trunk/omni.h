@@ -60,9 +60,11 @@ public:
     unsigned int* row_peaks;
     unsigned int* temp_row_peaks;
 
-    /* maps raw image pixels to rectified pixels */
+    /* map used for image rectification */
     int* calibration_map;
-    int* calibration_map2;
+
+    /* maps raw image pixels to 3D rays */
+    int* ray_map;
 
     unsigned int av_peaks;
 
@@ -98,6 +100,7 @@ public:
 
     bool FileExists(std::string filename);
     void save_edges(std::string filename, int no_of_feats_vertical, int no_of_feats_horizontal);
+    void save_rays(std::string filename, int no_of_feats_vertical, int no_of_feats_horizontal);
     void get_calibration_image(
     	unsigned char* img,
     	int img_width,
@@ -112,24 +115,33 @@ public:
         std::string direction);
 
     unsigned char* img_buffer;
-    void create_calibration_map(
+    void create_ray_map(
     	float mirror_diameter,
     	float dist_to_mirror,
     	float focal_length,
     	float outer_radius_percent,
+    	float camera_height,
         int img_width,
         int img_height);
-    void rectify(
+    void show_ray_map_side(
+    	unsigned char* img,
     	int img_width,
     	int img_height,
-    	int bytes_per_pixel,
-    	unsigned char* img_raw,
-    	unsigned char* img_rectified);
-    void rectify(
-    	int img_width,
-    	int img_height,
-    	int bytes_per_pixel,
-    	unsigned char* img);
+    	int max_height_mm,
+    	int focal_length_mm,
+    	int camera_height_mm);
+    void show_ground_plane(
+        unsigned char* img,
+        int img_width,
+        int img_height,
+        int max_radius_mm);
+    void show_ground_plane_features(
+        unsigned char* img,
+        int img_width,
+        int img_height,
+        int max_radius_mm,
+    	int no_of_feats_vertical,
+    	int no_of_feats_horizontal);
 
     omni(int width, int height);
     ~omni();
