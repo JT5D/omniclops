@@ -14,8 +14,8 @@ One of the first things which you'll need to do is specify the inner and outer r
 
 In this example the outer radius is set to 90% and the inner to 15%.  There are no limits on these figures, so potentially the outer radius could be set to greater than 100% if the camera is close to the mirror.
 
-The purpose of the inner radius is to remove the camera itself from the image, since this is typically not of interest.  The inner radius can be set to zero if you wish to include the camera.
-
 {{{
     omniclops --dev /dev/video0 --radius 90 --inner 15
 }}}
+
+The purpose of the inner radius is to remove the camera itself from the image, since this is typically not of interest.  The inner radius can be set to zero if you wish to include the camera.
