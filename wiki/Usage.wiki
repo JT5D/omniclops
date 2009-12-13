@@ -1,0 +1,11 @@
+The most basic way of running the software is as follows:
+
+{{{
+    omniclops --dev /dev/video0
+}}}
+
+where video0 is the camera device to be used.  To find out what video devices are available just type:
+
+{{{
+    ls /dev/video*
+}}}
