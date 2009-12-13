@@ -5,3 +5,5 @@ Example usage:
 {{{
     omniclops --dev /dev/video0 --unwarp
 }}}
+
+[http://lh5.ggpht.com/_cGREIsCvj4M/SyTBughSm4I/AAAAAAAAAW8/pdwcAiaebxI/unwarp.png]
