@@ -14,7 +14,7 @@ Alternatively you might wish to only save edge features to file, as follows:
     omniclops --dev /dev/video0 --saveedges edges.dat --headless
 }}}
 
-This saves a binary file called edges.dat.  This consists of pairs of unsigned short integers (16 bits * 2) giving the x and y image coordinates of each edge feature.  To try to increase the accuracy the edge values are sub-pixel interpolated, so to obtain a floating point value for the x and y coordinates divide the values by 32.
+This saves a binary file called edges.dat.  This consists of pairs of unsigned short integers (16 bits x 2) giving the x and y image coordinates of each edge feature.  To try to increase the accuracy the edge values are sub-pixel interpolated, so to obtain a floating point value for the x and y coordinates divide the values by 32.
 
 === Saving 3D rays ===
 
