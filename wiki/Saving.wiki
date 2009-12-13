@@ -21,7 +21,7 @@ This saves a binary file called edges.dat.  This consists of pairs of unsigned s
 You might also wish to save the 3D coordinates for rays of light corresponding to observed edge features.  This feature can be useful for applications requiring bundle adjustment or synthesis of the data with that obtained by other sensors.
 
 {{{
-    omniclops --dev /dev/video0 --diam 60 --dist 50 --focal 3.6 --height 400 --rays rays.dat --headless
+    omniclops --dev /dev/video0 --diam 60 --dist 50 --focal 3.6 --elevation 400 --rays rays.dat --headless
 }}}
 
 The resulting binary file contains 6 signed short integers per ray, specifying the beginning and end of the ray.  The first three values are a point on the mirror surface and the second three values are a point on the ground plane.  All values are in millimetres.
