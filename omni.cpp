@@ -1350,11 +1350,15 @@ void omni::show_ground_plane(
 				int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
 				int n0 = ((y * img_width) + x)*3;
 				for (int yyy = yy; yyy <= yy2; yyy++) {
-					for (int xxx = xx; xxx <= xx2; xxx++) {
-						int n2 = ((yyy * img_width) + xxx)*3;
-						img_buffer[n2] = img[n0];
-						img_buffer[n2+1] = img[n0+1];
-						img_buffer[n2+2] = img[n0+2];
+					if ((yyy > -1) && (yyy < img_height)) {
+						for (int xxx = xx; xxx <= xx2; xxx++) {
+							if ((xxx > -1) && (xxx < img_width)) {
+								int n2 = ((yyy * img_width) + xxx)*3;
+								img_buffer[n2] = img[n0];
+								img_buffer[n2+1] = img[n0+1];
+								img_buffer[n2+2] = img[n0+2];
+							}
+						}
 					}
 				}
 			}
