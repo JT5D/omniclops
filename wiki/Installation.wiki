@@ -1,0 +1,28 @@
+To install the software first you will need to ensure that OpenCV version 2 is installed.  A package for this can be downloaded from the project home page or downloads tab.  At the time of writing this is not the standard version of the OpenCV libraries available from within the package manager, and the main advantage is that the newer version allows images to be encoded for video streaming.
+
+A Debian type Linux operating system is assumed here.  To install from the terminal type:
+
+{{{
+    sudo dpkg -i opencv-2.0.deb
+}}}
+
+Then the main utility can be installed as follows:
+
+{{{
+    sudo dpkg -i omniclops_x.x.deb
+}}}
+
+Any additional dependencies should be installed automatically.
+
+Alternatively, once the OpenCV libraries have been installed you can also compile from source in the usual way with:
+
+{{{
+    make clean
+    make
+}}}
+
+If you make changes to the code you can also easily create a new deb package by running:
+
+{{{
+    sh makepackage.sh
+}}}
