@@ -9,7 +9,7 @@ A Debian type Linux operating system is assumed here.  To install from the termi
 Then the main utility can be installed as follows:
 
 {{{
-    sudo dpkg -i omniclops_x.x.deb
+    sudo dpkg -i omniclops-x.xx.deb
 }}}
 
 Any additional dependencies should be installed automatically.
