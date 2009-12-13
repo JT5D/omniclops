@@ -19,3 +19,5 @@ In this example the outer radius is set to 90% and the inner to 15%.  There are 
 }}}
 
 The purpose of the inner radius is to remove the camera itself from the image, since this is typically not of interest.  The inner radius can be set to zero if you wish to include the camera.
+
+To exit the program press the Escape key.
