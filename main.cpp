@@ -51,8 +51,9 @@ int main(int argc, char* argv[]) {
   bool show_features = false;
   bool show_ground_features = false;
   bool show_ground = false;
+  bool show_lines = false;
   float outer_radius = 115;
-  int FOV_degrees = 50;
+  //int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
   int start_port = 5000;
@@ -72,12 +73,14 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --diam                 Diameter of the spherical mirror in millimetres");
   opt->addUsage( "     --dist                 Distance from camera lens to nearest point on the mirror surface in millimetres");
   opt->addUsage( "     --focal                Focal length in millimetres");
-  opt->addUsage( "     --height               Height of the camera above the ground in millimetres");
+  opt->addUsage( "     --elevation            Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
   opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
   opt->addUsage( "     --features             Show edge features");
+  opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
   opt->addUsage( "     --ground               Show ground plane");
+  opt->addUsage( "     --range                Maximum range when displaying ground plane");
   opt->addUsage( "     --fast                 Show FAST corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
   opt->addUsage( "     --raypaths             Saves image showing ray paths");
@@ -100,7 +103,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "diam" );
   opt->setOption(  "dist" );
   opt->setOption(  "focal" );
-  opt->setOption(  "height" );
+  opt->setOption(  "elevation" );
+  opt->setOption(  "range" );
   opt->setOption(  "raypaths" );
   opt->setOption(  "rays" );
   opt->setOption(  "radius" );
@@ -122,6 +126,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "stream"  );
   opt->setFlag(  "headless"  );
   opt->setFlag(  "features" );
+  opt->setFlag(  "lines" );
   opt->setFlag(  "groundfeatures" );
   opt->setFlag(  "ground" );
 
@@ -191,6 +196,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "ground" ) ) {
+	  show_lines = false;
 	  show_ground = true;
 	  show_ground_features = false;
 	  show_features = false;
@@ -198,13 +204,23 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
+	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
 	  show_features = true;
 	  show_FAST = false;
   }
 
+  if( opt->getFlag( "lines" ) ) {
+	  show_lines = true;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+  }
+
   if( opt->getFlag( "groundfeatures" ) ) {
+	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = true;
 	  show_features = false;
@@ -217,8 +233,8 @@ int main(int argc, char* argv[]) {
   }
 
   float camera_height = 150;
-  if( opt->getValue( "height" ) != NULL  ) {
-	  camera_height = atof(opt->getValue("height"));
+  if( opt->getValue( "elevation" ) != NULL  ) {
+	  camera_height = atof(opt->getValue("elevation"));
   }
 
   std::string save_ray_paths_image = "";
@@ -252,8 +268,14 @@ int main(int argc, char* argv[]) {
 	  inner_radius = atoi(opt->getValue("inner"));
   }
 
+  int range_mm = 500;
+  if( opt->getValue( "range" ) != NULL  ) {
+	  range_mm = atoi(opt->getValue("range"));
+  }
+
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
+	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
 	  show_FAST = true;
@@ -263,9 +285,9 @@ int main(int argc, char* argv[]) {
 	  if (desired_corner_features < 50) desired_corner_features=50;
   }
 
-  if( opt->getValue( "fov" ) != NULL  ) {
-  	  FOV_degrees = atoi(opt->getValue("fov"));
-  }
+  //if( opt->getValue( "fov" ) != NULL  ) {
+  	  //FOV_degrees = atoi(opt->getValue("fov"));
+  //}
 
   std::string dev = "/dev/video1";
   if( opt->getValue( "dev" ) != NULL  ) {
@@ -412,7 +434,8 @@ int main(int argc, char* argv[]) {
 	if ((show_features) ||
 		(edges_filename != "") ||
 		(save_rays != "") ||
-		(show_ground_features)) {
+		(show_ground_features) ||
+		(show_lines)) {
 
 		int inner = (int)inner_radius;
 		int outer = (int)outer_radius;
@@ -431,39 +454,42 @@ int main(int argc, char* argv[]) {
 			inhibition_radius,
 			minimum_response,0,0, outer, inner);
 
-		/* vertically oriented features */
-		int row = 0;
-		int feats_remaining = lcam->features_per_row[row];
+		if (!show_lines) {
 
-		for (int f = 0; f < no_of_feats; f++, feats_remaining--) {
+			/* vertically oriented features */
+			int row = 0;
+			int feats_remaining = lcam->features_per_row[row];
 
-			int x = (int)lcam->feature_x[f] / OMNI_SUB_PIXEL;
-			int y = 4 + (row * OMNI_VERTICAL_SAMPLING);
+			for (int f = 0; f < no_of_feats; f++, feats_remaining--) {
 
-		    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				int x = (int)lcam->feature_x[f] / OMNI_SUB_PIXEL;
+				int y = 4 + (row * OMNI_VERTICAL_SAMPLING);
 
-			/* move to the next row */
-			if (feats_remaining <= 0) {
-				row++;
-				feats_remaining = lcam->features_per_row[row];
+				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+
+				/* move to the next row */
+				if (feats_remaining <= 0) {
+					row++;
+					feats_remaining = lcam->features_per_row[row];
+				}
 			}
-		}
 
-		/* horizontally oriented features */
-		int col = 0;
-		feats_remaining = lcam->features_per_col[col];
+			/* horizontally oriented features */
+			int col = 0;
+			feats_remaining = lcam->features_per_col[col];
 
-		for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+			for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
 
-			int y = (int)lcam->feature_y[f] / OMNI_SUB_PIXEL;
-			int x = 4 + (col * OMNI_HORIZONTAL_SAMPLING);
+				int y = (int)lcam->feature_y[f] / OMNI_SUB_PIXEL;
+				int x = 4 + (col * OMNI_HORIZONTAL_SAMPLING);
 
-		    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 
-		    /* move to the next column */
-			if (feats_remaining <= 0) {
-				col++;
-				feats_remaining = lcam->features_per_col[col];
+				/* move to the next column */
+				if (feats_remaining <= 0) {
+					col++;
+					feats_remaining = lcam->features_per_col[col];
+				}
 			}
 		}
 
@@ -479,19 +505,19 @@ int main(int argc, char* argv[]) {
 		cvSaveImage(calibration_image_filename.c_str(), calib);
 	    cvReleaseImage(&calib);
 		printf("Camera calibration image saved to %s\n", calibration_image_filename.c_str());
-		break;
+		if ((!save_image) && (save_rays == "") && (edges_filename == "") && (save_ray_paths_image == "")) break;
 	}
 
 	if (edges_filename != "") {
 		lcam->save_edges(edges_filename, no_of_feats, no_of_feats_horizontal);
 		printf("Edges saved to %s\n", edges_filename.c_str());
-		break;
+		if ((!save_image) && (save_rays == "") && (save_ray_paths_image == "")) break;
 	}
 
 	if (save_rays != "") {
 		lcam->save_rays(save_rays, no_of_feats, no_of_feats_horizontal);
 		printf("Rays saved to %s\n", save_rays.c_str());
-		break;
+		if ((!save_image) && (save_ray_paths_image == "")) break;
 	}
 
 	if (skip_frames == 0) {
@@ -500,7 +526,7 @@ int main(int argc, char* argv[]) {
 		if (save_image) {
 			std::string filename = save_filename + ".jpg";
 			cvSaveImage(filename.c_str(), l);
-			break;
+			if (save_ray_paths_image == "") break;
 		}
 	}
 
@@ -514,11 +540,40 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_ground) {
-	    lcam->show_ground_plane(l_,ww,hh,500);
+	    lcam->show_ground_plane(l_,ww,hh,range_mm);
 	}
 
 	if (show_ground_features) {
-	    lcam->show_ground_plane_features(l_,ww,hh,500,no_of_feats,no_of_feats_horizontal);
+		/*
+    	int min_displacement_x = -20;
+    	int min_displacement_y = -20;
+    	int min_displacement_rotation_degrees = -1;
+    	int max_displacement_x = 20;
+    	int max_displacement_y = 20;
+    	int max_displacement_rotation_degrees = 1;
+
+		lcam->localise(
+	        ww,hh,
+	    	no_of_feats, no_of_feats_horizontal, 500,
+	    	min_displacement_x,
+	    	min_displacement_y,
+	    	min_displacement_rotation_degrees,
+	    	max_displacement_x,
+	    	max_displacement_y,
+	    	max_displacement_rotation_degrees);
+
+	    lcam->update_ground_map(ww,hh,no_of_feats, no_of_feats_horizontal, 500);
+
+	    lcam->show_ground_map(l_,ww,hh,3);
+        */
+	    lcam->show_ground_plane_features(l_,ww,hh,range_mm,no_of_feats,no_of_feats_horizontal);
+	}
+
+	if (show_lines) {
+	    lcam->show_radial_lines(
+	        l_,ww,hh,range_mm,
+	    	no_of_feats,
+	    	no_of_feats_horizontal,5);
 	}
 
 	if (save_ray_paths_image != "") {

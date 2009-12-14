@@ -28,12 +28,14 @@
 #include "polynomial.h"
 #include "linefit.h"
 
-#define OMNI_MAX_FEATURES         4000
-#define OMNI_MAX_IMAGE_WIDTH      1024
-#define OMNI_MAX_IMAGE_HEIGHT     1024
-#define OMNI_VERTICAL_SAMPLING    2
-#define OMNI_HORIZONTAL_SAMPLING  2
-#define OMNI_SUB_PIXEL            32
+#define OMNI_MAX_FEATURES           4000
+#define OMNI_MAX_IMAGE_WIDTH        1024
+#define OMNI_MAX_IMAGE_HEIGHT       1024
+#define OMNI_VERTICAL_SAMPLING      4
+#define OMNI_HORIZONTAL_SAMPLING    4
+#define OMNI_SUB_PIXEL              32
+#define OMNI_GROUND_MAP_RADIUS      500
+#define OMNI_GROUND_MAP_COMPRESS    2
 
 #define pixindex(xx, yy)  ((yy * imgWidth + xx) * 3)
 
@@ -66,9 +68,17 @@ public:
     /* maps raw image pixels to 3D rays */
     int* ray_map;
 
+    unsigned char* ground_map;
+    bool moved, first_move;
+
     unsigned int av_peaks;
 
     int epipole;
+
+	int robot_x;
+	int robot_y;
+	int robot_z;
+	int robot_rotation_degrees;
 
     bool intersection(
         float x0,
@@ -142,6 +152,37 @@ public:
         int max_radius_mm,
     	int no_of_feats_vertical,
     	int no_of_feats_horizontal);
+    void localise(
+        int img_width,
+        int img_height,
+    	int no_of_feats_vertical,
+    	int no_of_feats_horizontal,
+    	int compare_radius,
+    	int min_displacement_x,
+    	int min_displacement_y,
+    	int min_displacement_rotation_degrees,
+    	int max_displacement_x,
+    	int max_displacement_y,
+    	int max_displacement_rotation_degrees);
+    void update_ground_map(
+        int img_width,
+        int img_height,
+    	int no_of_feats_vertical,
+    	int no_of_feats_horizontal,
+    	int update_radius);
+    void show_ground_map(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int bytes_per_pixel);
+    void show_radial_lines(
+        unsigned char* img,
+        int img_width,
+        int img_height,
+        int max_radius_mm,
+    	int no_of_feats_vertical,
+    	int no_of_feats_horizontal,
+    	int threshold);
 
     omni(int width, int height);
     ~omni();

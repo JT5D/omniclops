@@ -30,6 +30,7 @@ omni::omni(int width, int height) {
 
 	ray_map = NULL;
 	calibration_map = NULL;
+	ground_map = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -46,6 +47,13 @@ omni::omni(int width, int height) {
 
 	epipole=0;
 	img_buffer = NULL;
+
+	robot_x = 0;
+	robot_y = 0;
+	robot_z = 0;
+	robot_rotation_degrees = 0;
+	moved = false;
+	first_move = true;
 }
 
 omni::~omni() {
@@ -53,6 +61,9 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
+	if (ground_map != NULL) {
+		delete[] ground_map;
+	}
 	if (calibration_map != NULL) {
 		delete[] calibration_map;
 	}
@@ -1396,7 +1407,8 @@ void omni::show_ground_plane_features(
 		if ((x > -1) && (x < img_width) &&
 			(y > -1) && (y < img_height)) {
 			int n = ((y*img_width)+x)*6;
-			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+			if ((ray_map[n+5] == 0) &&
+				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
 				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
 				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
 				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
@@ -1425,7 +1437,8 @@ void omni::show_ground_plane_features(
 		if ((x > -1) && (x < img_width) &&
 			(y > -1) && (y < img_height)) {
 			int n = ((y*img_width)+x)*6;
-			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+			if ((ray_map[n+5] == 0) &&
+				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
 				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
 				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
 				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
@@ -1446,3 +1459,524 @@ void omni::show_ground_plane_features(
 	memcpy((void*)img, (void*)img_buffer, img_width*img_height*3);
 }
 
+void omni::show_radial_lines(
+    unsigned char* img,
+    int img_width,
+    int img_height,
+    int max_radius_mm,
+	int no_of_feats_vertical,
+	int no_of_feats_horizontal,
+	int threshold)
+{
+	show_ground_plane(img, img_width, img_height, max_radius_mm);
+
+	const int radii = 360/2;
+	int* bucket = new int[radii];
+	int* mean = new int[radii*2];
+	memset((void*)bucket,'\0',radii*sizeof(int));
+	memset((void*)mean,'\0',radii*2*sizeof(int));
+	int cx = img_width/2;
+	int cy = img_height/2;
+
+	int min_x = -max_radius_mm;
+	int max_x = max_radius_mm;
+	int min_y = -max_radius_mm*img_height/img_width;
+	int max_y = max_radius_mm*img_height/img_width;
+
+	/* vertically oriented features */
+	int row = 0;
+	int feats_remaining = features_per_row[row];
+
+	for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+
+		int x = feature_x[f] / OMNI_SUB_PIXEL;
+		int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+		if ((x > -1) && (x < img_width) &&
+			(y > -1) && (y < img_height)) {
+			int n = ((y*img_width)+x)*6;
+			if ((ray_map[n+5] == 0) &&
+				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+				int dx = xx - cx;
+				int dy = yy - cy;
+				int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+				if (b < 0) b += radii;
+				if (b > radii) b -= radii;
+				bucket[b]++;
+				mean[b*2] += xx;
+				mean[b*2+1] += yy;
+			}
+		}
+
+		/* move to the next row */
+		if (feats_remaining <= 0) {
+			row++;
+			feats_remaining = features_per_row[row];
+		}
+	}
+
+	/* horizontally oriented features */
+	int col = 0;
+	feats_remaining = features_per_col[col];
+
+	for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+
+		int y = feature_y[f] / OMNI_SUB_PIXEL;
+		int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+		if ((x > -1) && (x < img_width) &&
+			(y > -1) && (y < img_height)) {
+			int n = ((y*img_width)+x)*6;
+			if ((ray_map[n+5] == 0) &&
+				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+				int dx = xx - cx;
+				int dy = yy - cy;
+				int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+				if (b < 0) b += radii;
+				if (b > radii) b -= radii;
+				bucket[b]++;
+				mean[b*2] += xx;
+				mean[b*2+1] += yy;
+			}
+		}
+
+	    /* move to the next column */
+		if (feats_remaining <= 0) {
+			col++;
+			feats_remaining = features_per_col[col];
+		}
+	}
+
+	int average_bucket_hits = 0;
+	int ctr = 0;
+
+	// non maximal suppression
+	for (int i = 0; i < radii-1; i++) {
+		if (bucket[i+1] < bucket[i]) {
+			bucket[i+1] = 0;
+		}
+		else {
+			bucket[i] = 0;
+		}
+	}
+
+	for (int i = 0; i < radii; i++) {
+		if (bucket[i] > threshold) {
+		    average_bucket_hits += bucket[i];
+		    ctr++;
+		}
+	}
+	if (ctr > 0) average_bucket_hits /= ctr;
+	for (int i = 0; i < radii; i++) {
+		if ((bucket[i] > threshold) &&
+			(bucket[i] > average_bucket_hits)) {
+			int mid_x = (mean[i*2] / bucket[i]) - cx;
+			int mid_y = (mean[i*2+1] / bucket[i]) - cy;
+			int mid_r = mid_x*mid_x + mid_y*mid_y;
+			int x0 = 0;
+			int y0 = 0;
+			int hits0 = 0;
+			int x1 = 0;
+			int y1 = 0;
+			int hits1 = 0;
+
+			/* vertically oriented features */
+			row = 0;
+			feats_remaining = features_per_row[row];
+
+			for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+
+				int x = feature_x[f] / OMNI_SUB_PIXEL;
+				int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+				if ((x > -1) && (x < img_width) &&
+					(y > -1) && (y < img_height)) {
+					int n = ((y*img_width)+x)*6;
+					if ((ray_map[n+5] == 0) &&
+						(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+						(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+						int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+						int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+						int dx = xx - cx;
+						int dy = yy - cy;
+						int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+						if (b < 0) b += radii;
+						if (b > radii) b -= radii;
+						if ((b >= i-1) && (b <= i+1)) {
+							int r = dx*dx + dy*dy;
+							if (r < mid_r) {
+							    x0 += xx;
+							    y0 += yy;
+							    hits0++;
+							}
+							else {
+							    x1 += xx;
+							    y1 += yy;
+							    hits1++;
+							}
+						}
+					}
+				}
+
+				/* move to the next row */
+				if (feats_remaining <= 0) {
+					row++;
+					feats_remaining = features_per_row[row];
+				}
+			}
+
+			/* horizontally oriented features */
+			col = 0;
+			feats_remaining = features_per_col[col];
+
+			for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+
+				int y = feature_y[f] / OMNI_SUB_PIXEL;
+				int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+				if ((x > -1) && (x < img_width) &&
+					(y > -1) && (y < img_height)) {
+					int n = ((y*img_width)+x)*6;
+					if ((ray_map[n+5] == 0) &&
+						(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+						(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+						int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+						int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+						int dx = xx - cx;
+						int dy = yy - cy;
+						int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+						if (b < 0) b += radii;
+						if (b > radii) b -= radii;
+						if ((b >= i-1) && (b <= i+1)) {
+							int r = dx*dx + dy*dy;
+							if (r < mid_r) {
+							    x0 += xx;
+							    y0 += yy;
+							    hits0++;
+							}
+							else {
+							    x1 += xx;
+							    y1 += yy;
+							    hits1++;
+							}
+						}
+					}
+				}
+
+			    /* move to the next column */
+				if (feats_remaining <= 0) {
+					col++;
+					feats_remaining = features_per_col[col];
+				}
+			}
+
+
+			if ((hits0 > 0) && (hits1 > 0)) {
+				x0 /= hits0;
+				y0 /= hits0;
+				x1 /= hits1;
+				y1 /= hits1;
+				x1 = x0 + (x1 - x0)* 4;
+				y1 = y0 + (y1 - y0)* 4;
+				drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,255,0,0,1,false);
+			}
+		}
+	}
+
+	delete[] bucket;
+	delete[] mean;
+}
+
+
+void omni::localise(
+    int img_width,
+    int img_height,
+	int no_of_feats_vertical,
+	int no_of_feats_horizontal,
+	int compare_radius,
+	int min_displacement_x,
+	int min_displacement_y,
+	int min_displacement_rotation_degrees,
+	int max_displacement_x,
+	int max_displacement_y,
+	int max_displacement_rotation_degrees)
+{
+	if (ground_map == NULL) {
+		ground_map = new unsigned char[(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1];
+		memset((void*)ground_map,'\0',(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1);
+	}
+
+	const int feature_step = 4;
+	const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
+	const int bit_lookup[] = {
+		1,2,4,8,16,32,64,128,256
+	};
+
+	int max_hits = 0;
+	int best_offset_x = 0;
+	int best_offset_y = 0;
+	int best_offset_angle = 0;
+
+	for (int offset_x = min_displacement_x; offset_x <= max_displacement_x; offset_x+=2) {
+		for (int offset_y = min_displacement_y; offset_y <= max_displacement_y; offset_y+=2) {
+			for (int offset_angle = min_displacement_rotation_degrees; offset_angle <= max_displacement_rotation_degrees; offset_angle++) {
+
+				//printf("offset %d,%d\n",offset_x,offset_y);
+
+				float pan = (robot_rotation_degrees+offset_angle)*3.1415927f/180.0f;
+				float pan2 = pan + 3.1415927f;
+                float cos_pan2 = (float)cos(pan2);
+                float sin_pan2 = (float)sin(pan2);
+                float sin_pan = (float)sin(pan);
+                float cos_pan = (float)cos(pan);
+
+				int hits = 0;
+
+				/* vertically oriented features */
+				int row = 0;
+				int feats_remaining = features_per_row[row];
+
+				for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+
+					if (f % feature_step == 0) {
+						int x = feature_x[f] / OMNI_SUB_PIXEL;
+						int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+						if ((x > -1) && (x < img_width) &&
+							(y > -1) && (y < img_height)) {
+							int n = ((y*img_width)+x)*6;
+							if ((ray_map[n+5] == 0) &&
+								(ray_map[n+3] > -compare_radius) && (ray_map[n+3] < compare_radius) &&
+								(ray_map[n+4] > -compare_radius) && (ray_map[n+4] < compare_radius)) {
+								int xx0 = ray_map[n+3];
+								int yy0 = ray_map[n+4];
+				                int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
+				                int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
+								xx += offset_x+robot_x;
+								yy += offset_y+robot_y;
+								int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+								int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+								if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
+									(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
+									int n2 = (gy * ground_map_stride) + gx;
+									if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
+										hits++;
+									}
+								}
+							}
+						}
+					}
+
+					/* move to the next row */
+					if (feats_remaining <= 0) {
+						row++;
+						feats_remaining = features_per_row[row];
+					}
+				}
+
+				/* horizontally oriented features */
+				int col = 0;
+				feats_remaining = features_per_col[col];
+
+				for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+
+					if (f % feature_step == 0) {
+						int y = feature_y[f] / OMNI_SUB_PIXEL;
+						int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+						if ((x > -1) && (x < img_width) &&
+							(y > -1) && (y < img_height)) {
+							int n = ((y*img_width)+x)*6;
+							if ((ray_map[n+5] == 0) &&
+								(ray_map[n+3] > -compare_radius) && (ray_map[n+3] < compare_radius) &&
+								(ray_map[n+4] > -compare_radius) && (ray_map[n+4] < compare_radius)) {
+								int xx0 = ray_map[n+3];
+								int yy0 = ray_map[n+4];
+				                int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
+				                int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
+								xx += offset_x+robot_x;
+								yy += offset_y+robot_y;
+								int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+								int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+								if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
+									(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
+									int n2 = (gy * ground_map_stride) + gx;
+									if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
+										hits++;
+									}
+								}
+							}
+						}
+					}
+
+					/* move to the next column */
+					if (feats_remaining <= 0) {
+						col++;
+						feats_remaining = features_per_col[col];
+					}
+				}
+
+
+				if (hits > max_hits) {
+					max_hits = hits;
+					printf("offset %d,%d %d\n",offset_x,offset_y, hits);
+					best_offset_x = offset_x;
+					best_offset_y = offset_y;
+					best_offset_angle = offset_angle;
+				}
+			}
+		}
+	}
+
+	//printf("max hits = %d\n", max_hits);
+	//printf("best_offset = %d,%d\n", best_offset_x, best_offset_y);
+	if (max_hits > (no_of_feats_horizontal+no_of_feats_vertical)*0/100) {
+		robot_x += best_offset_x;
+		robot_y += best_offset_y;
+		robot_rotation_degrees += best_offset_angle;
+		if ((best_offset_x != 0) ||
+		    (best_offset_y != 0) ||
+		    (best_offset_angle != 0)) {
+			moved = true;
+		}
+	}
+}
+
+
+void omni::update_ground_map(
+    int img_width,
+    int img_height,
+	int no_of_feats_vertical,
+	int no_of_feats_horizontal,
+	int update_radius)
+{
+	if (ground_map == NULL) {
+		ground_map = new unsigned char[(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1];
+		memset((void*)ground_map,'\0',(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1);
+	}
+
+	if ((first_move) || (moved)) {
+		first_move = false;
+		moved = false;
+
+		const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
+		const int bit_lookup[] = {
+			1,2,4,8,16,32,64,128,256
+		};
+
+		float pan = (robot_rotation_degrees)*3.1415927f/180.0f;
+		float pan2 = pan + 3.1415927f;
+		float cos_pan2 = (float)cos(pan2);
+		float sin_pan2 = (float)sin(pan2);
+		float sin_pan = (float)sin(pan);
+		float cos_pan = (float)cos(pan);
+
+		/* vertically oriented features */
+		int row = 0;
+		int feats_remaining = features_per_row[row];
+
+		for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+
+			int x = feature_x[f] / OMNI_SUB_PIXEL;
+			int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+			if ((x > -1) && (x < img_width) &&
+				(y > -1) && (y < img_height)) {
+				int n = ((y*img_width)+x)*6;
+				if ((ray_map[n+5] == 0) &&
+					(ray_map[n+3] > -update_radius) && (ray_map[n+3] < update_radius) &&
+					(ray_map[n+4] > -update_radius) && (ray_map[n+4] < update_radius)) {
+					int xx0 = ray_map[n+3];
+					int yy0 = ray_map[n+4];
+					int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
+					int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
+					xx += robot_x;
+					yy += robot_y;
+					int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+					int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+					if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
+						(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
+						int n2 = (gy * ground_map_stride) + gx;
+						ground_map[n2/8] |= bit_lookup[n2 % 8];
+					}
+				}
+			}
+
+			/* move to the next row */
+			if (feats_remaining <= 0) {
+				row++;
+				feats_remaining = features_per_row[row];
+			}
+		}
+
+		/* horizontally oriented features */
+		int col = 0;
+		feats_remaining = features_per_col[col];
+
+		for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+
+			int y = feature_y[f] / OMNI_SUB_PIXEL;
+			int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+			if ((x > -1) && (x < img_width) &&
+				(y > -1) && (y < img_height)) {
+				int n = ((y*img_width)+x)*6;
+				if ((ray_map[n+5] == 0) &&
+					(ray_map[n+3] > -update_radius) && (ray_map[n+3] < update_radius) &&
+					(ray_map[n+4] > -update_radius) && (ray_map[n+4] < update_radius)) {
+					int xx0 = ray_map[n+3];
+					int yy0 = ray_map[n+4];
+					int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
+					int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
+					xx += robot_x;
+					yy += robot_y;
+					int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+					int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
+					if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
+						(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
+						int n2 = (gy * ground_map_stride) + gx;
+						ground_map[n2/8] |= bit_lookup[n2 % 8];
+					}
+				}
+			}
+
+			/* move to the next column */
+			if (feats_remaining <= 0) {
+				col++;
+				feats_remaining = features_per_col[col];
+			}
+		}
+	}
+}
+
+void omni::show_ground_map(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	int bytes_per_pixel)
+{
+	const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
+	const int bit_lookup[] = {
+		1,2,4,8,16,32,64,128,256
+	};
+
+	memset((void*)img,'\0',img_width*img_height*bytes_per_pixel);
+
+	if (ground_map != NULL) {
+		int col,n = 0;
+		for (int y = 0; y < img_height; y++) {
+			int gy = y * OMNI_GROUND_MAP_RADIUS*2 / (img_height*OMNI_GROUND_MAP_COMPRESS);
+			for (int x = 0; x < img_width; x++, n+=bytes_per_pixel) {
+				int gx = x * OMNI_GROUND_MAP_RADIUS*2 / (img_width*OMNI_GROUND_MAP_COMPRESS);
+				int n2 = (gy * ground_map_stride) + gx;
+				if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
+					for (col = 0; col < bytes_per_pixel; col++) {
+						img[n+col] = 255;
+					}
+				}
+			}
+		}
+	}
+
+	int x = (robot_x+OMNI_GROUND_MAP_RADIUS) * img_width / (OMNI_GROUND_MAP_RADIUS*2);
+	int y = (robot_y+OMNI_GROUND_MAP_RADIUS) * img_height / (OMNI_GROUND_MAP_RADIUS*2);
+    drawing::drawSpot(img,img_width,img_height,x,y,4,0,255,0);
+}
