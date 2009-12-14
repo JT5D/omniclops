@@ -43,6 +43,8 @@ class omni {
 public:
     unsigned int imgWidth, imgHeight;
 
+    unsigned char* feature_radius_index;
+
     /* array storing x coordinates of detected features */
     short int* feature_x;
 
@@ -67,6 +69,10 @@ public:
 
     /* maps raw image pixels to 3D rays */
     int* ray_map;
+
+    /* radial lines */
+    int no_of_radial_lines;
+    int* radial_lines;
 
     unsigned char* ground_map;
     bool moved, first_move;
@@ -111,6 +117,7 @@ public:
     bool FileExists(std::string filename);
     void save_edges(std::string filename, int no_of_feats_vertical, int no_of_feats_horizontal);
     void save_rays(std::string filename, int no_of_feats_vertical, int no_of_feats_horizontal);
+    void save_radial_lines(std::string filename);
     void get_calibration_image(
     	unsigned char* img,
     	int img_width,
@@ -175,7 +182,7 @@ public:
     	int img_width,
     	int img_height,
     	int bytes_per_pixel);
-    void show_radial_lines(
+    void detect_radial_lines(
         unsigned char* img,
         int img_width,
         int img_height,
@@ -183,6 +190,11 @@ public:
     	int no_of_feats_vertical,
     	int no_of_feats_horizontal,
     	int threshold);
+    void show_radial_lines(
+        unsigned char* img,
+        int img_width,
+        int img_height,
+        int max_radius_mm);
 
     omni(int width, int height);
     ~omni();
