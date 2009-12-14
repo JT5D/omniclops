@@ -31,6 +31,7 @@ omni::omni(int width, int height) {
 	ray_map = NULL;
 	calibration_map = NULL;
 	ground_map = NULL;
+	feature_radius_index = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -54,6 +55,9 @@ omni::omni(int width, int height) {
 	robot_rotation_degrees = 0;
 	moved = false;
 	first_move = true;
+
+	no_of_radial_lines = 0;
+	radial_lines = NULL;
 }
 
 omni::~omni() {
@@ -61,6 +65,12 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
+	if (radial_lines != NULL) {
+		delete[] radial_lines;
+	}
+	if (feature_radius_index != NULL) {
+		delete[] feature_radius_index;
+	}
 	if (ground_map != NULL) {
 		delete[] ground_map;
 	}
@@ -710,6 +720,38 @@ void omni::save_edges(
 	}
 }
 
+/* saves radial lines */
+void omni::save_radial_lines(
+	std::string filename)
+{
+	FILE *file = fopen(filename.c_str(), "wb");
+	if (file != NULL) {
+
+		struct MatchData {
+			int rotation_degrees;
+			int x0;
+			int y0;
+			int x1;
+			int y1;
+		};
+
+		MatchData *m = new MatchData[no_of_radial_lines+1];
+		for (int i = 0; i < no_of_radial_lines; i++) {
+			m[i].rotation_degrees = radial_lines[i*5];
+			m[i].x0 = radial_lines[i*5+1];
+			m[i].y0 = radial_lines[i*5+2];
+			m[i].x1 = radial_lines[i*5+3];
+			m[i].y1 = radial_lines[i*5+4];
+		}
+
+		fwrite(m, sizeof(MatchData), no_of_radial_lines, file);
+		delete[] m;
+
+		fclose(file);
+	}
+}
+
+
 /* saves 3D rays to file for use by other programs */
 void omni::save_rays(
 	std::string filename,
@@ -1208,6 +1250,7 @@ void omni::create_ray_map(
 {
 	if (ray_map == NULL) {
 		ray_map = new int[img_width*img_height*6];
+		memset((void*)ray_map,'\0',img_width*img_height*6*sizeof(int));
 	}
 
 	float half_pi = 3.1415927f/2;
@@ -1463,16 +1506,40 @@ void omni::show_radial_lines(
     unsigned char* img,
     int img_width,
     int img_height,
+    int max_radius_mm)
+{
+	show_ground_plane(img, img_width, img_height, max_radius_mm);
+
+	for (int i = 0; i < no_of_radial_lines; i++) {
+		int x0 = radial_lines[i*5+1];
+		int y0 = radial_lines[i*5+2];
+		int x1 = radial_lines[i*5+3];
+		int y1 = radial_lines[i*5+4];
+		drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,255,0,0,1,false);
+	}
+}
+
+void omni::detect_radial_lines(
+    unsigned char* img,
+    int img_width,
+    int img_height,
     int max_radius_mm,
 	int no_of_feats_vertical,
 	int no_of_feats_horizontal,
 	int threshold)
 {
-	show_ground_plane(img, img_width, img_height, max_radius_mm);
+	if (feature_radius_index == NULL) {
+		feature_radius_index = new unsigned char[OMNI_MAX_FEATURES];
+	}
+	if (radial_lines == NULL) {
+		radial_lines = new int[360/2*5];
+	}
+	int feature_index = 0;
+	no_of_radial_lines = 0;
 
 	const int radii = 360/2;
-	int* bucket = new int[radii];
-	int* mean = new int[radii*2];
+	int* bucket = new int[radii+1];
+	int* mean = new int[radii*2+2];
 	memset((void*)bucket,'\0',radii*sizeof(int));
 	memset((void*)mean,'\0',radii*2*sizeof(int));
 	int cx = img_width/2;
@@ -1487,26 +1554,31 @@ void omni::show_radial_lines(
 	int row = 0;
 	int feats_remaining = features_per_row[row];
 
-	for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+	for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--, feature_index++) {
 
-		int x = feature_x[f] / OMNI_SUB_PIXEL;
-		int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
-		if ((x > -1) && (x < img_width) &&
-			(y > -1) && (y < img_height)) {
-			int n = ((y*img_width)+x)*6;
-			if ((ray_map[n+5] == 0) &&
-				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
-				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
-				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
-				int dx = xx - cx;
-				int dy = yy - cy;
-				int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
-				if (b < 0) b += radii;
-				if (b > radii) b -= radii;
-				bucket[b]++;
-				mean[b*2] += xx;
-				mean[b*2+1] += yy;
+		if (feature_index < OMNI_MAX_FEATURES) {
+			feature_radius_index[feature_index] = 0;
+
+			int x = feature_x[f] / OMNI_SUB_PIXEL;
+			int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+			if ((x > -1) && (x < img_width) &&
+				(y > -1) && (y < img_height)) {
+				int n = ((y*img_width)+x)*6;
+				if ((ray_map[n+5] == 0) &&
+					(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+					(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+					int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+					int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+					int dx = xx - cx;
+					int dy = yy - cy;
+					int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+					if (b < 0) b += radii;
+					if (b >= radii) b -= radii;
+					feature_radius_index[feature_index] = (unsigned char)(1+b);
+					bucket[b]++;
+					mean[b*2] += xx;
+					mean[b*2+1] += yy;
+				}
 			}
 		}
 
@@ -1521,26 +1593,31 @@ void omni::show_radial_lines(
 	int col = 0;
 	feats_remaining = features_per_col[col];
 
-	for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+	for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--, feature_index++) {
 
-		int y = feature_y[f] / OMNI_SUB_PIXEL;
-		int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
-		if ((x > -1) && (x < img_width) &&
-			(y > -1) && (y < img_height)) {
-			int n = ((y*img_width)+x)*6;
-			if ((ray_map[n+5] == 0) &&
-				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
-				int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
-				int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
-				int dx = xx - cx;
-				int dy = yy - cy;
-				int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
-				if (b < 0) b += radii;
-				if (b > radii) b -= radii;
-				bucket[b]++;
-				mean[b*2] += xx;
-				mean[b*2+1] += yy;
+		if (feature_index < OMNI_MAX_FEATURES) {
+		    feature_radius_index[feature_index] = 0;
+
+			int y = feature_y[f] / OMNI_SUB_PIXEL;
+			int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+			if ((x > -1) && (x < img_width) &&
+				(y > -1) && (y < img_height)) {
+				int n = ((y*img_width)+x)*6;
+				if ((ray_map[n+5] == 0) &&
+					(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+					(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+					int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+					int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+					int dx = xx - cx;
+					int dy = yy - cy;
+					int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
+					if (b < 0) b += radii;
+					if (b >= radii) b -= radii;
+					feature_radius_index[feature_index] = (unsigned char)(1+b);
+					bucket[b]++;
+					mean[b*2] += xx;
+					mean[b*2+1] += yy;
+				}
 			}
 		}
 
@@ -1574,6 +1651,7 @@ void omni::show_radial_lines(
 	for (int i = 0; i < radii; i++) {
 		if ((bucket[i] > threshold) &&
 			(bucket[i] > average_bucket_hits)) {
+
 			int mid_x = (mean[i*2] / bucket[i]) - cx;
 			int mid_y = (mean[i*2+1] / bucket[i]) - cy;
 			int mid_r = mid_x*mid_x + mid_y*mid_y;
@@ -1584,38 +1662,42 @@ void omni::show_radial_lines(
 			int y1 = 0;
 			int hits1 = 0;
 
+			feature_index = 0;
+
 			/* vertically oriented features */
 			row = 0;
 			feats_remaining = features_per_row[row];
 
-			for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+			for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--, feature_index++) {
 
-				int x = feature_x[f] / OMNI_SUB_PIXEL;
-				int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
-				if ((x > -1) && (x < img_width) &&
-					(y > -1) && (y < img_height)) {
-					int n = ((y*img_width)+x)*6;
-					if ((ray_map[n+5] == 0) &&
-						(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-						(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
-						int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
-						int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
-						int dx = xx - cx;
-						int dy = yy - cy;
-						int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
-						if (b < 0) b += radii;
-						if (b > radii) b -= radii;
-						if ((b >= i-1) && (b <= i+1)) {
-							int r = dx*dx + dy*dy;
-							if (r < mid_r) {
-							    x0 += xx;
-							    y0 += yy;
-							    hits0++;
-							}
-							else {
-							    x1 += xx;
-							    y1 += yy;
-							    hits1++;
+				if (feature_index < OMNI_MAX_FEATURES) {
+					int x = feature_x[f] / OMNI_SUB_PIXEL;
+					int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+					if ((x > -1) && (x < img_width) &&
+						(y > -1) && (y < img_height)) {
+						int n = ((y*img_width)+x)*6;
+						if ((ray_map[n+5] == 0) &&
+							(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+							(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+							int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+							int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+							int dx = xx - cx;
+							int dy = yy - cy;
+							int b = (int)feature_radius_index[feature_index]-1;
+							if (b > -1) {
+								if ((b >= i-1) && (b <= i+1)) {
+									int r = dx*dx + dy*dy;
+									if (r < mid_r) {
+										x0 += xx;
+										y0 += yy;
+										hits0++;
+									}
+									else {
+										x1 += xx;
+										y1 += yy;
+										hits1++;
+									}
+								}
 							}
 						}
 					}
@@ -1632,34 +1714,36 @@ void omni::show_radial_lines(
 			col = 0;
 			feats_remaining = features_per_col[col];
 
-			for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+			for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--, feature_index++) {
+				if (feature_index < OMNI_MAX_FEATURES) {
+					int y = feature_y[f] / OMNI_SUB_PIXEL;
+					int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+					if ((x > -1) && (x < img_width) &&
+						(y > -1) && (y < img_height)) {
+						int n = ((y*img_width)+x)*6;
+						if ((ray_map[n+5] == 0) &&
+							(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+							(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+							int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
+							int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
+							int dx = xx - cx;
+							int dy = yy - cy;
 
-				int y = feature_y[f] / OMNI_SUB_PIXEL;
-				int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
-				if ((x > -1) && (x < img_width) &&
-					(y > -1) && (y < img_height)) {
-					int n = ((y*img_width)+x)*6;
-					if ((ray_map[n+5] == 0) &&
-						(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-						(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
-						int xx = (ray_map[n+3] - min_x) * img_width / (max_x-min_x);
-						int yy = (ray_map[n+4] - min_y) * img_height / (max_y-min_y);
-						int dx = xx - cx;
-						int dy = yy - cy;
-						int b = (int)((float)atan2(dx,dy) * (radii-1) / (3.1415927f*2));
-						if (b < 0) b += radii;
-						if (b > radii) b -= radii;
-						if ((b >= i-1) && (b <= i+1)) {
-							int r = dx*dx + dy*dy;
-							if (r < mid_r) {
-							    x0 += xx;
-							    y0 += yy;
-							    hits0++;
-							}
-							else {
-							    x1 += xx;
-							    y1 += yy;
-							    hits1++;
+							int b = (int)feature_radius_index[feature_index]-1;
+							if (b > -1) {
+								if ((b >= i-1) && (b <= i+1)) {
+									int r = dx*dx + dy*dy;
+									if (r < mid_r) {
+										x0 += xx;
+										y0 += yy;
+										hits0++;
+									}
+									else {
+										x1 += xx;
+										y1 += yy;
+										hits1++;
+									}
+								}
 							}
 						}
 					}
@@ -1680,7 +1764,12 @@ void omni::show_radial_lines(
 				y1 /= hits1;
 				x1 = x0 + (x1 - x0)* 4;
 				y1 = y0 + (y1 - y0)* 4;
-				drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,255,0,0,1,false);
+				radial_lines[no_of_radial_lines*5] = i * 360 / radii;
+				radial_lines[no_of_radial_lines*5+1] = x0;
+				radial_lines[no_of_radial_lines*5+2] = y0;
+				radial_lines[no_of_radial_lines*5+3] = x1;
+				radial_lines[no_of_radial_lines*5+4] = y1;
+				no_of_radial_lines++;
 			}
 		}
 	}

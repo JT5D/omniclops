@@ -92,6 +92,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
   opt->addUsage( "     --saveedges            Save edges to file");
+  opt->addUsage( "     --saveradial           Save radial lines to file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --stream               Stream output using gstreamer");
@@ -113,6 +114,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "save" );
   opt->setOption(  "savecalib" );
   opt->setOption(  "saveedges" );
+  opt->setOption(  "saveradial" );
   opt->setOption(  "fps", 'f' );
   opt->setOption(  "dev" );
   opt->setOption(  "width", 'w' );
@@ -187,6 +189,12 @@ int main(int argc, char* argv[]) {
   if( opt->getValue( "saveedges" ) != NULL  ) {
 	  edges_filename = opt->getValue("saveedges");
   	  if (edges_filename == "") edges_filename = "edges.dat";
+  }
+
+  std::string radial_lines_filename = "";
+  if( opt->getValue( "saveradial" ) != NULL  ) {
+	  radial_lines_filename = opt->getValue("saveradial");
+  	  if (radial_lines_filename == "") radial_lines_filename = "radial.dat";
   }
 
   if( opt->getFlag( "help" ) ) {
@@ -433,6 +441,7 @@ int main(int argc, char* argv[]) {
 	/* display the features */
 	if ((show_features) ||
 		(edges_filename != "") ||
+		(radial_lines_filename != "") ||
 		(save_rays != "") ||
 		(show_ground_features) ||
 		(show_lines)) {
@@ -505,12 +514,19 @@ int main(int argc, char* argv[]) {
 		cvSaveImage(calibration_image_filename.c_str(), calib);
 	    cvReleaseImage(&calib);
 		printf("Camera calibration image saved to %s\n", calibration_image_filename.c_str());
-		if ((!save_image) && (save_rays == "") && (edges_filename == "") && (save_ray_paths_image == "")) break;
+		if ((!save_image) && (radial_lines_filename == "") && (save_rays == "") && (edges_filename == "") && (save_ray_paths_image == "")) break;
 	}
 
 	if (edges_filename != "") {
 		lcam->save_edges(edges_filename, no_of_feats, no_of_feats_horizontal);
 		printf("Edges saved to %s\n", edges_filename.c_str());
+		if ((!save_image) && (radial_lines_filename == "") && (save_rays == "") && (save_ray_paths_image == "")) break;
+	}
+
+	if (radial_lines_filename != "") {
+	    lcam->detect_radial_lines(l_, ww, hh, range_mm, no_of_feats, no_of_feats_horizontal,5);
+		lcam->save_radial_lines(radial_lines_filename);
+		printf("Radial lines saved to %s\n", radial_lines_filename.c_str());
 		if ((!save_image) && (save_rays == "") && (save_ray_paths_image == "")) break;
 	}
 
@@ -570,10 +586,11 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_lines) {
-	    lcam->show_radial_lines(
-	        l_,ww,hh,range_mm,
-	    	no_of_feats,
-	    	no_of_feats_horizontal,5);
+	    lcam->detect_radial_lines(
+	        l_, ww, hh, range_mm,
+	    	no_of_feats, no_of_feats_horizontal,5);
+
+	    lcam->show_radial_lines(l_,ww,hh,range_mm);
 	}
 
 	if (save_ray_paths_image != "") {
