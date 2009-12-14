@@ -15,7 +15,7 @@ Optionally lines can be saved to file for subsequent analysis.
 The file contains 5 integer values per entry:
 
  # Orientation of the line in degrees
- # start x coordinate
- # start y coordinate
- # end x coordinate
- # end y coordinate
+ # start x coordinate in pixels
+ # start y coordinate in pixels
+ # end x coordinate in pixels
+ # end y coordinate in pixels
