@@ -25,9 +25,10 @@
 #include <string.h>
 #include <math.h>
 #include <fstream>
-#include "polynomial.h"
-#include "linefit.h"
+#include "drawing.h"
 
+#define OMNI_MATCH_HISTORY          4
+#define OMNI_MAX_MATCHES            2000
 #define OMNI_MAX_FEATURES           4000
 #define OMNI_MAX_IMAGE_WIDTH        1024
 #define OMNI_MAX_IMAGE_HEIGHT       1024
@@ -98,7 +99,6 @@ public:
     int get_features_horizontal(unsigned char* rectified_frame_buf, int inhibition_radius, unsigned int minimum_response, int calibration_offset_x, int calibration_offset_y, int outer_radius_percent, int inner_radius_percent);
     int get_features_vertical(unsigned char* rectified_frame_buf, int inhibition_radius, unsigned int minimum_response, int calibration_offset_x, int calibration_offset_y, int outer_radius_percent, int inner_radius_percent);
 
-    void make_map(float centre_of_distortion_x, float centre_of_distortion_y, float coeff_0, float coeff_1, float coeff_2, float rotation, float scale);
     void make_map_int(long centre_of_distortion_x, long centre_of_distortion_y, long* coeff, long scale_num, long scale_denom);
     void rectify(unsigned char* raw_image, unsigned char* rectified_frame_buf);
     void flip(unsigned char* raw_image, unsigned char* flipped_frame_buf);
@@ -128,6 +128,12 @@ public:
         std::string direction);
 
     unsigned char* img_buffer;
+    unsigned char* img_prev_feats;
+    unsigned short** matches;
+    int* no_of_matches;
+    int current_match_index;
+    int max_match_radius;
+
     void create_ray_map(
     	float mirror_diameter,
     	float dist_to_mirror,
@@ -179,7 +185,8 @@ public:
     	int img_height,
     	int bytes_per_pixel,
     	int no_of_feats_vertical,
-    	int no_of_feats_horizontal);
+    	int no_of_feats_horizontal,
+    	int match_radius);
 
     void compass(int max_variance_degrees);
 

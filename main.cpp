@@ -372,8 +372,6 @@ int main(int argc, char* argv[]) {
   //motionmodel* motion = new motionmodel();
   fast* corners = new fast();
 
-  linefit *lines = new linefit();
-
   /*
    * Send the video over a network for use in embedded applications
    * using the gstreamer library.
@@ -512,7 +510,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (unwarp_features) {
-    	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal);
+    	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal,4);
     }
 
 	if (calibration_image_filename != "") {
@@ -547,19 +545,6 @@ int main(int argc, char* argv[]) {
 		if ((!save_image) && (save_ray_paths_image == "")) break;
 	}
 
-	if (skip_frames == 0) {
-
-		/* save image to file, then quit */
-		if (save_image) {
-			std::string filename = save_filename + ".jpg";
-			cvSaveImage(filename.c_str(), l);
-			if (save_ray_paths_image == "") break;
-		}
-	}
-
-	//motion->update(l_,ww,hh);
-	//motion->show(l_,ww,hh);
-
 	if (show_FAST) {
 		/* locate corner features in the image */
 		corners->update(l_,ww,hh, desired_corner_features,1);
@@ -580,6 +565,16 @@ int main(int argc, char* argv[]) {
 	    	no_of_feats, no_of_feats_horizontal,5);
 
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
+	}
+
+	if (skip_frames == 0) {
+
+		/* save image to file, then quit */
+		if (save_image) {
+			std::string filename = save_filename + ".jpg";
+			cvSaveImage(filename.c_str(), l);
+			if (save_ray_paths_image == "") break;
+		}
 	}
 
 	if (save_ray_paths_image != "") {
@@ -625,7 +620,6 @@ int main(int argc, char* argv[]) {
   delete lcam;
   //delete motion;
   delete corners;
-  delete lines;
 
   return 0;
 }

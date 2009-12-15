@@ -8,7 +8,6 @@ CPP_SRCS += \
 ../drawing.cpp \
 ../fast.cpp \
 ../libcam.cpp \
-../linefit.cpp \
 ../main.cpp \
 ../motionmodel.cpp \
 ../omni.cpp \
@@ -19,7 +18,6 @@ OBJS += \
 ./drawing.o \
 ./fast.o \
 ./libcam.o \
-./linefit.o \
 ./main.o \
 ./motionmodel.o \
 ./omni.o \
@@ -30,7 +28,6 @@ CPP_DEPS += \
 ./drawing.d \
 ./fast.d \
 ./libcam.d \
-./linefit.d \
 ./main.d \
 ./motionmodel.d \
 ./omni.d \
