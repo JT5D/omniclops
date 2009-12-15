@@ -6159,7 +6159,7 @@ void fast::update_descriptors(
 	unsigned char* descriptor_colour,
 	unsigned char* descriptor_direction)
 {
-	int f, radius=10, disp;
+	int f, radius=10;
 
 	for (f = 0; f < num_nonmax; f++) {
 		compute_descriptor(
@@ -6277,7 +6277,7 @@ void fast::show(
     int img_height,
     int show_tracking)
 {
-    int f,x,y,x2,y2,n,dx,dy,xx,yy,idx,disp,i;
+    int f,x,y,x2,y2,n,dx,dy,xx,yy,idx,i;
     int r,g,b;
 
 	for (f = 0; f < num_nonmax; f++) {
