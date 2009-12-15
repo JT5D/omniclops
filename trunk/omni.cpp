@@ -32,6 +32,7 @@ omni::omni(int width, int height) {
 	calibration_map = NULL;
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
+	unwarp_lookup_reverse = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -62,6 +63,7 @@ omni::~omni() {
 	delete[] row_peaks;
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
+		delete[] unwarp_lookup_reverse;
 	}
 	if (prev_radial_lines != NULL) {
 		delete[] prev_radial_lines;
@@ -1297,12 +1299,15 @@ void omni::create_ray_map(
         if (lookup_angle[i] > max_angle) max_angle = lookup_angle[i];
 	}
 
-	// create unwarp lookup
 	float *calibration_radius = new float[img_width*4];
+
+	// create unwarp lookup
 	unwarp_lookup = new int[img_width*img_height];
+	unwarp_lookup_reverse = new int[img_width*img_height];
 	memset((void*)unwarp_lookup, '\0', img_width*img_height*sizeof(int));
+	memset((void*)unwarp_lookup_reverse, '\0', img_width*img_height*sizeof(int));
 	for (int j = 0; j < img_height; j++) {
-		float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
+		float target_ang = min_angle + (j * (max_angle-min_angle) / img_height);
 		int k = 0;
 		for (k = 0; k < i; k++) {
 			if (lookup_angle[k] >= target_ang) break;
@@ -1319,7 +1324,10 @@ void omni::create_ray_map(
         	int raw_y = (img_height/2) + (int)(raw_radius * cos(angle));
         	n = ((img_height-1-y) * img_width)+x;
         	int n2 = (raw_y * img_width)+raw_x;
-        	unwarp_lookup[n] = n2;
+        	if ((n2 > -1) && (n2 < img_width*img_height)) {
+        	    unwarp_lookup[n] = n2;
+        	    unwarp_lookup_reverse[n2] = n;
+        	}
         }
     }
 
@@ -1867,4 +1875,77 @@ void omni::unwarp(
 		}
 		memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 	}
+}
+
+void omni::unwarp_features(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	int bytes_per_pixel,
+	int no_of_feats_vertical,
+	int no_of_feats_horizontal)
+{
+	if (img_buffer == NULL) {
+		img_buffer = new unsigned char[img_width*img_height*3];
+	}
+	memset((void*)img_buffer,'\0', img_width*img_height*3);
+
+	int max = img_width*(img_height-1)*bytes_per_pixel;
+	int stride = img_width*bytes_per_pixel;
+
+	/* vertically oriented features */
+	int row = 0;
+	int feats_remaining = features_per_row[row];
+
+	for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
+
+		int x = feature_x[f] / OMNI_SUB_PIXEL;
+		int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
+		if ((x > -1) && (x < img_width) &&
+			(y > -1) && (y < img_height)) {
+			int n = (y*img_width)+x;
+			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
+			if ((n2 > 0) && (n2 < max)) {
+			    for (int col = 0; col < bytes_per_pixel; col++) {
+			    	img_buffer[n2+col] = 255;
+			    	img_buffer[n2+col+stride] = 255;
+			    }
+			}
+		}
+
+		/* move to the next row */
+		if (feats_remaining <= 0) {
+			row++;
+			feats_remaining = features_per_row[row];
+		}
+	}
+
+	/* horizontally oriented features */
+	int col = 0;
+	feats_remaining = features_per_col[col];
+
+	for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
+
+		int y = feature_y[f] / OMNI_SUB_PIXEL;
+		int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
+		if ((x > -1) && (x < img_width) &&
+			(y > -1) && (y < img_height)) {
+			int n = (y*img_width)+x;
+			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
+			if ((n2 > 0) && (n2 < max)) {
+			    for (int col = 0; col < bytes_per_pixel; col++) {
+			    	img_buffer[n2+col] = 255;
+			    	img_buffer[n2+col+stride] = 255;
+			    }
+			}
+		}
+
+		/* move to the next column */
+		if (feats_remaining <= 0) {
+			col++;
+			feats_remaining = features_per_col[col];
+		}
+	}
+
+	memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 }
