@@ -51,6 +51,7 @@ int main(int argc, char* argv[]) {
   bool show_ground_features = false;
   bool show_ground = false;
   bool show_lines = false;
+  bool unwarp_features = false;
   float outer_radius = 115;
   //int FOV_degrees = 50;
 
@@ -94,6 +95,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --saveradial           Save radial lines to file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
+  opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
   opt->addUsage( "     --help                 Show help");
@@ -123,6 +125,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
+  opt->setFlag(  "unwarpfeatures" );
   opt->setFlag(  "version", 'V' );
   opt->setFlag(  "stream"  );
   opt->setFlag(  "headless"  );
@@ -208,6 +211,7 @@ int main(int argc, char* argv[]) {
 	  show_ground_features = false;
 	  show_features = false;
 	  show_FAST = false;
+	  unwarp_features = false;
   }
 
   if( opt->getFlag( "features" ) ) {
@@ -215,6 +219,16 @@ int main(int argc, char* argv[]) {
 	  show_ground = false;
 	  show_ground_features = false;
 	  show_features = true;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
+  if( opt->getFlag( "unwarpfeatures" ) ) {
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  unwarp_features = true;
 	  show_FAST = false;
   }
 
@@ -224,6 +238,7 @@ int main(int argc, char* argv[]) {
 	  show_ground_features = false;
 	  show_features = false;
 	  show_FAST = false;
+	  unwarp_features = false;
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
@@ -232,6 +247,7 @@ int main(int argc, char* argv[]) {
 	  show_ground_features = true;
 	  show_features = false;
 	  show_FAST = false;
+	  unwarp_features = false;
   }
 
   float focal_length = 3.6f;
@@ -287,6 +303,7 @@ int main(int argc, char* argv[]) {
 	  show_ground_features = false;
 	  show_FAST = true;
 	  show_features = false;
+	  unwarp_features = false;
 	  desired_corner_features = atoi(opt->getValue("fast"));
 	  if (desired_corner_features > 150) desired_corner_features=150;
 	  if (desired_corner_features < 50) desired_corner_features=50;
@@ -419,15 +436,12 @@ int main(int argc, char* argv[]) {
 
     lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
-    if (unwarp_image) {
-    	lcam->unwarp(l_,ww,hh,3);
-    }
-
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
 	/* display the features */
 	if ((show_features) ||
+		(unwarp_features) ||
 		(edges_filename != "") ||
 		(radial_lines_filename != "") ||
 		(save_rays != "") ||
@@ -451,7 +465,8 @@ int main(int argc, char* argv[]) {
 			inhibition_radius,
 			minimum_response,0,0, outer, inner);
 
-		if (!show_lines) {
+		if ((!show_lines) &&
+			(!unwarp_features)) {
 
 			/* vertically oriented features */
 			int row = 0;
@@ -491,6 +506,14 @@ int main(int argc, char* argv[]) {
 		}
 
 	}
+
+    if (unwarp_image) {
+    	lcam->unwarp(l_,ww,hh,3);
+    }
+
+    if (unwarp_features) {
+    	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal);
+    }
 
 	if (calibration_image_filename != "") {
 		const int calibration_image_width = 640*2;
@@ -548,28 +571,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_ground_features) {
-		/*
-    	int min_displacement_x = -20;
-    	int min_displacement_y = -20;
-    	int min_displacement_rotation_degrees = -1;
-    	int max_displacement_x = 20;
-    	int max_displacement_y = 20;
-    	int max_displacement_rotation_degrees = 1;
-
-		lcam->localise(
-	        ww,hh,
-	    	no_of_feats, no_of_feats_horizontal, 500,
-	    	min_displacement_x,
-	    	min_displacement_y,
-	    	min_displacement_rotation_degrees,
-	    	max_displacement_x,
-	    	max_displacement_y,
-	    	max_displacement_rotation_degrees);
-
-	    lcam->update_ground_map(ww,hh,no_of_feats, no_of_feats_horizontal, 500);
-
-	    lcam->show_ground_map(l_,ww,hh,3);
-        */
 	    lcam->show_ground_plane_features(l_,ww,hh,range_mm,no_of_feats,no_of_feats_horizontal);
 	}
 
@@ -579,7 +580,6 @@ int main(int argc, char* argv[]) {
 	    	no_of_feats, no_of_feats_horizontal,5);
 
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
-	    lcam->compass(20);
 	}
 
 	if (save_ray_paths_image != "") {

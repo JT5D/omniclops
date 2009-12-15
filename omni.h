@@ -78,6 +78,7 @@ public:
 
     unsigned int av_peaks;
     int* unwarp_lookup;
+    int* unwarp_lookup_reverse;
 
     int epipole;
 
@@ -172,6 +173,13 @@ public:
     	int img_width,
     	int img_height,
     	int bytes_per_pixel);
+    void unwarp_features(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int bytes_per_pixel,
+    	int no_of_feats_vertical,
+    	int no_of_feats_horizontal);
 
     void compass(int max_variance_degrees);
 
