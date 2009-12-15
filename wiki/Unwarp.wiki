@@ -1,4 +1,4 @@
-Unwarping is a particular way in which the omnidirectional image can be visualised.  The code to do this was originally written by [http://www.csc.kth.se/~pronobis/ Andrzej Pronobis].
+Unwarping is a particular way in which the omnidirectional image can be visualised, by projecting the raw image to a virtual camera located at the centre of the spherical mirror.
 
 Example usage:
 
