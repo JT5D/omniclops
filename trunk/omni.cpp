@@ -33,6 +33,10 @@ omni::omni(int width, int height) {
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
+	matches = NULL;
+	no_of_matches = NULL;
+	current_match_index = 0;
+	max_match_radius = 0;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -49,6 +53,7 @@ omni::omni(int width, int height) {
 
 	epipole=0;
 	img_buffer = NULL;
+	img_prev_feats = NULL;
 
 	no_of_radial_lines = 0;
 	radial_lines = NULL;
@@ -61,6 +66,16 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
+	if (matches != NULL) {
+		for (int i = 0; i < OMNI_MATCH_HISTORY; i++) {
+			delete[] matches[i];
+		}
+		delete[] matches;
+		delete[] no_of_matches;
+	}
+	if (img_prev_feats != NULL) {
+		delete[] img_prev_feats;
+	}
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -379,86 +394,6 @@ int inner_radius_percent)
 #endif
 
 	return (no_of_features);
-}
-
-/* creates a calibration map */
-void omni::make_map(
-float centre_of_distortion_x, /* centre of distortion x coordinate in pixels */
-float centre_of_distortion_y, /* centre of distortion y coordinate in pixels */
-float coeff_0, /* lens distortion polynomial coefficient 0 */
-float coeff_1, /* lens distortion polynomial coefficient 1 */
-float coeff_2, /* lens distortion polynomial coefficient 2 */
-float rotation, /* camera rotation (roll angle) in radians */
-float scale) { /* scaling applied */
-
-	/* free existing map */
-	if (calibration_map != NULL)
-		free(calibration_map);
-
-	polynomial* distortion_curve = new polynomial();
-	distortion_curve->SetDegree(3);
-	distortion_curve->SetCoeff(0, 0);
-	distortion_curve->SetCoeff(1, coeff_0);
-	distortion_curve->SetCoeff(2, coeff_1);
-	distortion_curve->SetCoeff(3, coeff_2);
-
-	int half_width = imgWidth / 2;
-	int half_height = imgHeight / 2;
-	calibration_map = new int[imgWidth * imgHeight];
-	for (int x = 0; x < (int) imgWidth; x++) {
-
-		float dx = x - centre_of_distortion_x;
-
-		for (int y = 0; y < (int) imgHeight; y++) {
-
-			float dy = y - centre_of_distortion_y;
-
-			float radial_dist_rectified = (float) sqrt(dx * dx + dy * dy);
-			if (radial_dist_rectified >= 0.01f) {
-
-				double radial_dist_original = distortion_curve->RegVal(
-						radial_dist_rectified);
-				if (radial_dist_original > 0) {
-
-					double ratio = radial_dist_original / radial_dist_rectified;
-					float x2 = (float) round(centre_of_distortion_x + (dx
-							* ratio));
-					x2 = (x2 - (imgWidth / 2)) * scale;
-					float y2 = (float) round(centre_of_distortion_y + (dy
-							* ratio));
-					y2 = (y2 - (imgHeight / 2)) * scale;
-
-					// apply rotation
-					double x3 = x2, y3 = y2;
-					double hyp;
-					if (rotation != 0) {
-						hyp = sqrt(x2 * x2 + y2 * y2);
-						if (hyp > 0) {
-							double rot_angle = acos(y2 / hyp);
-							if (x2 < 0)
-								rot_angle = (3.1415927 * 2) - rot_angle;
-							double new_angle = rotation + rot_angle;
-							x3 = hyp * sin(new_angle);
-							y3 = hyp * cos(new_angle);
-						}
-					}
-
-					x3 += half_width;
-					y3 += half_height;
-
-					if (((int) x3 > -1) && ((int) x3 < (int) imgWidth)
-							&& ((int) y3 > -1) && ((int) y3 < (int) imgHeight)) {
-
-						int n = (y * imgWidth) + x;
-						int n2 = ((int) y3 * imgWidth) + (int) x3;
-
-						calibration_map[n] = n2;
-					}
-				}
-			}
-		}
-	}
-	delete distortion_curve;
 }
 
 /* takes the raw image and camera calibration parameters and returns a rectified image */
@@ -1180,7 +1115,7 @@ bool omni::intersection(
     else
         m2 = (float)1e+10;   //close, but no cigar
 
-    dm = (float)ABS(m1 - m2);
+    dm = fabs(m1 - m2);
     if (dm > 0.000001f)
     {
         //compute constants
@@ -1221,23 +1156,6 @@ bool omni::intersection(
 
     return (insideLine);
 }
-
-/* convert a 2D point (range,height) to a radial position */
-/*
-float omni::CartesianToRadius(
-	float feature_range_mm,
-	float feature_height_mm,
-	float mirror_diameter_mm,
-	float dist_to_mirror_mm,
-	float focal_length_mm,
-	float camera_height_mm,
-	float outer_radius_percent,
-    int img_width,
-    int img_height)
-{
-
-}
-*/
 
 void omni::create_ray_map(
 	float mirror_diameter,
@@ -1307,7 +1225,7 @@ void omni::create_ray_map(
 	memset((void*)unwarp_lookup, '\0', img_width*img_height*sizeof(int));
 	memset((void*)unwarp_lookup_reverse, '\0', img_width*img_height*sizeof(int));
 	for (int j = 0; j < img_height; j++) {
-		float target_ang = min_angle + (j * (max_angle-min_angle) / img_height);
+		float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
 		int k = 0;
 		for (k = 0; k < i; k++) {
 			if (lookup_angle[k] >= target_ang) break;
@@ -1883,13 +1801,30 @@ void omni::unwarp_features(
 	int img_height,
 	int bytes_per_pixel,
 	int no_of_feats_vertical,
-	int no_of_feats_horizontal)
+	int no_of_feats_horizontal,
+	int match_radius)
 {
 	if (img_buffer == NULL) {
 		img_buffer = new unsigned char[img_width*img_height*3];
 	}
+	if (matches == NULL) {
+		no_of_matches = new int[OMNI_MATCH_HISTORY];
+		memset((void*)no_of_matches,'\0',OMNI_MATCH_HISTORY*sizeof(int));
+		matches = new unsigned short*[OMNI_MATCH_HISTORY];
+		for (int i = 0; i < OMNI_MATCH_HISTORY; i++) {
+			matches[i] = new unsigned short[OMNI_MAX_MATCHES*4];
+		}
+	}
+	if ((match_radius > 0) && (img_prev_feats == NULL)) {
+		img_prev_feats = new unsigned char[img_width*img_height*3];
+		memset((void*)img_prev_feats,'\0', img_width*img_height*3);
+	}
 	memset((void*)img_buffer,'\0', img_width*img_height*3);
 
+	if (match_radius > 0) no_of_matches[current_match_index] = 0;
+	if (max_match_radius < match_radius) max_match_radius = match_radius;
+	int average_flow = 0;
+	int average_flow_hits = 0;
 	int max = img_width*(img_height-1)*bytes_per_pixel;
 	int stride = img_width*bytes_per_pixel;
 
@@ -1906,9 +1841,40 @@ void omni::unwarp_features(
 			int n = (y*img_width)+x;
 			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
 			if ((n2 > 0) && (n2 < max)) {
+				// look for local matches
+                if (match_radius > 0) {
+                	int min_dist = max_match_radius*max_match_radius;
+                	int yy = n2 / stride;
+                	int xx = (n2 - (yy*stride))/bytes_per_pixel;
+                	int best_xx=-1;
+                	int best_yy=-1;
+                	for (int yyy = yy - max_match_radius; yyy <= yy + max_match_radius; yyy++) {
+                		int n3 = (yyy * stride) + ((xx - max_match_radius)*bytes_per_pixel);
+                		int dy = yyy-yy;
+                    	for (int xxx = xx - max_match_radius; xxx <= xx + max_match_radius; xxx++, n3 += bytes_per_pixel) {
+                    		if (img_prev_feats[n3] != 0) {
+                    			int dist = (xxx - xx)*(xxx - xx) + dy*dy;
+                    			if (dist < min_dist) {
+                    				min_dist = dist;
+                    				best_xx = xxx;
+                    				best_yy = yyy;
+                    			}
+                    		}
+                    	}
+                	}
+                	if ((best_xx != -1) && (no_of_matches[current_match_index] < OMNI_MAX_MATCHES)) {
+                		int m = no_of_matches[current_match_index];
+                		matches[current_match_index][m*4] = (unsigned short)best_xx;
+                		matches[current_match_index][m*4+1] = (unsigned short)best_yy;
+                		matches[current_match_index][m*4+2] = (unsigned short)xx;
+                		matches[current_match_index][m*4+3] = (unsigned short)yy;
+                		average_flow += min_dist;
+                		average_flow_hits++;
+                		no_of_matches[current_match_index]++;
+                	}
+                }
 			    for (int col = 0; col < bytes_per_pixel; col++) {
 			    	img_buffer[n2+col] = 255;
-			    	img_buffer[n2+col+stride] = 255;
 			    }
 			}
 		}
@@ -1933,9 +1899,40 @@ void omni::unwarp_features(
 			int n = (y*img_width)+x;
 			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
 			if ((n2 > 0) && (n2 < max)) {
+				// look for local matches
+                if (match_radius > 0) {
+                	int min_dist = max_match_radius*max_match_radius;
+                	int yy = n2 / stride;
+                	int xx = (n2 - (yy*stride))/bytes_per_pixel;
+                	int best_xx=-1;
+                	int best_yy=-1;
+                	for (int yyy = yy - max_match_radius; yyy <= yy + max_match_radius; yyy++) {
+                		int n3 = (yyy * stride) + ((xx - max_match_radius)*bytes_per_pixel);
+                		int dy = yyy-yy;
+                    	for (int xxx = xx - max_match_radius; xxx <= xx + max_match_radius; xxx++, n3 += bytes_per_pixel) {
+                    		if (img_prev_feats[n3] != 0) {
+                    			int dist = (xxx - xx)*(xxx - xx) + dy*dy;
+                    			if (dist < min_dist) {
+                    				min_dist = dist;
+                    				best_xx = xxx;
+                    				best_yy = yyy;
+                    			}
+                    		}
+                    	}
+                	}
+                	if ((best_xx != -1) && (no_of_matches[current_match_index] < OMNI_MAX_MATCHES)) {
+                		int m = no_of_matches[current_match_index];
+                		matches[current_match_index][m*4] = (unsigned short)best_xx;
+                		matches[current_match_index][m*4+1] = (unsigned short)best_yy;
+                		matches[current_match_index][m*4+2] = (unsigned short)xx;
+                		matches[current_match_index][m*4+3] = (unsigned short)yy;
+                		average_flow += min_dist;
+                		average_flow_hits++;
+                		no_of_matches[current_match_index]++;
+                	}
+                }
 			    for (int col = 0; col < bytes_per_pixel; col++) {
 			    	img_buffer[n2+col] = 255;
-			    	img_buffer[n2+col+stride] = 255;
 			    }
 			}
 		}
@@ -1947,5 +1944,46 @@ void omni::unwarp_features(
 		}
 	}
 
-	memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
+	if (match_radius > 0) {
+		//printf("matches = %d\n", no_of_matches);
+	    memcpy((void*)img_prev_feats, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
+
+	    memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
+	    for (int j = 0; j < OMNI_MATCH_HISTORY; j++) {
+	    	int n = current_match_index - j;
+	    	if (n < 0) n += OMNI_MATCH_HISTORY;
+			for (int i = 0; i < no_of_matches[n]; i++) {
+				int dx = abs(matches[n][i*4] - matches[n][i*4+2]);
+				int dy = abs(matches[n][i*4+1] - matches[n][i*4+3]);
+				if ((dx > 1) || (dy > 1)) {
+					int r = 255;
+					int g = 0;
+					int b = 0;
+					if (matches[n][i*4] - matches[n][i*4+2] > matches[n][i*4+1] - matches[n][i*4+3]) {
+						r = 0;
+						g = 255;
+						b = 0;
+					}
+					drawing::drawLine(img,img_width,img_height,matches[n][i*4],matches[n][i*4+1],matches[n][i*4+2],matches[n][i*4+3],r,g,b,0,false);
+				}
+			}
+	    }
+
+	    if (average_flow_hits > 0) average_flow /= average_flow_hits;
+	    if (average_flow > max_match_radius-3) {
+	    	max_match_radius++;
+	    }
+	    else {
+	    	max_match_radius--;
+	    }
+	    //printf("max_match_radius %d\n", max_match_radius);
+
+	    current_match_index++;
+	    if (current_match_index >= OMNI_MATCH_HISTORY) {
+	    	current_match_index = 0;
+	    }
+	}
+	else {
+	    memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
+	}
 }
