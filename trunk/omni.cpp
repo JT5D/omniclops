@@ -30,8 +30,8 @@ omni::omni(int width, int height) {
 
 	ray_map = NULL;
 	calibration_map = NULL;
-	ground_map = NULL;
 	feature_radius_index = NULL;
+	unwarp_lookup = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -49,15 +49,10 @@ omni::omni(int width, int height) {
 	epipole=0;
 	img_buffer = NULL;
 
-	robot_x = 0;
-	robot_y = 0;
-	robot_z = 0;
-	robot_rotation_degrees = 0;
-	moved = false;
-	first_move = true;
-
 	no_of_radial_lines = 0;
 	radial_lines = NULL;
+	prev_no_of_radial_lines = 0;
+	prev_radial_lines = NULL;
 }
 
 omni::~omni() {
@@ -65,14 +60,17 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
+	if (unwarp_lookup != NULL) {
+		delete[] unwarp_lookup;
+	}
+	if (prev_radial_lines != NULL) {
+		delete[] prev_radial_lines;
+	}
 	if (radial_lines != NULL) {
 		delete[] radial_lines;
 	}
 	if (feature_radius_index != NULL) {
 		delete[] feature_radius_index;
-	}
-	if (ground_map != NULL) {
-		delete[] ground_map;
 	}
 	if (calibration_map != NULL) {
 		delete[] calibration_map;
@@ -1265,16 +1263,20 @@ void omni::create_ray_map(
     int max_index = (int)(half_pi / ang_incr);
     float* lookup_pixel_x = new float[max_index];
     float* lookup_ray = new float[max_index*4];
+    float* lookup_angle = new float[max_index];
     memset((void*)lookup_pixel_x,'\0',max_index*sizeof(float));
     memset((void*)lookup_ray,'\0',max_index*4*sizeof(float));
+    memset((void*)lookup_angle,'\0',max_index*sizeof(float));
     int i = 0;
+    float min_angle = 9999;
+    float max_angle = -9999;
 	for (float ang = ang_incr; ang < half_pi; ang += ang_incr, i++) {
         sphere_x = (float)fabs(mirror_diameter*0.5f*sin(ang));
         sphere_y = camera_height_mm + dist_to_mirror_centre - (float)fabs(mirror_diameter*0.5f*cos(ang));
         float viewing_angle = (float)atan(sphere_x / (sphere_y - camera_height_mm));
         pixel_x = viewing_angle * outer_radius_pixels / max_viewing_angle;
         float ang2 = viewing_angle + (ang*2);
-        if (ang2 >= 3.1415927f/2) {
+        if (ang2 >= half_pi) {
         	if (epipole == 0) {
         		epipole = (int)pixel_x;
         	}
@@ -1290,14 +1292,42 @@ void omni::create_ray_map(
         lookup_ray[i*4+1] = sphere_y;
         lookup_ray[i*4+2] = ray_end_x;
         lookup_ray[i*4+3] = ray_end_y;
+        lookup_angle[i] = (float)atan2(ray_end_x, dist_to_mirror_centre);
+        if (lookup_angle[i] < min_angle) min_angle = lookup_angle[i];
+        if (lookup_angle[i] > max_angle) max_angle = lookup_angle[i];
 	}
+
+	// create unwarp lookup
+	float *calibration_radius = new float[img_width*4];
+	unwarp_lookup = new int[img_width*img_height];
+	memset((void*)unwarp_lookup, '\0', img_width*img_height*sizeof(int));
+	for (int j = 0; j < img_height; j++) {
+		float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
+		int k = 0;
+		for (k = 0; k < i; k++) {
+			if (lookup_angle[k] >= target_ang) break;
+		}
+		calibration_radius[j] = lookup_pixel_x[k];
+	}
+    int n = 0;
+    float angle;
+    for (int x = 0; x < img_width; x++) {
+        angle = x * 3.1415927f*2 / img_width;
+        for (int y = 0; y < img_height; y++) {
+        	float raw_radius = calibration_radius[y];
+        	int raw_x = (img_width/2) + (int)(raw_radius * sin(angle));
+        	int raw_y = (img_height/2) + (int)(raw_radius * cos(angle));
+        	n = ((img_height-1-y) * img_width)+x;
+        	int n2 = (raw_y * img_width)+raw_x;
+        	unwarp_lookup[n] = n2;
+        }
+    }
 
 	float prev_x = 0;
 	float prev_ray_start_x = 0;
 	float prev_ray_start_y = 0;
 	float prev_ray_end_x = 0;
 	float prev_ray_end_y = 0;
-	float *calibration_radius = new float[img_width*4];
 	memset((void*)calibration_radius,'\0', img_width*4*sizeof(float));
     for (int j = 0; j < i; j++) {
 		int x = (int)lookup_pixel_x[j];
@@ -1319,8 +1349,7 @@ void omni::create_ray_map(
     memset((void*)ray_map,'\0', img_width*img_height*6*sizeof(int));
     int cx = img_width/2;
     int cy = img_height/2;
-    int n = 0;
-    float angle;
+    n = 0;
     for (int y = 0; y < img_height; y++) {
     	int dy = y - cy;
         for (int x = 0; x < img_width; x++, n++) {
@@ -1341,6 +1370,7 @@ void omni::create_ray_map(
     delete[] calibration_radius;
     delete[] lookup_pixel_x;
     delete[] lookup_ray;
+    delete[] lookup_angle;
 }
 
 void omni::show_ray_map_side(
@@ -1779,293 +1809,62 @@ void omni::detect_radial_lines(
 }
 
 
-void omni::localise(
-    int img_width,
-    int img_height,
-	int no_of_feats_vertical,
-	int no_of_feats_horizontal,
-	int compare_radius,
-	int min_displacement_x,
-	int min_displacement_y,
-	int min_displacement_rotation_degrees,
-	int max_displacement_x,
-	int max_displacement_y,
-	int max_displacement_rotation_degrees)
+void omni::compass(
+	int max_variance_degrees)
 {
-	if (ground_map == NULL) {
-		ground_map = new unsigned char[(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1];
-		memset((void*)ground_map,'\0',(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1);
+	if (prev_radial_lines == NULL) {
+		prev_radial_lines = new int[360/2*5];
+        memcpy((void*)prev_radial_lines, radial_lines, no_of_radial_lines*5*sizeof(int));
+        prev_no_of_radial_lines = no_of_radial_lines;
 	}
 
-	const int feature_step = 4;
-	const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
-	const int bit_lookup[] = {
-		1,2,4,8,16,32,64,128,256
-	};
+	int offset_degrees = 0;
+	int best_score = 99999;
+    for (int variance = -max_variance_degrees; variance <= max_variance_degrees; variance++) {
+    	int score = 0;
+        for (int i = 0; i < no_of_radial_lines; i++) {
+        	int min = 9999;
+        	int angle = radial_lines[i*5] + variance;
+        	if (angle < 0) angle += 360;
+        	if (angle >= 360) angle -= 360;
+        	for (int j = 0; j < prev_no_of_radial_lines; j++) {
+        		int diff = prev_radial_lines[j*5] - angle;
+        		if (diff < 0) diff = -diff;
+        		if (diff < min) min = diff;
+        	}
+        	score += min;
+        }
+        if (score < best_score) {
+        	best_score = score;
+        	offset_degrees = variance;
+        }
+    }
 
-	int max_hits = 0;
-	int best_offset_x = 0;
-	int best_offset_y = 0;
-	int best_offset_angle = 0;
+    if (offset_degrees != 0) {
+        //printf("offset_degrees = %d\n", offset_degrees);
 
-	for (int offset_x = min_displacement_x; offset_x <= max_displacement_x; offset_x+=2) {
-		for (int offset_y = min_displacement_y; offset_y <= max_displacement_y; offset_y+=2) {
-			for (int offset_angle = min_displacement_rotation_degrees; offset_angle <= max_displacement_rotation_degrees; offset_angle++) {
-
-				//printf("offset %d,%d\n",offset_x,offset_y);
-
-				float pan = (robot_rotation_degrees+offset_angle)*3.1415927f/180.0f;
-				float pan2 = pan + 3.1415927f;
-                float cos_pan2 = (float)cos(pan2);
-                float sin_pan2 = (float)sin(pan2);
-                float sin_pan = (float)sin(pan);
-                float cos_pan = (float)cos(pan);
-
-				int hits = 0;
-
-				/* vertically oriented features */
-				int row = 0;
-				int feats_remaining = features_per_row[row];
-
-				for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
-
-					if (f % feature_step == 0) {
-						int x = feature_x[f] / OMNI_SUB_PIXEL;
-						int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
-						if ((x > -1) && (x < img_width) &&
-							(y > -1) && (y < img_height)) {
-							int n = ((y*img_width)+x)*6;
-							if ((ray_map[n+5] == 0) &&
-								(ray_map[n+3] > -compare_radius) && (ray_map[n+3] < compare_radius) &&
-								(ray_map[n+4] > -compare_radius) && (ray_map[n+4] < compare_radius)) {
-								int xx0 = ray_map[n+3];
-								int yy0 = ray_map[n+4];
-				                int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
-				                int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
-								xx += offset_x+robot_x;
-								yy += offset_y+robot_y;
-								int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-								int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-								if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
-									(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
-									int n2 = (gy * ground_map_stride) + gx;
-									if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
-										hits++;
-									}
-								}
-							}
-						}
-					}
-
-					/* move to the next row */
-					if (feats_remaining <= 0) {
-						row++;
-						feats_remaining = features_per_row[row];
-					}
-				}
-
-				/* horizontally oriented features */
-				int col = 0;
-				feats_remaining = features_per_col[col];
-
-				for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
-
-					if (f % feature_step == 0) {
-						int y = feature_y[f] / OMNI_SUB_PIXEL;
-						int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
-						if ((x > -1) && (x < img_width) &&
-							(y > -1) && (y < img_height)) {
-							int n = ((y*img_width)+x)*6;
-							if ((ray_map[n+5] == 0) &&
-								(ray_map[n+3] > -compare_radius) && (ray_map[n+3] < compare_radius) &&
-								(ray_map[n+4] > -compare_radius) && (ray_map[n+4] < compare_radius)) {
-								int xx0 = ray_map[n+3];
-								int yy0 = ray_map[n+4];
-				                int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
-				                int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
-								xx += offset_x+robot_x;
-								yy += offset_y+robot_y;
-								int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-								int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-								if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
-									(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
-									int n2 = (gy * ground_map_stride) + gx;
-									if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
-										hits++;
-									}
-								}
-							}
-						}
-					}
-
-					/* move to the next column */
-					if (feats_remaining <= 0) {
-						col++;
-						feats_remaining = features_per_col[col];
-					}
-				}
-
-
-				if (hits > max_hits) {
-					max_hits = hits;
-					printf("offset %d,%d %d\n",offset_x,offset_y, hits);
-					best_offset_x = offset_x;
-					best_offset_y = offset_y;
-					best_offset_angle = offset_angle;
-				}
-			}
-		}
-	}
-
-	//printf("max hits = %d\n", max_hits);
-	//printf("best_offset = %d,%d\n", best_offset_x, best_offset_y);
-	if (max_hits > (no_of_feats_horizontal+no_of_feats_vertical)*0/100) {
-		robot_x += best_offset_x;
-		robot_y += best_offset_y;
-		robot_rotation_degrees += best_offset_angle;
-		if ((best_offset_x != 0) ||
-		    (best_offset_y != 0) ||
-		    (best_offset_angle != 0)) {
-			moved = true;
-		}
-	}
+        memcpy((void*)prev_radial_lines, radial_lines, no_of_radial_lines*5*sizeof(int));
+        prev_no_of_radial_lines = no_of_radial_lines;
+    }
 }
 
-
-void omni::update_ground_map(
-    int img_width,
-    int img_height,
-	int no_of_feats_vertical,
-	int no_of_feats_horizontal,
-	int update_radius)
-{
-	if (ground_map == NULL) {
-		ground_map = new unsigned char[(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1];
-		memset((void*)ground_map,'\0',(((OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS)*(OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS))/8)+1);
-	}
-
-	if ((first_move) || (moved)) {
-		first_move = false;
-		moved = false;
-
-		const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
-		const int bit_lookup[] = {
-			1,2,4,8,16,32,64,128,256
-		};
-
-		float pan = (robot_rotation_degrees)*3.1415927f/180.0f;
-		float pan2 = pan + 3.1415927f;
-		float cos_pan2 = (float)cos(pan2);
-		float sin_pan2 = (float)sin(pan2);
-		float sin_pan = (float)sin(pan);
-		float cos_pan = (float)cos(pan);
-
-		/* vertically oriented features */
-		int row = 0;
-		int feats_remaining = features_per_row[row];
-
-		for (int f = 0; f < no_of_feats_vertical; f++, feats_remaining--) {
-
-			int x = feature_x[f] / OMNI_SUB_PIXEL;
-			int y = (int)((4 + (row * OMNI_VERTICAL_SAMPLING)));
-			if ((x > -1) && (x < img_width) &&
-				(y > -1) && (y < img_height)) {
-				int n = ((y*img_width)+x)*6;
-				if ((ray_map[n+5] == 0) &&
-					(ray_map[n+3] > -update_radius) && (ray_map[n+3] < update_radius) &&
-					(ray_map[n+4] > -update_radius) && (ray_map[n+4] < update_radius)) {
-					int xx0 = ray_map[n+3];
-					int yy0 = ray_map[n+4];
-					int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
-					int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
-					xx += robot_x;
-					yy += robot_y;
-					int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-					int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-					if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
-						(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
-						int n2 = (gy * ground_map_stride) + gx;
-						ground_map[n2/8] |= bit_lookup[n2 % 8];
-					}
-				}
-			}
-
-			/* move to the next row */
-			if (feats_remaining <= 0) {
-				row++;
-				feats_remaining = features_per_row[row];
-			}
-		}
-
-		/* horizontally oriented features */
-		int col = 0;
-		feats_remaining = features_per_col[col];
-
-		for (int f = 0; f < no_of_feats_horizontal; f++, feats_remaining--) {
-
-			int y = feature_y[f] / OMNI_SUB_PIXEL;
-			int x = (int)((4 + (col * OMNI_HORIZONTAL_SAMPLING)));
-			if ((x > -1) && (x < img_width) &&
-				(y > -1) && (y < img_height)) {
-				int n = ((y*img_width)+x)*6;
-				if ((ray_map[n+5] == 0) &&
-					(ray_map[n+3] > -update_radius) && (ray_map[n+3] < update_radius) &&
-					(ray_map[n+4] > -update_radius) && (ray_map[n+4] < update_radius)) {
-					int xx0 = ray_map[n+3];
-					int yy0 = ray_map[n+4];
-					int xx = xx0; //(int)((cos_pan2 * xx0) - (sin_pan2 * yy0));
-					int yy = yy0; //(int)((sin_pan * xx0) + (cos_pan * yy0));
-					xx += robot_x;
-					yy += robot_y;
-					int gx = (xx + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-					int gy = (yy + OMNI_GROUND_MAP_RADIUS) * OMNI_GROUND_MAP_RADIUS*2 / (OMNI_GROUND_MAP_RADIUS*2*OMNI_GROUND_MAP_COMPRESS);
-					if ((gx > -1) && (gx < OMNI_GROUND_MAP_RADIUS*2) &&
-						(gy > -1) && (gy < OMNI_GROUND_MAP_RADIUS*2)) {
-						int n2 = (gy * ground_map_stride) + gx;
-						ground_map[n2/8] |= bit_lookup[n2 % 8];
-					}
-				}
-			}
-
-			/* move to the next column */
-			if (feats_remaining <= 0) {
-				col++;
-				feats_remaining = features_per_col[col];
-			}
-		}
-	}
-}
-
-void omni::show_ground_map(
+void omni::unwarp(
 	unsigned char* img,
 	int img_width,
 	int img_height,
 	int bytes_per_pixel)
 {
-	const int ground_map_stride = OMNI_GROUND_MAP_RADIUS*2/OMNI_GROUND_MAP_COMPRESS;
-	const int bit_lookup[] = {
-		1,2,4,8,16,32,64,128,256
-	};
+	if (unwarp_lookup != NULL) {
+		if (img_buffer == NULL) {
+			img_buffer = new unsigned char[img_width*img_height*3];
+		}
 
-	memset((void*)img,'\0',img_width*img_height*bytes_per_pixel);
-
-	if (ground_map != NULL) {
-		int col,n = 0;
-		for (int y = 0; y < img_height; y++) {
-			int gy = y * OMNI_GROUND_MAP_RADIUS*2 / (img_height*OMNI_GROUND_MAP_COMPRESS);
-			for (int x = 0; x < img_width; x++, n+=bytes_per_pixel) {
-				int gx = x * OMNI_GROUND_MAP_RADIUS*2 / (img_width*OMNI_GROUND_MAP_COMPRESS);
-				int n2 = (gy * ground_map_stride) + gx;
-				if (ground_map[n2/8] & bit_lookup[n2 % 8]) {
-					for (col = 0; col < bytes_per_pixel; col++) {
-						img[n+col] = 255;
-					}
-				}
+		for (int i = 0; i < img_width*img_height; i++) {
+			int j = unwarp_lookup[i] * bytes_per_pixel;
+			for (int col = 0; col < bytes_per_pixel; col++) {
+			    img_buffer[i*bytes_per_pixel+col] = img[j+col];
 			}
 		}
+		memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 	}
-
-	int x = (robot_x+OMNI_GROUND_MAP_RADIUS) * img_width / (OMNI_GROUND_MAP_RADIUS*2);
-	int y = (robot_y+OMNI_GROUND_MAP_RADIUS) * img_height / (OMNI_GROUND_MAP_RADIUS*2);
-    drawing::drawSpot(img,img_width,img_height,x,y,4,0,255,0);
 }

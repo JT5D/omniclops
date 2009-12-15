@@ -483,7 +483,7 @@ void Camera::init_mmap() {
     exit(1);
   }
 
-  for(n_buffers = 0; n_buffers < req.count; ++n_buffers) {
+  for(n_buffers = 0; n_buffers < (int)req.count; ++n_buffers) {
     struct v4l2_buffer buf;
 
     CLEAR (buf);
@@ -540,13 +540,13 @@ void Camera::UnInit() {
       break;
 
     case IO_METHOD_MMAP:
-      for(i = 0; i < n_buffers; ++i)
+      for(i = 0; i < (unsigned int)n_buffers; ++i)
         if(-1 == munmap (buffers[i].start, buffers[i].length))
           errno_exit ("munmap");
       break;
 
     case IO_METHOD_USERPTR:
-      for (i = 0; i < n_buffers; ++i)
+      for (i = 0; i < (unsigned int)n_buffers; ++i)
         free (buffers[i].start);
       break;
   }
@@ -567,7 +567,7 @@ void Camera::Start() {
       break;
 
     case IO_METHOD_MMAP:
-      for(i = 0; i < n_buffers; ++i) {
+      for(i = 0; i < (unsigned int)n_buffers; ++i) {
         struct v4l2_buffer buf;
 
         CLEAR (buf);
@@ -588,7 +588,7 @@ void Camera::Start() {
       break;
 
     case IO_METHOD_USERPTR:
-      for(i = 0; i < n_buffers; ++i) {
+      for(i = 0; i < (unsigned int)n_buffers; ++i) {
         struct v4l2_buffer buf;
 
         CLEAR (buf);
@@ -639,7 +639,6 @@ void Camera::Stop() {
 
 unsigned char *Camera::Get() {
   struct v4l2_buffer buf;
-  unsigned int i;
 
 
   switch(io) {
@@ -678,7 +677,7 @@ unsigned char *Camera::Get() {
         }
       }
 
-      assert(buf.index < n_buffers);
+      assert((int)buf.index < n_buffers);
 
 //process_image(buffers[buf.index].start);
 
@@ -729,7 +728,7 @@ return data;
       break;
   }
 
-
+  return(0);
 }
 
 

@@ -73,18 +73,13 @@ public:
     /* radial lines */
     int no_of_radial_lines;
     int* radial_lines;
-
-    unsigned char* ground_map;
-    bool moved, first_move;
+    int prev_no_of_radial_lines;
+    int* prev_radial_lines;
 
     unsigned int av_peaks;
+    int* unwarp_lookup;
 
     int epipole;
-
-	int robot_x;
-	int robot_y;
-	int robot_z;
-	int robot_rotation_degrees;
 
     bool intersection(
         float x0,
@@ -159,29 +154,6 @@ public:
         int max_radius_mm,
     	int no_of_feats_vertical,
     	int no_of_feats_horizontal);
-    void localise(
-        int img_width,
-        int img_height,
-    	int no_of_feats_vertical,
-    	int no_of_feats_horizontal,
-    	int compare_radius,
-    	int min_displacement_x,
-    	int min_displacement_y,
-    	int min_displacement_rotation_degrees,
-    	int max_displacement_x,
-    	int max_displacement_y,
-    	int max_displacement_rotation_degrees);
-    void update_ground_map(
-        int img_width,
-        int img_height,
-    	int no_of_feats_vertical,
-    	int no_of_feats_horizontal,
-    	int update_radius);
-    void show_ground_map(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int bytes_per_pixel);
     void detect_radial_lines(
         unsigned char* img,
         int img_width,
@@ -195,6 +167,13 @@ public:
         int img_width,
         int img_height,
         int max_radius_mm);
+    void unwarp(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int bytes_per_pixel);
+
+    void compass(int max_variance_degrees);
 
     omni(int width, int height);
     ~omni();

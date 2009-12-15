@@ -34,7 +34,6 @@
 #include "anyoption.h"
 #include "drawing.h"
 #include "omni.h"
-#include "unwarp.h"
 //#include "motionmodel.h"
 #include "fast.h"
 #include "libcam.h"
@@ -347,7 +346,6 @@ int main(int argc, char* argv[]) {
   IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *unwarped=cvCreateImage(cvSize(ww, hh), 8, 3);
   unsigned char *l_=(unsigned char *)l->imageData;
-  unsigned char *unwarped_=(unsigned char *)unwarped->imageData;
 
   /* feature detection params */
   int inhibition_radius = 6;
@@ -422,17 +420,7 @@ int main(int argc, char* argv[]) {
     lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
     if (unwarp_image) {
-
-        unwarp::update(
-			ww/2, hh/2,
-			(int)(inner_radius*ww/200),
-			(int)(outer_radius*ww/200),
-			false, false, false,
-			0.28,
-			1.5,
-			l,
-			unwarped);
-		memcpy((void*)l_,(void*)unwarped_,ww*hh*3);
+    	lcam->unwarp(l_,ww,hh,3);
     }
 
 	int no_of_feats = 0;
@@ -591,6 +579,7 @@ int main(int argc, char* argv[]) {
 	    	no_of_feats, no_of_feats_horizontal,5);
 
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
+	    lcam->compass(20);
 	}
 
 	if (save_ray_paths_image != "") {
