@@ -42,6 +42,77 @@
 
 using namespace std;
 
+void compute_optical_flow(
+	IplImage* frame1,
+	IplImage* frame2,
+	IplImage* output,
+	int number_of_features,
+	int max_magnitude,
+    IplImage *&frame1_1C,
+    IplImage *&frame2_1C,
+	IplImage *&eig_image,
+	IplImage *&temp_image,
+	IplImage *&pyramid1,
+	IplImage *&pyramid2)
+{
+	if (frame1_1C == NULL) {
+		frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+		frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+		eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+		temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+		pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+		pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+	}
+	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
+	cvConvertImage(frame2, frame2_1C, CV_BGR2GRAY);
+
+    CvPoint2D32f frame1_features[number_of_features];
+
+    cvGoodFeaturesToTrack(frame1_1C, eig_image, temp_image, frame1_features, &
+number_of_features, .01, .01, NULL);
+
+    CvPoint2D32f frame2_features[number_of_features];
+
+    char optical_flow_found_feature[number_of_features];
+    float optical_flow_feature_error[number_of_features];
+    CvSize optical_flow_window = cvSize(3,3);
+    CvTermCriteria optical_flow_termination_criteria
+        = cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .3 );
+
+    cvCalcOpticalFlowPyrLK(frame1_1C, frame2_1C, pyramid1, pyramid2, frame1_features,
+frame2_features, number_of_features, optical_flow_window, 5,
+optical_flow_found_feature, optical_flow_feature_error,
+optical_flow_termination_criteria, 0);
+
+    /* let's paint and make blended drinks */
+    for(int i = 0; i < number_of_features; i++)
+    {
+         if (optical_flow_found_feature[i] == 0) continue;
+         int line_thickness = 1;
+         CvScalar line_color = CV_RGB(255,0,0);
+         CvPoint p,q;
+         p.x = (int) frame1_features[i].x;
+         p.y = (int) frame1_features[i].y;
+         q.x = (int) frame2_features[i].x;
+         q.y = (int) frame2_features[i].y;
+         double hypotenuse = sqrt( (p.y - q.y)*(p.y - q.y) + (p.x - q.x)*(p.x - q.x) );
+         if ((hypotenuse > 3) && (hypotenuse < max_magnitude)) {
+			 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
+			 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
+			 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+			 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
+			 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+			 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
+			 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+         }
+    }
+
+}
+
+
 int main(int argc, char* argv[]) {
   int ww = 640;
   int hh = 480;
@@ -96,6 +167,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
+  opt->addUsage( "     --flow                 Compute optical flow");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
   opt->addUsage( "     --help                 Show help");
@@ -126,6 +198,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
   opt->setFlag(  "unwarpfeatures" );
+  opt->setFlag(  "flow" );
   opt->setFlag(  "version", 'V' );
   opt->setFlag(  "stream"  );
   opt->setFlag(  "headless"  );
@@ -212,6 +285,11 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+  }
+
+  bool optical_flow = false;
+  if( opt->getFlag( "flow" ) ) {
+      optical_flow = true;
   }
 
   if( opt->getFlag( "features" ) ) {
@@ -361,8 +439,17 @@ int main(int argc, char* argv[]) {
   }
 
   IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
-  IplImage *unwarped=cvCreateImage(cvSize(ww, hh), 8, 3);
+  IplImage *prev=cvCreateImage(cvSize(ww, hh), 8, 3);
+  IplImage *flow=cvCreateImage(cvSize(ww, hh), 8, 3);
+  IplImage *frame1_1C = NULL;
+  IplImage *frame2_1C = NULL;
+  IplImage *eig_image = NULL;
+  IplImage *temp_image = NULL;
+  IplImage *pyramid1 = NULL;
+  IplImage *pyramid2 = NULL;
   unsigned char *l_=(unsigned char *)l->imageData;
+  unsigned char *prev_=(unsigned char *)prev->imageData;
+  unsigned char *flow_=(unsigned char *)flow->imageData;
 
   /* feature detection params */
   int inhibition_radius = 6;
@@ -567,6 +654,15 @@ int main(int argc, char* argv[]) {
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
 	}
 
+	if (optical_flow) {
+    	memcpy((void*)flow_,l_,ww*hh*3);
+    	compute_optical_flow(
+    		prev, l, flow, 200, 20,
+            frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2);
+        memcpy((void*)prev_,l_,ww*hh*3);
+        memcpy((void*)l_,flow_,ww*hh*3);
+    }
+
 	if (skip_frames == 0) {
 
 		/* save image to file, then quit */
@@ -615,7 +711,17 @@ int main(int argc, char* argv[]) {
 	  cvDestroyWindow(image_title.c_str());
   }
   cvReleaseImage(&l);
-  cvReleaseImage(&unwarped);
+  cvReleaseImage(&prev);
+  cvReleaseImage(&flow);
+
+  if (frame1_1C != NULL) {
+	  cvReleaseImage(&frame1_1C);
+	  cvReleaseImage(&frame2_1C);
+	  cvReleaseImage(&eig_image);
+	  cvReleaseImage(&temp_image);
+	  cvReleaseImage(&pyramid1);
+	  cvReleaseImage(&pyramid2);
+  }
 
   delete lcam;
   //delete motion;
