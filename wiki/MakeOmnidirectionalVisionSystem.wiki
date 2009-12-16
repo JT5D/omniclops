@@ -7,7 +7,7 @@ Here's how you can make an inexpensive omnidirectional vision system using a web
 
 Here's what you'll need:
 
-  * A webcam.  This should be USB Video Class (UVC) compliant to ensure that it can be used on Linux.
+  * A webcam.  This should be USB Video Class (UVC) compliant to ensure that it can be used on Linux.  It should also have a narrow field of view (most, but not all, webcams do)
   * A length of 5mm diameter aluminium tubing
   * A silver (reflective) Christmas tree baubel, approximately 60mm diameter (although other sizes could be used)
   * Some cardboard
