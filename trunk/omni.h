@@ -27,8 +27,6 @@
 #include <fstream>
 #include "drawing.h"
 
-#define OMNI_MATCH_HISTORY          4
-#define OMNI_MAX_MATCHES            2000
 #define OMNI_MAX_FEATURES           4000
 #define OMNI_MAX_IMAGE_WIDTH        1024
 #define OMNI_MAX_IMAGE_HEIGHT       1024
@@ -128,11 +126,6 @@ public:
         std::string direction);
 
     unsigned char* img_buffer;
-    unsigned char* img_prev_feats;
-    unsigned short** matches;
-    int* no_of_matches;
-    int current_match_index;
-    int max_match_radius;
 
     void create_ray_map(
     	float mirror_diameter,
@@ -185,8 +178,7 @@ public:
     	int img_height,
     	int bytes_per_pixel,
     	int no_of_feats_vertical,
-    	int no_of_feats_horizontal,
-    	int match_radius);
+    	int no_of_feats_horizontal);
 
     void compass(int max_variance_degrees);
 

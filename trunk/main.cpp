@@ -38,7 +38,7 @@
 #include "fast.h"
 #include "libcam.h"
 
-#define VERSION 0.1
+#define VERSION 0.2
 
 using namespace std;
 
@@ -53,7 +53,8 @@ void compute_optical_flow(
 	IplImage *&eig_image,
 	IplImage *&temp_image,
 	IplImage *&pyramid1,
-	IplImage *&pyramid2)
+	IplImage *&pyramid2,
+	std::string flow_filename)
 {
 	if (frame1_1C == NULL) {
 		frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
@@ -63,6 +64,22 @@ void compute_optical_flow(
 		pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
 		pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
 	}
+
+	struct MatchData {
+		unsigned short int x0;
+		unsigned short int y0;
+		unsigned short int x1;
+		unsigned short int y1;
+	};
+
+	FILE *file = NULL;
+	MatchData *m = NULL;
+	if (flow_filename != "") {
+		file = fopen(flow_filename.c_str(), "wb");
+		m = new MatchData[number_of_features*4];
+		memset((void*)m,'\0',number_of_features*4*sizeof(unsigned short int));
+	}
+
 	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
 	cvConvertImage(frame2, frame2_1C, CV_BGR2GRAY);
 
@@ -97,6 +114,12 @@ optical_flow_termination_criteria, 0);
          q.y = (int) frame2_features[i].y;
          double hypotenuse = sqrt( (p.y - q.y)*(p.y - q.y) + (p.x - q.x)*(p.x - q.x) );
          if ((hypotenuse > 3) && (hypotenuse < max_magnitude)) {
+			 if (flow_filename != "") {
+				 m[i].x0 = (unsigned short int)p.x;
+				 m[i].y0 = (unsigned short int)p.y;
+				 m[i].x1 = (unsigned short int)q.x;
+				 m[i].y1 = (unsigned short int)q.y;
+			 }
 			 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
 			 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
 			 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
@@ -110,6 +133,13 @@ optical_flow_termination_criteria, 0);
          }
     }
 
+	if (flow_filename != "") {
+		fprintf(file, "%d",number_of_features);
+		fwrite(m, sizeof(MatchData), number_of_features, file);
+		delete[] m;
+
+		fclose(file);
+	}
 }
 
 
@@ -163,6 +193,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
   opt->addUsage( "     --saveedges            Save edges to file");
+  opt->addUsage( "     --saveflow             Save optical flow vectors");
   opt->addUsage( "     --saveradial           Save radial lines to file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
@@ -188,6 +219,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "savecalib" );
   opt->setOption(  "saveedges" );
   opt->setOption(  "saveradial" );
+  opt->setOption(  "saveflow" );
   opt->setOption(  "fps", 'f' );
   opt->setOption(  "dev" );
   opt->setOption(  "width", 'w' );
@@ -270,6 +302,12 @@ int main(int argc, char* argv[]) {
   if( opt->getValue( "saveradial" ) != NULL  ) {
 	  radial_lines_filename = opt->getValue("saveradial");
   	  if (radial_lines_filename == "") radial_lines_filename = "radial.dat";
+  }
+
+  std::string flow_filename = "";
+  if( opt->getValue( "saveflow" ) != NULL  ) {
+	  flow_filename = opt->getValue("saveflow");
+  	  if (flow_filename == "") flow_filename = "flow.dat";
   }
 
   if( opt->getFlag( "help" ) ) {
@@ -597,7 +635,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (unwarp_features) {
-    	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal,4);
+    	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal);
     }
 
 	if (calibration_image_filename != "") {
@@ -657,8 +695,9 @@ int main(int argc, char* argv[]) {
 	if (optical_flow) {
     	memcpy((void*)flow_,l_,ww*hh*3);
     	compute_optical_flow(
-    		prev, l, flow, 200, 20,
-            frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2);
+    		prev, l, flow, 150, 20,
+            frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2,
+            flow_filename);
         memcpy((void*)prev_,l_,ww*hh*3);
         memcpy((void*)l_,flow_,ww*hh*3);
     }
