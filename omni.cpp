@@ -33,10 +33,6 @@ omni::omni(int width, int height) {
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
-	matches = NULL;
-	no_of_matches = NULL;
-	current_match_index = 0;
-	max_match_radius = 0;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -53,7 +49,6 @@ omni::omni(int width, int height) {
 
 	epipole=0;
 	img_buffer = NULL;
-	img_prev_feats = NULL;
 
 	no_of_radial_lines = 0;
 	radial_lines = NULL;
@@ -66,16 +61,6 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
-	if (matches != NULL) {
-		for (int i = 0; i < OMNI_MATCH_HISTORY; i++) {
-			delete[] matches[i];
-		}
-		delete[] matches;
-		delete[] no_of_matches;
-	}
-	if (img_prev_feats != NULL) {
-		delete[] img_prev_feats;
-	}
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -1801,32 +1786,14 @@ void omni::unwarp_features(
 	int img_height,
 	int bytes_per_pixel,
 	int no_of_feats_vertical,
-	int no_of_feats_horizontal,
-	int match_radius)
+	int no_of_feats_horizontal)
 {
 	if (img_buffer == NULL) {
 		img_buffer = new unsigned char[img_width*img_height*3];
 	}
-	if (matches == NULL) {
-		no_of_matches = new int[OMNI_MATCH_HISTORY];
-		memset((void*)no_of_matches,'\0',OMNI_MATCH_HISTORY*sizeof(int));
-		matches = new unsigned short*[OMNI_MATCH_HISTORY];
-		for (int i = 0; i < OMNI_MATCH_HISTORY; i++) {
-			matches[i] = new unsigned short[OMNI_MAX_MATCHES*4];
-		}
-	}
-	if ((match_radius > 0) && (img_prev_feats == NULL)) {
-		img_prev_feats = new unsigned char[img_width*img_height*3];
-		memset((void*)img_prev_feats,'\0', img_width*img_height*3);
-	}
 	memset((void*)img_buffer,'\0', img_width*img_height*3);
 
-	if (match_radius > 0) no_of_matches[current_match_index] = 0;
-	if (max_match_radius < match_radius) max_match_radius = match_radius;
-	int average_flow = 0;
-	int average_flow_hits = 0;
 	int max = img_width*(img_height-1)*bytes_per_pixel;
-	int stride = img_width*bytes_per_pixel;
 
 	/* vertically oriented features */
 	int row = 0;
@@ -1841,38 +1808,6 @@ void omni::unwarp_features(
 			int n = (y*img_width)+x;
 			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
 			if ((n2 > 0) && (n2 < max)) {
-				// look for local matches
-                if (match_radius > 0) {
-                	int min_dist = max_match_radius*max_match_radius;
-                	int yy = n2 / stride;
-                	int xx = (n2 - (yy*stride))/bytes_per_pixel;
-                	int best_xx=-1;
-                	int best_yy=-1;
-                	for (int yyy = yy - max_match_radius; yyy <= yy + max_match_radius; yyy++) {
-                		int n3 = (yyy * stride) + ((xx - max_match_radius)*bytes_per_pixel);
-                		int dy = yyy-yy;
-                    	for (int xxx = xx - max_match_radius; xxx <= xx + max_match_radius; xxx++, n3 += bytes_per_pixel) {
-                    		if (img_prev_feats[n3] != 0) {
-                    			int dist = (xxx - xx)*(xxx - xx) + dy*dy;
-                    			if (dist < min_dist) {
-                    				min_dist = dist;
-                    				best_xx = xxx;
-                    				best_yy = yyy;
-                    			}
-                    		}
-                    	}
-                	}
-                	if ((best_xx != -1) && (no_of_matches[current_match_index] < OMNI_MAX_MATCHES)) {
-                		int m = no_of_matches[current_match_index];
-                		matches[current_match_index][m*4] = (unsigned short)best_xx;
-                		matches[current_match_index][m*4+1] = (unsigned short)best_yy;
-                		matches[current_match_index][m*4+2] = (unsigned short)xx;
-                		matches[current_match_index][m*4+3] = (unsigned short)yy;
-                		average_flow += min_dist;
-                		average_flow_hits++;
-                		no_of_matches[current_match_index]++;
-                	}
-                }
 			    for (int col = 0; col < bytes_per_pixel; col++) {
 			    	img_buffer[n2+col] = 255;
 			    }
@@ -1899,38 +1834,6 @@ void omni::unwarp_features(
 			int n = (y*img_width)+x;
 			int n2 = unwarp_lookup_reverse[n] * bytes_per_pixel;
 			if ((n2 > 0) && (n2 < max)) {
-				// look for local matches
-                if (match_radius > 0) {
-                	int min_dist = max_match_radius*max_match_radius;
-                	int yy = n2 / stride;
-                	int xx = (n2 - (yy*stride))/bytes_per_pixel;
-                	int best_xx=-1;
-                	int best_yy=-1;
-                	for (int yyy = yy - max_match_radius; yyy <= yy + max_match_radius; yyy++) {
-                		int n3 = (yyy * stride) + ((xx - max_match_radius)*bytes_per_pixel);
-                		int dy = yyy-yy;
-                    	for (int xxx = xx - max_match_radius; xxx <= xx + max_match_radius; xxx++, n3 += bytes_per_pixel) {
-                    		if (img_prev_feats[n3] != 0) {
-                    			int dist = (xxx - xx)*(xxx - xx) + dy*dy;
-                    			if (dist < min_dist) {
-                    				min_dist = dist;
-                    				best_xx = xxx;
-                    				best_yy = yyy;
-                    			}
-                    		}
-                    	}
-                	}
-                	if ((best_xx != -1) && (no_of_matches[current_match_index] < OMNI_MAX_MATCHES)) {
-                		int m = no_of_matches[current_match_index];
-                		matches[current_match_index][m*4] = (unsigned short)best_xx;
-                		matches[current_match_index][m*4+1] = (unsigned short)best_yy;
-                		matches[current_match_index][m*4+2] = (unsigned short)xx;
-                		matches[current_match_index][m*4+3] = (unsigned short)yy;
-                		average_flow += min_dist;
-                		average_flow_hits++;
-                		no_of_matches[current_match_index]++;
-                	}
-                }
 			    for (int col = 0; col < bytes_per_pixel; col++) {
 			    	img_buffer[n2+col] = 255;
 			    }
@@ -1944,46 +1847,5 @@ void omni::unwarp_features(
 		}
 	}
 
-	if (match_radius > 0) {
-		//printf("matches = %d\n", no_of_matches);
-	    memcpy((void*)img_prev_feats, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
-
-	    memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
-	    for (int j = 0; j < OMNI_MATCH_HISTORY; j++) {
-	    	int n = current_match_index - j;
-	    	if (n < 0) n += OMNI_MATCH_HISTORY;
-			for (int i = 0; i < no_of_matches[n]; i++) {
-				int dx = abs(matches[n][i*4] - matches[n][i*4+2]);
-				int dy = abs(matches[n][i*4+1] - matches[n][i*4+3]);
-				if ((dx > 1) || (dy > 1)) {
-					int r = 255;
-					int g = 0;
-					int b = 0;
-					if (matches[n][i*4] - matches[n][i*4+2] > matches[n][i*4+1] - matches[n][i*4+3]) {
-						r = 0;
-						g = 255;
-						b = 0;
-					}
-					drawing::drawLine(img,img_width,img_height,matches[n][i*4],matches[n][i*4+1],matches[n][i*4+2],matches[n][i*4+3],r,g,b,0,false);
-				}
-			}
-	    }
-
-	    if (average_flow_hits > 0) average_flow /= average_flow_hits;
-	    if (average_flow > max_match_radius-3) {
-	    	max_match_radius++;
-	    }
-	    else {
-	    	max_match_radius--;
-	    }
-	    //printf("max_match_radius %d\n", max_match_radius);
-
-	    current_match_index++;
-	    if (current_match_index >= OMNI_MATCH_HISTORY) {
-	    	current_match_index = 0;
-	    }
-	}
-	else {
-	    memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
-	}
+    memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 }
