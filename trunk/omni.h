@@ -179,6 +179,15 @@ public:
     	int bytes_per_pixel,
     	int no_of_feats_vertical,
     	int no_of_feats_horizontal);
+    void get_ray(
+    	int img_width,
+    	int pixel_x, int pixel_y,
+    	int& ray_origin_x_mm,
+    	int& ray_origin_y_mm,
+    	int& ray_origin_z_mm,
+    	int& ray_ground_x_mm,
+    	int& ray_ground_y_mm,
+    	int& ray_ground_z_mm);
 
     void compass(int max_variance_degrees);
 
