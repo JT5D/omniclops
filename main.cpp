@@ -39,8 +39,16 @@
 #include "libcam.h"
 
 #define VERSION 0.2
+#define MAX_FLOW_MATCHES 150
 
 using namespace std;
+
+struct Match2D {
+	unsigned short int x0;
+	unsigned short int y0;
+	unsigned short int x1;
+	unsigned short int y1;
+};
 
 void compute_optical_flow(
 	IplImage* frame1,
@@ -54,8 +62,12 @@ void compute_optical_flow(
 	IplImage *&temp_image,
 	IplImage *&pyramid1,
 	IplImage *&pyramid2,
-	std::string flow_filename)
+	std::string flow_filename,
+	int& no_of_matches,
+	Match2D* matches)
 {
+	no_of_matches = 0;
+
 	if (frame1_1C == NULL) {
 		frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
 		frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
@@ -65,19 +77,9 @@ void compute_optical_flow(
 		pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
 	}
 
-	struct MatchData {
-		unsigned short int x0;
-		unsigned short int y0;
-		unsigned short int x1;
-		unsigned short int y1;
-	};
-
 	FILE *file = NULL;
-	MatchData *m = NULL;
 	if (flow_filename != "") {
 		file = fopen(flow_filename.c_str(), "wb");
-		m = new MatchData[number_of_features*4];
-		memset((void*)m,'\0',number_of_features*4*sizeof(unsigned short int));
 	}
 
 	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
@@ -113,30 +115,33 @@ optical_flow_termination_criteria, 0);
          q.x = (int) frame2_features[i].x;
          q.y = (int) frame2_features[i].y;
          double hypotenuse = sqrt( (p.y - q.y)*(p.y - q.y) + (p.x - q.x)*(p.x - q.x) );
-         if ((hypotenuse > 3) && (hypotenuse < max_magnitude)) {
-			 if (flow_filename != "") {
-				 m[i].x0 = (unsigned short int)p.x;
-				 m[i].y0 = (unsigned short int)p.y;
-				 m[i].x1 = (unsigned short int)q.x;
-				 m[i].y1 = (unsigned short int)q.y;
-			 }
-			 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
-			 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
-			 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
-			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-			 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
-			 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
-			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-			 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
-			 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
-			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+         if (hypotenuse < max_magnitude) {  /* ignore big magnitudes which are probably bogus */
+
+        	 /* store the match for later use */
+        	 matches[no_of_matches].x0 = (unsigned short)p.x;
+        	 matches[no_of_matches].y0 = (unsigned short)p.y;
+        	 matches[no_of_matches].x1 = (unsigned short)q.x;
+        	 matches[no_of_matches].y1 = (unsigned short)q.y;
+        	 no_of_matches++;
+
+        	 if (hypotenuse > 3) { /* don't bother to show features which havn't moved */
+				 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
+				 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
+				 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
+				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+				 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
+				 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
+				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+				 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
+				 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
+				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+        	 }
          }
     }
 
 	if (flow_filename != "") {
-		fprintf(file, "%d",number_of_features);
-		fwrite(m, sizeof(MatchData), number_of_features, file);
-		delete[] m;
+		fprintf(file, "%d",no_of_matches);
+		fwrite(matches, sizeof(Match2D), no_of_matches, file);
 
 		fclose(file);
 	}
@@ -190,6 +195,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( " -f  --fps                  Frames per second");
   opt->addUsage( " -s  --skip                 Skip this number of frames");
   opt->addUsage( " -V  --version              Show version number");
+  opt->addUsage( "     --load                 Load raw image");
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
   opt->addUsage( "     --saveedges            Save edges to file");
@@ -215,6 +221,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "radius" );
   opt->setOption(  "inner" );
   opt->setOption(  "descriptors" );
+  opt->setOption(  "load" );
   opt->setOption(  "save" );
   opt->setOption(  "savecalib" );
   opt->setOption(  "saveedges" );
@@ -284,6 +291,12 @@ int main(int argc, char* argv[]) {
   	  save_filename = opt->getValue("save");
   	  if (save_filename == "") save_filename = "image_";
   	  save_image = true;
+  }
+
+  std::string load_filename = "";
+  if( opt->getValue( "load" ) != NULL  ) {
+  	  load_filename = opt->getValue("load");
+  	  if (load_filename == "") load_filename = "image_";
   }
 
   std::string calibration_image_filename = "";
@@ -539,6 +552,7 @@ int main(int argc, char* argv[]) {
 	}
   }
 
+  /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
       	mirror_diameter,
       	dist_to_mirror,
@@ -546,6 +560,15 @@ int main(int argc, char* argv[]) {
       	outer_radius,
       	camera_height,
         ww, hh);
+
+  Match2D flow_matches[MAX_FLOW_MATCHES];
+
+  /* load image from file */
+  if (load_filename != "") {
+	  cvReleaseImage(&prev);
+	  prev = cvLoadImage( load_filename.c_str(), CV_LOAD_IMAGE_COLOR );
+      prev_ = (unsigned char *)prev->imageData;
+  }
 
   while(1){
 
@@ -693,11 +716,13 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (optical_flow) {
+	    int no_of_flow_matches = 0;
+
     	memcpy((void*)flow_,l_,ww*hh*3);
     	compute_optical_flow(
-    		prev, l, flow, 150, 20,
+    		prev, l, flow, MAX_FLOW_MATCHES, 20,
             frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2,
-            flow_filename);
+            flow_filename,no_of_flow_matches,flow_matches);
         memcpy((void*)prev_,l_,ww*hh*3);
         memcpy((void*)l_,flow_,ww*hh*3);
     }
@@ -707,7 +732,12 @@ int main(int argc, char* argv[]) {
 		/* save image to file, then quit */
 		if (save_image) {
 			std::string filename = save_filename + ".jpg";
-			cvSaveImage(filename.c_str(), l);
+			if (!optical_flow) {
+			    cvSaveImage(filename.c_str(), l);
+			}
+			else {
+				cvSaveImage(filename.c_str(), prev);
+			}
 			if (save_ray_paths_image == "") break;
 		}
 	}

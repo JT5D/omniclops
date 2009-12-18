@@ -633,6 +633,7 @@ void omni::save_edges(
 			}
 		}
 
+		fprintf(file,"%d", index);
 		fwrite(m, sizeof(MatchData), index, file);
 		delete[] m;
 
@@ -664,6 +665,7 @@ void omni::save_radial_lines(
 			m[i].y1 = radial_lines[i*5+4];
 		}
 
+		fprintf(file, "%d", no_of_radial_lines);
 		fwrite(m, sizeof(MatchData), no_of_radial_lines, file);
 		delete[] m;
 
@@ -671,6 +673,26 @@ void omni::save_radial_lines(
 	}
 }
 
+
+void omni::get_ray(
+	int img_width,
+	int pixel_x, int pixel_y,
+	int& ray_origin_x_mm,
+	int& ray_origin_y_mm,
+	int& ray_origin_z_mm,
+	int& ray_ground_x_mm,
+	int& ray_ground_y_mm,
+	int& ray_ground_z_mm)
+{
+	int n = (pixel_y*img_width+pixel_x)*6;
+	ray_origin_x_mm = ray_map[n];
+	ray_origin_y_mm = ray_map[n+1];
+	ray_origin_z_mm = ray_map[n+2];
+
+	ray_ground_x_mm = ray_map[n+3];
+	ray_ground_y_mm = ray_map[n+4];
+	ray_ground_z_mm = ray_map[n+5];
+}
 
 /* saves 3D rays to file for use by other programs */
 void omni::save_rays(
@@ -762,6 +784,7 @@ void omni::save_rays(
 			}
 		}
 
+		fprintf(file, "%d", index);
 		fwrite(m, sizeof(MatchData), index, file);
 		delete[] m;
 
