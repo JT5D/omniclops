@@ -92,6 +92,18 @@ public:
         float y3,
         float& xi,
         float& yi);
+    float intersection_ray_sphere(
+        float ray_x0,
+        float ray_y0,
+        float ray_z0,
+        float ray_x1,
+        float ray_y1,
+        float ray_z1,
+        float sphere_x,
+        float sphere_y,
+        float sphere_z,
+        float sphere_radius);
+
     int update_sums(int cols, int y, unsigned char* rectified_frame_buf);
     void non_max(int cols, int inhibition_radius, unsigned int min_response);
     int get_features_horizontal(unsigned char* rectified_frame_buf, int inhibition_radius, unsigned int minimum_response, int calibration_offset_x, int calibration_offset_y, int outer_radius_percent, int inner_radius_percent);
@@ -129,10 +141,12 @@ public:
 
     void create_ray_map(
     	float mirror_diameter,
-    	float dist_to_mirror,
+    	float dist_to_mirror_backing,
     	float focal_length,
     	float outer_radius_percent,
-    	float camera_height,
+    	float camera_height_mm,
+    	int no_of_mirrors,
+    	float* mirror_position,
         int img_width,
         int img_height);
     void show_ray_map_side(
@@ -141,7 +155,17 @@ public:
     	int img_height,
     	int max_height_mm,
     	int focal_length_mm,
-    	int camera_height_mm);
+    	int camera_height_mm,
+    	bool show_all);
+    void show_ray_map_above(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int max_radius_mm);
+    void show_ray_pixels(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height);
     void show_ground_plane(
         unsigned char* img,
         int img_width,

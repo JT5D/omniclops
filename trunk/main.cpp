@@ -176,8 +176,10 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --dev                  Video device to be used");
   opt->addUsage( " -w  --width                Image width in pixels");
   opt->addUsage( " -h  --height               Image height in pixels");
+  opt->addUsage( "     --mirrors              Number of mirrors");
+  opt->addUsage( "     --baseline             Baseline distance between mirrors in mm");
   opt->addUsage( "     --diam                 Diameter of the spherical mirror in millimetres");
-  opt->addUsage( "     --dist                 Distance from camera lens to nearest point on the mirror surface in millimetres");
+  opt->addUsage( "     --dist                 Distance from camera lens to the centre of the mirror in millimetres");
   opt->addUsage( "     --focal                Focal length in millimetres");
   opt->addUsage( "     --elevation            Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
@@ -186,6 +188,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
   opt->addUsage( "     --ground               Show ground plane");
+  opt->addUsage( "     --overlay              Show overlaid ray intersections with the image plane");
   opt->addUsage( "     --range                Maximum range when displaying ground plane");
   opt->addUsage( "     --fast                 Show FAST corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
@@ -207,6 +210,16 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --flow                 Compute optical flow");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
+  opt->addUsage( "     --mirrorx0             Relative x coordinate of the first mirror in millimetres");
+  opt->addUsage( "     --mirrory0             Relative y coordinate of the first mirror in millimetres");
+  opt->addUsage( "     --mirrorx1             Relative x coordinate of the second mirror in millimetres");
+  opt->addUsage( "     --mirrory1             Relative y coordinate of the second mirror in millimetres");
+  opt->addUsage( "     --mirrorx2             Relative x coordinate of the third mirror in millimetres");
+  opt->addUsage( "     --mirrory2             Relative y coordinate of the third mirror in millimetres");
+  opt->addUsage( "     --mirrorx3             Relative x coordinate of the fourth mirror in millimetres");
+  opt->addUsage( "     --mirrory3             Relative y coordinate of the fourth mirror in millimetres");
+  opt->addUsage( "     --mirrorx4             Relative x coordinate of the fifth mirror in millimetres");
+  opt->addUsage( "     --mirrory4             Relative y coordinate of the fifth mirror in millimetres");
   opt->addUsage( "     --help                 Show help");
   opt->addUsage( "" );
 
@@ -214,6 +227,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "diam" );
   opt->setOption(  "dist" );
   opt->setOption(  "focal" );
+  opt->setOption(  "mirrors" );
+  opt->setOption(  "baseline" );
   opt->setOption(  "elevation" );
   opt->setOption(  "range" );
   opt->setOption(  "raypaths" );
@@ -233,6 +248,16 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "height", 'h' );
   opt->setOption(  "skip", 's' );
   opt->setOption(  "fov" );
+  opt->setOption(  "mirrorx0" );
+  opt->setOption(  "mirrory0" );
+  opt->setOption(  "mirrorx1" );
+  opt->setOption(  "mirrory1" );
+  opt->setOption(  "mirrorx2" );
+  opt->setOption(  "mirrory2" );
+  opt->setOption(  "mirrorx3" );
+  opt->setOption(  "mirrory3" );
+  opt->setOption(  "mirrorx4" );
+  opt->setOption(  "mirrory4" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -245,6 +270,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "lines" );
   opt->setFlag(  "groundfeatures" );
   opt->setFlag(  "ground" );
+  opt->setFlag(  "overlay" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -329,7 +355,19 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
+  bool show_overlay = false;
+  if( opt->getFlag( "overlay" ) ) {
+	  show_overlay = true;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
   if( opt->getFlag( "ground" ) ) {
+	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = true;
 	  show_ground_features = false;
@@ -344,6 +382,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
+	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
@@ -353,6 +392,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
+	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
@@ -362,6 +402,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "lines" ) ) {
+	  show_overlay = false;
 	  show_lines = true;
 	  show_ground = false;
 	  show_ground_features = false;
@@ -371,6 +412,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
+	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = true;
@@ -379,12 +421,104 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
   }
 
+  float baseline = 100;
+  if( opt->getValue( "baseline" ) != NULL  ) {
+	  baseline = atof(opt->getValue("baseline"));
+  }
+
+  int no_of_mirrors = 1;
+  float mirror_position[5*2];
+  mirror_position[0] = 0;
+  mirror_position[1] = 0;
+  if( opt->getValue( "mirrors" ) != NULL  ) {
+	  no_of_mirrors = atoi(opt->getValue("mirrors"));
+	  switch(no_of_mirrors)
+	  {
+		  case 1: {
+			  mirror_position[0] = 0;
+			  mirror_position[1] = 0;
+			  break;
+		  }
+		  case 2: {
+			  mirror_position[0] = -baseline/2;
+			  mirror_position[1] = 0;
+			  mirror_position[2] = baseline/2;
+			  mirror_position[3] = 0;
+			  break;
+		  }
+		  case 3: {
+			  mirror_position[0] = -baseline/2;
+			  mirror_position[1] = -baseline/2;
+			  mirror_position[2] = baseline/2;
+			  mirror_position[3] = -baseline/2;
+			  mirror_position[4] = 0;
+			  mirror_position[5] = baseline/2;
+			  break;
+		  }
+		  case 4: {
+			  mirror_position[0] = -baseline/2;
+			  mirror_position[1] = -baseline/2;
+			  mirror_position[2] = baseline/2;
+			  mirror_position[3] = -baseline/2;
+			  mirror_position[4] = baseline/2;
+			  mirror_position[5] = baseline/2;
+			  mirror_position[6] = -baseline/2;
+			  mirror_position[7] = baseline/2;
+			  break;
+		  }
+		  case 5: {
+			  mirror_position[0] = -baseline/2;
+			  mirror_position[1] = -baseline/2;
+			  mirror_position[2] = baseline/2;
+			  mirror_position[3] = -baseline/2;
+			  mirror_position[4] = baseline/2;
+			  mirror_position[5] = baseline/2;
+			  mirror_position[6] = -baseline/2;
+			  mirror_position[7] = baseline/2;
+			  mirror_position[8] = 0;
+			  mirror_position[9] = 0;
+			  break;
+		  }
+	  }
+  }
+
+  if( opt->getValue( "mirrorx0" ) != NULL  ) {
+	  mirror_position[0] = atof(opt->getValue("mirrorx0"));
+  }
+  if( opt->getValue( "mirrory0" ) != NULL  ) {
+	  mirror_position[1] = atof(opt->getValue("mirrory0"));
+  }
+  if( opt->getValue( "mirrorx1" ) != NULL  ) {
+	  mirror_position[2] = atof(opt->getValue("mirrorx1"));
+  }
+  if( opt->getValue( "mirrory1" ) != NULL  ) {
+	  mirror_position[3] = atof(opt->getValue("mirrory1"));
+  }
+  if( opt->getValue( "mirrorx2" ) != NULL  ) {
+	  mirror_position[4] = atof(opt->getValue("mirrorx2"));
+  }
+  if( opt->getValue( "mirrory2" ) != NULL  ) {
+	  mirror_position[5] = atof(opt->getValue("mirrory2"));
+  }
+  if( opt->getValue( "mirrorx3" ) != NULL  ) {
+	  mirror_position[6] = atof(opt->getValue("mirrorx3"));
+  }
+  if( opt->getValue( "mirrory3" ) != NULL  ) {
+	  mirror_position[7] = atof(opt->getValue("mirrory3"));
+  }
+  if( opt->getValue( "mirrorx4" ) != NULL  ) {
+	  mirror_position[8] = atof(opt->getValue("mirrorx4"));
+  }
+  if( opt->getValue( "mirrory4" ) != NULL  ) {
+	  mirror_position[9] = atof(opt->getValue("mirrory4"));
+  }
+
   float focal_length = 3.6f;
   if( opt->getValue( "focal" ) != NULL  ) {
 	  focal_length = atof(opt->getValue("focal"));
   }
 
-  float camera_height = 150;
+  float camera_height = 0;
   if( opt->getValue( "elevation" ) != NULL  ) {
 	  camera_height = atof(opt->getValue("elevation"));
   }
@@ -406,9 +540,9 @@ int main(int argc, char* argv[]) {
 	  mirror_diameter = atof(opt->getValue("diam"));
   }
 
-  float dist_to_mirror = 50;
+  float dist_to_mirror_centre = 50+(mirror_diameter/2);
   if( opt->getValue( "dist" ) != NULL  ) {
-	  dist_to_mirror = atof(opt->getValue("dist"));
+	  dist_to_mirror_centre = atof(opt->getValue("dist"));
   }
 
   if( opt->getValue( "radius" ) != NULL  ) {
@@ -420,13 +554,14 @@ int main(int argc, char* argv[]) {
 	  inner_radius = atoi(opt->getValue("inner"));
   }
 
-  int range_mm = 500;
+  int range_mm = 200;
   if( opt->getValue( "range" ) != NULL  ) {
 	  range_mm = atoi(opt->getValue("range"));
   }
 
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
+	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
@@ -554,12 +689,14 @@ int main(int argc, char* argv[]) {
 
   /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
-      	mirror_diameter,
-      	dist_to_mirror,
-      	focal_length,
-      	outer_radius,
-      	camera_height,
-        ww, hh);
+  	mirror_diameter,
+  	dist_to_mirror_centre,
+  	focal_length,
+  	outer_radius,
+  	camera_height,
+  	no_of_mirrors,
+  	mirror_position,
+    ww,hh);
 
   Match2D flow_matches[MAX_FLOW_MATCHES];
 
@@ -715,6 +852,10 @@ int main(int argc, char* argv[]) {
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
 	}
 
+	if (show_overlay) {
+		lcam->show_ray_pixels(l_,ww,hh);
+	}
+
 	if (optical_flow) {
 	    int no_of_flow_matches = 0;
 
@@ -744,7 +885,10 @@ int main(int argc, char* argv[]) {
 
 	if (save_ray_paths_image != "") {
 	    lcam->show_ray_map_side(
-		    l_, ww,hh,(int)((camera_height+focal_length+dist_to_mirror+(mirror_diameter*0.5f))*1.1f),(int)focal_length, (int)camera_height);
+		    l_, ww,hh,(int)((camera_height+focal_length+dist_to_mirror_centre)*1.1f),(int)focal_length, (int)camera_height, true);
+
+	    //float max_radius_mm = 130;
+	    //lcam->show_ray_map_above(l_, ww, hh, max_radius_mm);
 	    cvSaveImage(save_ray_paths_image.c_str(), l);
 		printf("Ray paths saved to %s\n", save_ray_paths_image.c_str());
 	    break;
