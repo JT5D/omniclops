@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
   bool show_ground = false;
   bool show_lines = false;
   bool unwarp_features = false;
-  float outer_radius = 115;
+  float outer_radius = 37; //115;
   //int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
@@ -204,22 +204,24 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --saveedges            Save edges to file");
   opt->addUsage( "     --saveflow             Save optical flow vectors");
   opt->addUsage( "     --saveradial           Save radial lines to file");
+  opt->addUsage( "     --loadpositions        Load mirror positions from file");
+  opt->addUsage( "     --savepositions        Save mirror positions to file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
   opt->addUsage( "     --flow                 Compute optical flow");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
-  opt->addUsage( "     --mirrorx0             Relative x coordinate of the first mirror in millimetres");
-  opt->addUsage( "     --mirrory0             Relative y coordinate of the first mirror in millimetres");
-  opt->addUsage( "     --mirrorx1             Relative x coordinate of the second mirror in millimetres");
-  opt->addUsage( "     --mirrory1             Relative y coordinate of the second mirror in millimetres");
-  opt->addUsage( "     --mirrorx2             Relative x coordinate of the third mirror in millimetres");
-  opt->addUsage( "     --mirrory2             Relative y coordinate of the third mirror in millimetres");
-  opt->addUsage( "     --mirrorx3             Relative x coordinate of the fourth mirror in millimetres");
-  opt->addUsage( "     --mirrory3             Relative y coordinate of the fourth mirror in millimetres");
-  opt->addUsage( "     --mirrorx4             Relative x coordinate of the fifth mirror in millimetres");
-  opt->addUsage( "     --mirrory4             Relative y coordinate of the fifth mirror in millimetres");
+  opt->addUsage( "     --mirrorx0             Relative x coordinate of the first mirror as a percent of image width");
+  opt->addUsage( "     --mirrory0             Relative y coordinate of the first mirror as a percent of image height");
+  opt->addUsage( "     --mirrorx1             Relative x coordinate of the second mirror as a percent of image width");
+  opt->addUsage( "     --mirrory1             Relative y coordinate of the second mirror as a percent of image height");
+  opt->addUsage( "     --mirrorx2             Relative x coordinate of the third mirror as a percent of image width");
+  opt->addUsage( "     --mirrory2             Relative y coordinate of the third mirror as a percent of image height");
+  opt->addUsage( "     --mirrorx3             Relative x coordinate of the fourth mirror as a percent of image width");
+  opt->addUsage( "     --mirrory3             Relative y coordinate of the fourth mirror as a percent of image height");
+  opt->addUsage( "     --mirrorx4             Relative x coordinate of the fifth mirror as a percent of image width");
+  opt->addUsage( "     --mirrory4             Relative y coordinate of the fifth mirror as a percent of image height");
   opt->addUsage( "     --help                 Show help");
   opt->addUsage( "" );
 
@@ -258,6 +260,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "mirrory3" );
   opt->setOption(  "mirrorx4" );
   opt->setOption(  "mirrory4" );
+  opt->setOption(  "savepositions" );
+  opt->setOption(  "loadpositions" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -428,8 +432,11 @@ int main(int argc, char* argv[]) {
 
   int no_of_mirrors = 1;
   float mirror_position[5*2];
+  float mirror_position_pixels[5*2];
   mirror_position[0] = 0;
   mirror_position[1] = 0;
+  mirror_position_pixels[0] = 50;
+  mirror_position_pixels[1] = 50;
   if( opt->getValue( "mirrors" ) != NULL  ) {
 	  no_of_mirrors = atoi(opt->getValue("mirrors"));
 	  switch(no_of_mirrors)
@@ -437,13 +444,19 @@ int main(int argc, char* argv[]) {
 		  case 1: {
 			  mirror_position[0] = 0;
 			  mirror_position[1] = 0;
+			  mirror_position_pixels[0] = 50;
+			  mirror_position_pixels[1] = 50;
 			  break;
 		  }
 		  case 2: {
 			  mirror_position[0] = -baseline/2;
 			  mirror_position[1] = 0;
+			  mirror_position_pixels[0] = 20;
+			  mirror_position_pixels[1] = 50;
 			  mirror_position[2] = baseline/2;
 			  mirror_position[3] = 0;
+			  mirror_position_pixels[2] = 80;
+			  mirror_position_pixels[3] = 50;
 			  break;
 		  }
 		  case 3: {
@@ -453,64 +466,111 @@ int main(int argc, char* argv[]) {
 			  mirror_position[3] = -baseline/2;
 			  mirror_position[4] = 0;
 			  mirror_position[5] = baseline/2;
+
+			  mirror_position_pixels[0] = 20;
+			  mirror_position_pixels[1] = 20;
+			  mirror_position_pixels[2] = 80;
+			  mirror_position_pixels[3] = 20;
+			  mirror_position_pixels[4] = 50;
+			  mirror_position_pixels[5] = 80;
 			  break;
 		  }
 		  case 4: {
 			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline/2;
+			  mirror_position[1] = -baseline/4;
 			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline/2;
+			  mirror_position[3] = -baseline/4;
 			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline/2;
+			  mirror_position[5] = baseline/4;
 			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline/2;
+			  mirror_position[7] = baseline/4;
+
+			  mirror_position_pixels[0] = 20;
+			  mirror_position_pixels[1] = 20;
+			  mirror_position_pixels[2] = 80;
+			  mirror_position_pixels[3] = 20;
+			  mirror_position_pixels[4] = 80;
+			  mirror_position_pixels[5] = 80;
+			  mirror_position_pixels[6] = 20;
+			  mirror_position_pixels[7] = 80;
 			  break;
 		  }
 		  case 5: {
 			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline/2;
+			  mirror_position[1] = -baseline/4;
 			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline/2;
+			  mirror_position[3] = -baseline/4;
 			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline/2;
+			  mirror_position[5] = baseline/4;
 			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline/2;
+			  mirror_position[7] = baseline/4;
 			  mirror_position[8] = 0;
 			  mirror_position[9] = 0;
+
+			  mirror_position_pixels[0] = 20;
+			  mirror_position_pixels[1] = 20;
+			  mirror_position_pixels[2] = 80;
+			  mirror_position_pixels[3] = 20;
+			  mirror_position_pixels[4] = 80;
+			  mirror_position_pixels[5] = 80;
+			  mirror_position_pixels[6] = 20;
+			  mirror_position_pixels[7] = 80;
+			  mirror_position_pixels[8] = 50;
+			  mirror_position_pixels[9] = 50;
 			  break;
 		  }
 	  }
   }
 
+  if( opt->getValue( "loadpositions" ) != NULL  ) {
+	  string positions_filename = opt->getValue("loadpositions");
+	  if (omni::load_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels)) {
+		  printf("Mirror positions loaded from %s\n", positions_filename.c_str());
+	  }
+	  else {
+		  printf("Warning: Mirror positions could not be loaded from %s\n", positions_filename.c_str());
+	  }
+  }
+
   if( opt->getValue( "mirrorx0" ) != NULL  ) {
-	  mirror_position[0] = atof(opt->getValue("mirrorx0"));
+	  mirror_position_pixels[0] = atof(opt->getValue("mirrorx0"));
   }
   if( opt->getValue( "mirrory0" ) != NULL  ) {
-	  mirror_position[1] = atof(opt->getValue("mirrory0"));
+	  mirror_position_pixels[1] = atof(opt->getValue("mirrory0"));
   }
   if( opt->getValue( "mirrorx1" ) != NULL  ) {
-	  mirror_position[2] = atof(opt->getValue("mirrorx1"));
+	  mirror_position_pixels[2] = atof(opt->getValue("mirrorx1"));
   }
   if( opt->getValue( "mirrory1" ) != NULL  ) {
-	  mirror_position[3] = atof(opt->getValue("mirrory1"));
+	  mirror_position_pixels[3] = atof(opt->getValue("mirrory1"));
   }
   if( opt->getValue( "mirrorx2" ) != NULL  ) {
-	  mirror_position[4] = atof(opt->getValue("mirrorx2"));
+	  mirror_position_pixels[4] = atof(opt->getValue("mirrorx2"));
   }
   if( opt->getValue( "mirrory2" ) != NULL  ) {
-	  mirror_position[5] = atof(opt->getValue("mirrory2"));
+	  mirror_position_pixels[5] = atof(opt->getValue("mirrory2"));
   }
   if( opt->getValue( "mirrorx3" ) != NULL  ) {
-	  mirror_position[6] = atof(opt->getValue("mirrorx3"));
+	  mirror_position_pixels[6] = atof(opt->getValue("mirrorx3"));
   }
   if( opt->getValue( "mirrory3" ) != NULL  ) {
-	  mirror_position[7] = atof(opt->getValue("mirrory3"));
+	  mirror_position_pixels[7] = atof(opt->getValue("mirrory3"));
   }
   if( opt->getValue( "mirrorx4" ) != NULL  ) {
-	  mirror_position[8] = atof(opt->getValue("mirrorx4"));
+	  mirror_position_pixels[8] = atof(opt->getValue("mirrorx4"));
   }
   if( opt->getValue( "mirrory4" ) != NULL  ) {
-	  mirror_position[9] = atof(opt->getValue("mirrory4"));
+	  mirror_position_pixels[9] = atof(opt->getValue("mirrory4"));
+  }
+
+  if( opt->getValue( "savepositions" ) != NULL  ) {
+	  string positions_filename = opt->getValue("savepositions");
+	  if (omni::save_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels)) {
+		  printf("Mirror positions saved to %s\n", positions_filename.c_str());
+	  }
+	  else {
+		  printf("Warning: Mirror positions could not be saved to %s\n", positions_filename.c_str());
+	  }
   }
 
   float focal_length = 3.6f;
@@ -696,6 +756,7 @@ int main(int argc, char* argv[]) {
   	camera_height,
   	no_of_mirrors,
   	mirror_position,
+  	mirror_position_pixels,
     ww,hh);
 
   Match2D flow_matches[MAX_FLOW_MATCHES];
@@ -717,7 +778,8 @@ int main(int argc, char* argv[]) {
     	lcam->flip(l_, NULL);
     }
 
-    lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
+    if (no_of_mirrors == 1)
+        lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
 
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;

@@ -1204,6 +1204,7 @@ void omni::create_ray_map(
 	float camera_height_mm,
 	int no_of_mirrors,
 	float* mirror_position,
+	float* mirror_position_pixels,
     int img_width,
     int img_height)
 {
@@ -1233,27 +1234,25 @@ void omni::create_ray_map(
 	float bounding_box_ty = 9999;
 	float bounding_box_bx = -9999;
 	float bounding_box_by = -9999;
+	float centre_x = 0, centre_y = 0;
 	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-        if (mirror_position[mirror*2] < bounding_box_tx) bounding_box_tx = mirror_position[mirror*2];
-        if (mirror_position[mirror*2+1] < bounding_box_ty) bounding_box_ty = mirror_position[mirror*2+1];
-        if (mirror_position[mirror*2] > bounding_box_bx) bounding_box_bx = mirror_position[mirror*2];
-        if (mirror_position[mirror*2+1] > bounding_box_by) bounding_box_by = mirror_position[mirror*2+1];
+		centre_x += mirror_position[mirror*2];
+		centre_y += mirror_position[mirror*2+1];
 	}
-	bounding_box_tx -= mirror_diameter*0.5f;
-	bounding_box_ty -= mirror_diameter*0.5f;
-	bounding_box_bx += mirror_diameter*0.5f;
-	bounding_box_by += mirror_diameter*0.5f;
-
-	/*
-	if (bounding_box_tx < bounding_box_ty)
-		bounding_box_ty = bounding_box_tx;
-	else
-		bounding_box_tx = bounding_box_ty;
-	if (bounding_box_bx > bounding_box_by)
-		bounding_box_by = bounding_box_bx;
-	else
-		bounding_box_bx = bounding_box_by;
-		*/
+	centre_x /= no_of_mirrors;
+	centre_y /= no_of_mirrors;
+	float max_dx = 0;
+	float max_dy = 0;
+	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+		max_dx += fabs(mirror_position[mirror*2] - centre_x);
+		max_dy += fabs(mirror_position[mirror*2+1] - centre_y);
+	}
+	max_dx /= no_of_mirrors;
+	max_dy /= no_of_mirrors;
+	bounding_box_tx = centre_x - max_dx - (mirror_diameter*0.5f);
+	bounding_box_ty = centre_y - max_dy - (mirror_diameter*0.5f);
+	bounding_box_bx = centre_x + max_dx + (mirror_diameter*0.5f);
+	bounding_box_by = centre_y + max_dy + (mirror_diameter*0.5f);
 
 	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
 
@@ -1301,7 +1300,6 @@ void omni::create_ray_map(
 
 			pixel_x = viewing_angle * outer_radius_pixels / max_viewing_angle;
 
-			//printf("i = %d/%d %f\n",i, max_index, pixel_x);
 			lookup_pixel_x[i] = pixel_x;
 			lookup_ray[i*4] = sphere_x;
 			lookup_ray[i*4+1] = sphere_y;
@@ -1315,28 +1313,30 @@ void omni::create_ray_map(
 		// create unwarp lookup
 		memset((void*)unwarp_lookup, '\0', img_width*img_height*sizeof(int));
 		memset((void*)unwarp_lookup_reverse, '\0', img_width*img_height*sizeof(int));
-		for (int j = 0; j < img_height; j++) {
-			float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
-			int k = 0;
-			for (k = 0; k < i; k++) {
-				if (lookup_angle[k] >= target_ang) break;
-			}
-			calibration_radius[j] = lookup_pixel_x[k];
-		}
-
 		int n = 0;
 		float angle;
-		for (int x = 0; x < img_width; x++) {
-			angle = x * 3.1415927f*2 / img_width;
-			for (int y = 0; y < img_height; y++) {
-				float raw_radius = calibration_radius[y];
-				int raw_x = cx + (int)(raw_radius * sin(angle));
-				int raw_y = cy + (int)(raw_radius * cos(angle));
-				n = ((img_height-1-y) * img_width)+x;
-				int n2 = (raw_y * img_width)+raw_x;
-				if ((n2 > -1) && (n2 < img_width*img_height)) {
-					unwarp_lookup[n] = n2;
-					unwarp_lookup_reverse[n2] = n;
+		if (mirror == no_of_mirrors-1) {
+			for (int j = 0; j < img_height; j++) {
+				float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
+				int k = 0;
+				for (k = 0; k < i; k++) {
+					if (lookup_angle[k] >= target_ang) break;
+				}
+				calibration_radius[j] = lookup_pixel_x[k];
+			}
+
+			for (int x = 0; x < img_width; x++) {
+				angle = x * 3.1415927f*2 / img_width;
+				for (int y = 0; y < img_height; y++) {
+					float raw_radius = calibration_radius[y];
+					int raw_x = cx + (int)(raw_radius * sin(angle));
+					int raw_y = cy + (int)(raw_radius * cos(angle));
+					n = ((img_height-1-y) * img_width)+x;
+					int n2 = (raw_y * img_width)+raw_x;
+					if ((n2 > -1) && (n2 < img_width*img_height)) {
+						unwarp_lookup[n] = n2;
+						unwarp_lookup_reverse[n2] = n;
+					}
 				}
 			}
 		}
@@ -1365,11 +1365,9 @@ void omni::create_ray_map(
 			}
 		}
 
-		float mirror_cx = cx - outer_radius_pixels + ((mirror_position[mirror*2] - bounding_box_tx) * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx));
-		float mirror_cy = cy - outer_radius_pixels + ((mirror_position[mirror*2+1] - bounding_box_ty) * outer_radius_pixels*2 / (bounding_box_by - bounding_box_ty));
-		float mirror_r = (mirror_diameter * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx))/2;
-
-		//printf("mirror %f %f %f\n", mirror_cx, mirror_cy, mirror_r);
+		float mirror_cx = mirror_position_pixels[mirror*2] * img_width / 100;  // cx - outer_radius_pixels + ((mirror_position[mirror*2] - bounding_box_tx) * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx));
+		float mirror_cy = mirror_position_pixels[mirror*2+1] * img_height / 100;  // cy - outer_radius_pixels + ((mirror_position[mirror*2+1] - bounding_box_ty) * outer_radius_pixels*2 / (bounding_box_by - bounding_box_ty));
+		float mirror_r = outer_radius_pixels; //(mirror_diameter * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx))/2;
 
 		int min_x = (int)(mirror_cx - mirror_r);
 		int max_x = (int)(mirror_cx + mirror_r);
@@ -1637,21 +1635,33 @@ void omni::show_ground_plane(
 			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
 				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
 				int xx = (ray_map[n+3] - min_x) * (img_width-1) / (max_x-min_x);
-				int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
-				int xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
-				int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
-				int n0 = ((y * img_width) + x)*3;
-				for (int yyy = yy; yyy <= yy2; yyy++) {
-					if ((yyy > -1) && (yyy < img_height)) {
-						for (int xxx = xx; xxx <= xx2; xxx++) {
-							if ((xxx > -1) && (xxx < img_width)) {
-								int n2 = ((yyy * img_width) + xxx)*3;
-								img_buffer[n2] = img[n0];
-								img_buffer[n2+1] = img[n0+1];
-								img_buffer[n2+2] = img[n0+2];
+				if ((xx > -1) && (xx < img_width)) {
+
+					int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
+					if ((yy > -1) && (yy < img_height)) {
+
+						int xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
+						if ((xx2 > -1) && (xx2 < img_width)) {
+
+							int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
+							if ((yy2 > -1) && (yy2 < img_height)) {
+
+								int n0 = ((y * img_width) + x)*3;
+								for (int yyy = yy; yyy <= yy2; yyy++) {
+									for (int xxx = xx; xxx <= xx2; xxx++) {
+										int n2 = ((yyy * img_width) + xxx)*3;
+										img_buffer[n2] = img[n0];
+										img_buffer[n2+1] = img[n0+1];
+										img_buffer[n2+2] = img[n0+2];
+									}
+								}
+
 							}
+
 						}
+
 					}
+
 				}
 			}
 		}
@@ -2145,4 +2155,47 @@ void omni::unwarp_features(
 	}
 
     memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
+}
+
+bool omni::save_mirror_positions(
+	std::string filename,
+	int no_of_mirrors,
+	float* mirror_position)
+{
+	bool saved = false;
+	FILE *file = fopen(filename.c_str(), "w");
+	if (file != NULL) {
+
+		fprintf(file,"%d\n", no_of_mirrors);
+		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+			fprintf(file,"%f,%f\n", mirror_position[mirror*2], mirror_position[mirror*2+1]);
+		}
+
+		fclose(file);
+		saved = true;
+	}
+	return(saved);
+}
+
+bool omni::load_mirror_positions(
+	std::string filename,
+	int& no_of_mirrors,
+	float* mirror_position)
+{
+	bool loaded = false;
+	FILE *file = fopen(filename.c_str(), "r");
+	if (file != NULL) {
+
+		float x=0,y=0;
+		fscanf(file,"%d\n", &no_of_mirrors);
+		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+			fscanf(file,"%f,%f\n", &x, &y);
+			mirror_position[mirror*2] = x;
+			mirror_position[mirror*2+1] = y;
+		}
+
+		fclose(file);
+		loaded = true;
+	}
+	return(loaded);
 }
