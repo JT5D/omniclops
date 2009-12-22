@@ -147,6 +147,7 @@ public:
     	float camera_height_mm,
     	int no_of_mirrors,
     	float* mirror_position,
+    	float* mirror_position_pixels,
         int img_width,
         int img_height);
     void show_ray_map_side(
@@ -212,6 +213,14 @@ public:
     	int& ray_ground_x_mm,
     	int& ray_ground_y_mm,
     	int& ray_ground_z_mm);
+    static bool save_mirror_positions(
+    	std::string filename,
+    	int no_of_mirrors,
+    	float* mirror_position);
+    static bool load_mirror_positions(
+    	std::string filename,
+    	int& no_of_mirrors,
+    	float* mirror_position);
 
     void compass(int max_variance_degrees);
 
