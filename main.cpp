@@ -477,13 +477,13 @@ int main(int argc, char* argv[]) {
 		  }
 		  case 4: {
 			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline/4;
+			  mirror_position[1] = -baseline*hh/ww;
 			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline/4;
+			  mirror_position[3] = -baseline*hh/ww;
 			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline/4;
+			  mirror_position[5] = baseline*hh/ww;
 			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline/4;
+			  mirror_position[7] = baseline*hh/ww;
 
 			  mirror_position_pixels[0] = 20;
 			  mirror_position_pixels[1] = 20;
@@ -497,13 +497,13 @@ int main(int argc, char* argv[]) {
 		  }
 		  case 5: {
 			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline/4;
+			  mirror_position[1] = -baseline*hh/ww;
 			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline/4;
+			  mirror_position[3] = -baseline*hh/ww;
 			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline/4;
+			  mirror_position[5] = baseline*hh/ww;
 			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline/4;
+			  mirror_position[7] = baseline*hh/ww;
 			  mirror_position[8] = 0;
 			  mirror_position[9] = 0;
 

@@ -1365,9 +1365,9 @@ void omni::create_ray_map(
 			}
 		}
 
-		float mirror_cx = mirror_position_pixels[mirror*2] * img_width / 100;  // cx - outer_radius_pixels + ((mirror_position[mirror*2] - bounding_box_tx) * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx));
-		float mirror_cy = mirror_position_pixels[mirror*2+1] * img_height / 100;  // cy - outer_radius_pixels + ((mirror_position[mirror*2+1] - bounding_box_ty) * outer_radius_pixels*2 / (bounding_box_by - bounding_box_ty));
-		float mirror_r = outer_radius_pixels; //(mirror_diameter * outer_radius_pixels*2 / (bounding_box_bx - bounding_box_tx))/2;
+		float mirror_cx = mirror_position_pixels[mirror*2] * img_width / 100;
+		float mirror_cy = mirror_position_pixels[mirror*2+1] * img_height / 100;
+		float mirror_r = outer_radius_pixels;
 
 		int min_x = (int)(mirror_cx - mirror_r);
 		int max_x = (int)(mirror_cx + mirror_r);
@@ -1387,8 +1387,30 @@ void omni::create_ray_map(
 				{
 					n = (y * img_width) + x;
 
+
 					angle = 0;
 					if (r > 0) angle = (float)atan2(dx,dy);
+
+					// this is pretty hacky, but seems to work
+					// the orientations of mirrors are screwed up otherwise
+					angle += 3.1415927f;
+					if (mirror_position[mirror*2] > 0) {
+						if (mirror_position[mirror*2+1] > 0) {
+							angle += 3.1415927f/4;
+						}
+						else {
+							angle -= 3.1415927f/4;
+						}
+					}
+					else {
+						if (mirror_position[mirror*2+1] > 0) {
+							angle -= 3.1415927f/4;
+						}
+						else {
+							angle += 3.1415927f/4;
+						}
+						angle += 3.1415927f;
+					}
 
 					float xx0 = calibration_radius[r*4]*sin(angle);
 					float yy0 = calibration_radius[r*4]*cos(angle);
@@ -1603,11 +1625,29 @@ void omni::show_ray_pixels(
 	int img_width,
 	int img_height)
 {
+	const int max_dist = 64;
+	const int max_dist2 = 75;
+	const int max_dist3 = 100;
 	int n = 0,n2 = 0;
     for (int y = 0; y < img_height; y++) {
 		for (int x = 0; x < img_width; x++, n+=6, n2+=3) {
 			if ((ray_map[n]!=0) || (ray_map[n+1]!=0)) {
-			    img[n2+1] = 255;
+				float dist = (float)sqrt(ray_map[n]*ray_map[n] + ray_map[n+1]*ray_map[n+1]);
+
+				if (dist < max_dist) {
+					img[n2+1] = (unsigned char)255;
+				}
+				else {
+					if (dist < max_dist2) {
+						img[n2+1] = (unsigned char)150;
+					}
+					else {
+						if (dist < max_dist3) {
+							img[n2+1] = (unsigned char)100;
+						}
+					}
+				}
+
 			}
 		}
     }
