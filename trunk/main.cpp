@@ -189,6 +189,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
   opt->addUsage( "     --ground               Show ground plane");
   opt->addUsage( "     --overlay              Show overlaid ray intersections with the image plane");
+  opt->addUsage( "     --overlayangles        Show overlaid ray angles with the image plane");
   opt->addUsage( "     --range                Maximum range when displaying ground plane");
   opt->addUsage( "     --fast                 Show FAST corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
@@ -275,6 +276,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "groundfeatures" );
   opt->setFlag(  "ground" );
   opt->setFlag(  "overlay" );
+  opt->setFlag(  "overlayangles" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -359,8 +361,10 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
+  bool show_overlay_angles = false;
   bool show_overlay = false;
   if( opt->getFlag( "overlay" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = true;
 	  show_lines = false;
 	  show_ground = false;
@@ -370,7 +374,19 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
   }
 
+  if( opt->getFlag( "overlayangles" ) ) {
+	  show_overlay_angles = true;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
   if( opt->getFlag( "ground" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = true;
@@ -386,6 +402,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
@@ -396,6 +413,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
@@ -406,6 +424,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "lines" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = true;
 	  show_ground = false;
@@ -416,6 +435,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
@@ -487,12 +507,15 @@ int main(int argc, char* argv[]) {
 
 			  mirror_position_pixels[0] = 20;
 			  mirror_position_pixels[1] = 20;
-			  mirror_position_pixels[2] = 80;
-			  mirror_position_pixels[3] = 20;
+
+			  mirror_position_pixels[2] = 20;
+			  mirror_position_pixels[3] = 80;
+
 			  mirror_position_pixels[4] = 80;
 			  mirror_position_pixels[5] = 80;
-			  mirror_position_pixels[6] = 20;
-			  mirror_position_pixels[7] = 80;
+
+			  mirror_position_pixels[6] = 80;
+			  mirror_position_pixels[7] = 20;
 			  break;
 		  }
 		  case 5: {
@@ -509,12 +532,16 @@ int main(int argc, char* argv[]) {
 
 			  mirror_position_pixels[0] = 20;
 			  mirror_position_pixels[1] = 20;
-			  mirror_position_pixels[2] = 80;
-			  mirror_position_pixels[3] = 20;
+
+			  mirror_position_pixels[2] = 20;
+			  mirror_position_pixels[3] = 80;
+
 			  mirror_position_pixels[4] = 80;
 			  mirror_position_pixels[5] = 80;
-			  mirror_position_pixels[6] = 20;
-			  mirror_position_pixels[7] = 80;
+
+			  mirror_position_pixels[6] = 80;
+			  mirror_position_pixels[7] = 20;
+
 			  mirror_position_pixels[8] = 50;
 			  mirror_position_pixels[9] = 50;
 			  break;
@@ -524,7 +551,7 @@ int main(int argc, char* argv[]) {
 
   if( opt->getValue( "loadpositions" ) != NULL  ) {
 	  string positions_filename = opt->getValue("loadpositions");
-	  if (omni::load_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels)) {
+	  if (omni::load_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels, mirror_position)) {
 		  printf("Mirror positions loaded from %s\n", positions_filename.c_str());
 	  }
 	  else {
@@ -565,7 +592,7 @@ int main(int argc, char* argv[]) {
 
   if( opt->getValue( "savepositions" ) != NULL  ) {
 	  string positions_filename = opt->getValue("savepositions");
-	  if (omni::save_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels)) {
+	  if (omni::save_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels, mirror_position)) {
 		  printf("Mirror positions saved to %s\n", positions_filename.c_str());
 	  }
 	  else {
@@ -621,6 +648,7 @@ int main(int argc, char* argv[]) {
 
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
+	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
@@ -916,6 +944,10 @@ int main(int argc, char* argv[]) {
 
 	if (show_overlay) {
 		lcam->show_ray_pixels(l_,ww,hh);
+	}
+
+	if (show_overlay_angles) {
+		lcam->show_ray_directions(l_,ww,hh);
 	}
 
 	if (optical_flow) {

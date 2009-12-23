@@ -1379,47 +1379,30 @@ void omni::create_ray_map(
 		if (max_y >= img_height) max_y = img_height-1;
 
 		for (int y = min_y; y <= max_y; y++) {
-			float dy = ((y - mirror_cy)*outer_radius_pixels/mirror_r);
+			float dy = y - mirror_cy;
 			for (int x = min_x; x <= max_x; x++) {
-				float dx = (x - mirror_cx)*outer_radius_pixels/mirror_r;
+				float dx = x - mirror_cx;
 				int r = (int)sqrt(dx*dx + dy*dy);
 				if (r < outer_radius_pixels)
 				{
+					int r_tilted = r;//(int)(sqrt(dx*dx + dy*dy) * cos(mirror_angle));
 					n = (y * img_width) + x;
-
 
 					angle = 0;
 					if (r > 0) angle = (float)atan2(dx,dy);
 
-					// this is pretty hacky, but seems to work
-					// the orientations of mirrors are screwed up otherwise
-					angle += 3.1415927f;
-					if (mirror_position[mirror*2] > 0) {
-						if (mirror_position[mirror*2+1] > 0) {
-							angle += 3.1415927f/4;
-						}
-						else {
-							angle -= 3.1415927f/4;
-						}
-					}
-					else {
-						if (mirror_position[mirror*2+1] > 0) {
-							angle -= 3.1415927f/4;
-						}
-						else {
-							angle += 3.1415927f/4;
-						}
-						angle += 3.1415927f;
-					}
+					angle = -mirror_rotation - angle;
 
-					float xx0 = calibration_radius[r*4]*sin(angle);
-					float yy0 = calibration_radius[r*4]*cos(angle);
-					float zz0 = calibration_radius[r*4+1];
+				    float xx0 = calibration_radius[r_tilted*4]*sin(angle);
+				    float yy0 = calibration_radius[r_tilted*4]*cos(angle);
+					float zz0 = calibration_radius[r_tilted*4+1];
 
+					// tilt
 					float xx1 = (float)((cos(mirror_angle2) * xx0) - (sin(mirror_angle2) * zz0));
 					float yy1 = yy0;
 					float zz1 = (float)((sin(mirror_angle) * xx0) + (cos(mirror_angle) * zz0));
 
+					// rotate
 					float xx2 = (float)((cos(mirror_rotation2) * xx1) - (sin(mirror_rotation2) * yy1));
 					float yy2 = (float)((sin(mirror_rotation) * xx1) + (cos(mirror_rotation) * yy1));
 					float zz2 = zz1 + camera_height_mm;
@@ -1444,14 +1427,16 @@ void omni::create_ray_map(
 					ray_map[n*6+1] = (int)yy2;
 					ray_map[n*6+2] = (int)zz2;
 
-					xx0 = calibration_radius[r*4+2]*sin(angle);
-					yy0 = calibration_radius[r*4+2]*cos(angle);
-					zz0 = calibration_radius[r*4+3];
+					xx0 = calibration_radius[r_tilted*4+2]*sin(angle);
+					yy0 = calibration_radius[r_tilted*4+2]*cos(angle);
+					zz0 = calibration_radius[r_tilted*4+3];
 
+					// tilt
 					xx1 = (float)((cos(mirror_angle2) * xx0) - (sin(mirror_angle2) * zz0));
 					yy1 = yy0;
 					zz1 = (float)((sin(mirror_angle) * xx0) + (cos(mirror_angle) * zz0));
 
+					// rotate
 					xx2 = (float)((cos(mirror_rotation2) * xx1) - (sin(mirror_rotation2) * yy1));
 					yy2 = (float)((sin(mirror_rotation) * xx1) + (cos(mirror_rotation) * yy1));
 					zz2 = zz1 + camera_height_mm;
@@ -1648,6 +1633,81 @@ void omni::show_ray_pixels(
 					}
 				}
 
+			}
+		}
+    }
+}
+
+void omni::show_ray_directions(
+	unsigned char* img,
+	int img_width,
+	int img_height)
+{
+	int n = 0,n2 = 0;
+    for (int y = 0; y < img_height; y++) {
+		for (int x = 0; x < img_width; x++, n+=6, n2+=3) {
+			if ((ray_map[n]!=0) || (ray_map[n+1]!=0)) {
+				int angle = (int)((float)atan2(ray_map[n], ray_map[n+1])*180/3.1415927f)/5;
+
+				if (angle == 8) {
+					img[n2+2] = (unsigned char)255;
+				}
+				if (angle == 9) {
+					img[n2+2] = (unsigned char)255;
+					img[n2] = (unsigned char)255;
+				}
+
+				if (angle == 26) {
+					img[n2+1] = (unsigned char)255;
+				}
+				if (angle == 27) {
+					img[n2] = (unsigned char)255;
+				}
+
+				if (angle == -8) {
+					img[n2+1] = (unsigned char)255;
+					img[n2+2] = (unsigned char)255;
+				}
+				if (angle == -9) {
+					img[n2+2] = (unsigned char)255;
+				}
+
+				if (angle == -26) {
+					img[n2] = (unsigned char)255;
+				}
+				if (angle == -27) {
+					img[n2] = (unsigned char)255;
+					img[n2+1] = (unsigned char)255;
+				}
+
+
+
+/*
+				switch(angle % 5) {
+			    case 0: {
+			    	img[n2] = (unsigned char)255;
+			    	break;
+			    }
+			    case 1: {
+			    	img[n2+1] = (unsigned char)255;
+			    	break;
+			    }
+			    case 2: {
+			    	img[n2+2] = (unsigned char)255;
+			    	break;
+			    }
+			    case 3: {
+			    	img[n2+1] = (unsigned char)255;
+			    	img[n2+2] = (unsigned char)255;
+			    	break;
+			    }
+			    case 4: {
+			    	img[n2] = (unsigned char)255;
+			    	img[n2+2] = (unsigned char)255;
+			    	break;
+			    }
+				}
+*/
 			}
 		}
     }
@@ -2200,13 +2260,19 @@ void omni::unwarp_features(
 bool omni::save_mirror_positions(
 	std::string filename,
 	int no_of_mirrors,
+	float* mirror_position_pixels,
 	float* mirror_position)
 {
 	bool saved = false;
 	FILE *file = fopen(filename.c_str(), "w");
 	if (file != NULL) {
 
-		fprintf(file,"%d\n", no_of_mirrors);
+		fprintf(file,"Number of mirrors %d\n", no_of_mirrors);
+		fprintf(file,"Image coordinates as percentages\n");
+		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+			fprintf(file,"%f,%f\n", mirror_position_pixels[mirror*2], mirror_position_pixels[mirror*2+1]);
+		}
+		fprintf(file,"\nReal coordinates in millimetres\n");
 		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
 			fprintf(file,"%f,%f\n", mirror_position[mirror*2], mirror_position[mirror*2+1]);
 		}
@@ -2220,6 +2286,7 @@ bool omni::save_mirror_positions(
 bool omni::load_mirror_positions(
 	std::string filename,
 	int& no_of_mirrors,
+	float* mirror_position_pixels,
 	float* mirror_position)
 {
 	bool loaded = false;
@@ -2227,7 +2294,14 @@ bool omni::load_mirror_positions(
 	if (file != NULL) {
 
 		float x=0,y=0;
-		fscanf(file,"%d\n", &no_of_mirrors);
+		fscanf(file,"Number of mirrors %d\n", &no_of_mirrors);
+		fscanf(file,"Image coordinates as percentages\n");
+		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+			fscanf(file,"%f,%f\n", &x, &y);
+			mirror_position_pixels[mirror*2] = x;
+			mirror_position_pixels[mirror*2+1] = y;
+		}
+		fscanf(file,"\nReal coordinates in millimetres\n");
 		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
 			fscanf(file,"%f,%f\n", &x, &y);
 			mirror_position[mirror*2] = x;
