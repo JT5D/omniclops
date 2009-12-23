@@ -167,6 +167,10 @@ public:
     	unsigned char* img,
     	int img_width,
     	int img_height);
+    void show_ray_directions(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height);
     void show_ground_plane(
         unsigned char* img,
         int img_width,
@@ -216,10 +220,12 @@ public:
     static bool save_mirror_positions(
     	std::string filename,
     	int no_of_mirrors,
+    	float* mirror_position_pixels,
     	float* mirror_position);
     static bool load_mirror_positions(
     	std::string filename,
     	int& no_of_mirrors,
+    	float* mirror_position_pixels,
     	float* mirror_position);
 
     void compass(int max_variance_degrees);
