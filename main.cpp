@@ -205,8 +205,8 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --saveedges            Save edges to file");
   opt->addUsage( "     --saveflow             Save optical flow vectors");
   opt->addUsage( "     --saveradial           Save radial lines to file");
-  opt->addUsage( "     --loadpositions        Load mirror positions from file");
-  opt->addUsage( "     --savepositions        Save mirror positions to file");
+  opt->addUsage( "     --loadconfig           Load a configuration file");
+  opt->addUsage( "     --saveconfig           Save a configuration file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
@@ -261,8 +261,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "mirrory3" );
   opt->setOption(  "mirrorx4" );
   opt->setOption(  "mirrory4" );
-  opt->setOption(  "savepositions" );
-  opt->setOption(  "loadpositions" );
+  opt->setOption(  "saveconfig" );
+  opt->setOption(  "loadconfig" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -549,16 +549,6 @@ int main(int argc, char* argv[]) {
 	  }
   }
 
-  if( opt->getValue( "loadpositions" ) != NULL  ) {
-	  string positions_filename = opt->getValue("loadpositions");
-	  if (omni::load_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels, mirror_position)) {
-		  printf("Mirror positions loaded from %s\n", positions_filename.c_str());
-	  }
-	  else {
-		  printf("Warning: Mirror positions could not be loaded from %s\n", positions_filename.c_str());
-	  }
-  }
-
   if( opt->getValue( "mirrorx0" ) != NULL  ) {
 	  mirror_position_pixels[0] = atof(opt->getValue("mirrorx0"));
   }
@@ -588,16 +578,6 @@ int main(int argc, char* argv[]) {
   }
   if( opt->getValue( "mirrory4" ) != NULL  ) {
 	  mirror_position_pixels[9] = atof(opt->getValue("mirrory4"));
-  }
-
-  if( opt->getValue( "savepositions" ) != NULL  ) {
-	  string positions_filename = opt->getValue("savepositions");
-	  if (omni::save_mirror_positions(positions_filename, no_of_mirrors, mirror_position_pixels, mirror_position)) {
-		  printf("Mirror positions saved to %s\n", positions_filename.c_str());
-	  }
-	  else {
-		  printf("Warning: Mirror positions could not be saved to %s\n", positions_filename.c_str());
-	  }
   }
 
   float focal_length = 3.6f;
@@ -641,9 +621,9 @@ int main(int argc, char* argv[]) {
 	  inner_radius = atoi(opt->getValue("inner"));
   }
 
-  int range_mm = 200;
+  float range_mm = 200;
   if( opt->getValue( "range" ) != NULL  ) {
-	  range_mm = atoi(opt->getValue("range"));
+	  range_mm = atof(opt->getValue("range"));
   }
 
   int desired_corner_features = 70;
@@ -690,6 +670,50 @@ int main(int argc, char* argv[]) {
 
   if( opt->getValue( 's' ) != NULL  || opt->getValue( "skip" ) != NULL  ) {
 	  skip_frames = atoi(opt->getValue("skip"));
+  }
+
+  if( opt->getValue( "loadconfig" ) != NULL  ) {
+	  string config_filename = opt->getValue("loadconfig");
+	  if (omni::load_configuration(
+			  config_filename,
+			  no_of_mirrors,
+			  mirror_position_pixels,
+			  mirror_position,
+			  focal_length,
+			  mirror_diameter,
+			  outer_radius,
+			  inner_radius,
+			  dist_to_mirror_centre,
+			  camera_height,
+			  baseline,
+			  range_mm)) {
+		  printf("Configuration loaded from %s\n", config_filename.c_str());
+	  }
+	  else {
+		  printf("Warning: Configuration could not be loaded from %s\n", config_filename.c_str());
+	  }
+  }
+
+  if( opt->getValue( "saveconfig" ) != NULL  ) {
+	  string config_filename = opt->getValue("saveconfig");
+	  if (omni::save_configuration(
+			  config_filename,
+			  no_of_mirrors,
+			  mirror_position_pixels,
+			  mirror_position,
+			  focal_length,
+			  mirror_diameter,
+			  outer_radius,
+			  inner_radius,
+			  dist_to_mirror_centre,
+			  camera_height,
+			  baseline,
+			  range_mm)) {
+		  printf("Configuration saved to %s\n", config_filename.c_str());
+	  }
+	  else {
+		  printf("Warning: Configuration could not be saved to %s\n", config_filename.c_str());
+	  }
   }
 
   delete opt;

@@ -217,16 +217,32 @@ public:
     	int& ray_ground_x_mm,
     	int& ray_ground_y_mm,
     	int& ray_ground_z_mm);
-    static bool save_mirror_positions(
+    static bool save_configuration(
     	std::string filename,
     	int no_of_mirrors,
     	float* mirror_position_pixels,
-    	float* mirror_position);
-    static bool load_mirror_positions(
+    	float* mirror_position,
+    	float focal_length,
+    	float mirror_diameter,
+    	float outer_radius_percent,
+    	float inner_radius_percent,
+    	float dist_to_mirror_centre,
+    	float camera_height,
+    	float baseline,
+    	float range);
+    static bool load_configuration(
     	std::string filename,
     	int& no_of_mirrors,
     	float* mirror_position_pixels,
-    	float* mirror_position);
+    	float* mirror_position,
+    	float &focal_length,
+		float &mirror_diameter,
+		float &outer_radius_percent,
+		float &inner_radius_percent,
+		float &dist_to_mirror_centre,
+		float &camera_height,
+		float &baseline,
+		float &range);
 
     void compass(int max_variance_degrees);
 
