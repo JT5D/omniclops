@@ -1385,7 +1385,7 @@ void omni::create_ray_map(
 				int r = (int)sqrt(dx*dx + dy*dy);
 				if (r < outer_radius_pixels)
 				{
-					int r_tilted = (int)(sqrt(dx*dx + dy*dy) * sin(mirror_angle));
+					int r_tilted = (int)(sqrt(dx*dx + dy*dy) * cos(mirror_angle));
 					n = (y * img_width) + x;
 
 					angle = 0;
@@ -2267,11 +2267,19 @@ void omni::unwarp_features(
     memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 }
 
-bool omni::save_mirror_positions(
+bool omni::save_configuration(
 	std::string filename,
 	int no_of_mirrors,
 	float* mirror_position_pixels,
-	float* mirror_position)
+	float* mirror_position,
+	float focal_length,
+	float mirror_diameter,
+	float outer_radius_percent,
+	float inner_radius_percent,
+	float dist_to_mirror_centre,
+	float camera_height,
+	float baseline,
+	float range)
 {
 	bool saved = false;
 	FILE *file = fopen(filename.c_str(), "w");
@@ -2280,12 +2288,21 @@ bool omni::save_mirror_positions(
 		fprintf(file,"Number of mirrors %d\n", no_of_mirrors);
 		fprintf(file,"Image coordinates as percentages\n");
 		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fprintf(file,"%f,%f\n", mirror_position_pixels[mirror*2], mirror_position_pixels[mirror*2+1]);
+			fprintf(file,"%.2f,%.2f\n", mirror_position_pixels[mirror*2], mirror_position_pixels[mirror*2+1]);
 		}
 		fprintf(file,"\nReal coordinates in millimetres\n");
 		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fprintf(file,"%f,%f\n", mirror_position[mirror*2], mirror_position[mirror*2+1]);
+			fprintf(file,"%.2f,%.2f\n", mirror_position[mirror*2], mirror_position[mirror*2+1]);
 		}
+
+		fprintf(file,"\nFocal length (mm) %.2f\n", focal_length);
+		fprintf(file,"Mirror diameter (mm) %.2f\n", mirror_diameter);
+		fprintf(file,"Outer radius (percent of image width) %.2f\n", outer_radius_percent);
+		fprintf(file,"Inner radius (percent of image width) %.2f\n", inner_radius_percent);
+		fprintf(file,"Distance from camera to mirror plane (mm) %.2f\n", dist_to_mirror_centre);
+		fprintf(file,"Camera elevation (mm) %.2f\n", camera_height);
+		fprintf(file,"Baseline (mm) %.2f\n", baseline);
+		fprintf(file,"Mapping range (mm) %.2f\n", range);
 
 		fclose(file);
 		saved = true;
@@ -2293,11 +2310,19 @@ bool omni::save_mirror_positions(
 	return(saved);
 }
 
-bool omni::load_mirror_positions(
+bool omni::load_configuration(
 	std::string filename,
 	int& no_of_mirrors,
 	float* mirror_position_pixels,
-	float* mirror_position)
+	float* mirror_position,
+	float &focal_length,
+	float &mirror_diameter,
+	float &outer_radius_percent,
+	float &inner_radius_percent,
+	float &dist_to_mirror_centre,
+	float &camera_height,
+	float &baseline,
+	float &range)
 {
 	bool loaded = false;
 	FILE *file = fopen(filename.c_str(), "r");
@@ -2317,6 +2342,15 @@ bool omni::load_mirror_positions(
 			mirror_position[mirror*2] = x;
 			mirror_position[mirror*2+1] = y;
 		}
+
+		fscanf(file,"\nFocal length (mm) %.2f\n", &focal_length);
+		fscanf(file,"Mirror diameter (mm) %.2f\n", &mirror_diameter);
+		fscanf(file,"Outer radius (percent of image width) %.2f\n", &outer_radius_percent);
+		fscanf(file,"Inner radius (percent of image width) %.2f\n", &inner_radius_percent);
+		fscanf(file,"Distance from camera to mirror plane (mm) %.2f\n", &dist_to_mirror_centre);
+		fscanf(file,"Camera elevation (mm) %.2f\n", &camera_height);
+		fscanf(file,"Baseline (mm) %.2f\n", &baseline);
+		fscanf(file,"Mapping range (mm) %.2f\n", &range);
 
 		fclose(file);
 		loaded = true;
