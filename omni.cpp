@@ -1385,7 +1385,7 @@ void omni::create_ray_map(
 				int r = (int)sqrt(dx*dx + dy*dy);
 				if (r < outer_radius_pixels)
 				{
-					int r_tilted = r;//(int)(sqrt(dx*dx + dy*dy) * cos(mirror_angle));
+					int r_tilted = (int)(sqrt(dx*dx + dy*dy) * sin(mirror_angle));
 					n = (y * img_width) + x;
 
 					angle = 0;
@@ -1732,24 +1732,34 @@ void omni::show_ground_plane(
 	int n = 0;
 	for (int y = 0; y < img_height; y++) {
 		for (int x = 0; x < img_width; x++, n += 6) {
-			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
+			if ((!((ray_map[n+3] == 0) && (ray_map[n+4] == 0))) &&
+				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y) &&
+				(ray_map[n+5] == 0)) {
 				int xx = (ray_map[n+3] - min_x) * (img_width-1) / (max_x-min_x);
 				if ((xx > -1) && (xx < img_width)) {
 
 					int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
 					if ((yy > -1) && (yy < img_height)) {
 
-						int xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
-						if ((xx2 > -1) && (xx2 < img_width)) {
+						int xx2 = xx+8;
+						//if (ray_map[n+3+6] != 0) xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
+						if ((xx2 > 0) && (xx2 < img_width)) {
 
-							int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
-							if ((yy2 > -1) && (yy2 < img_height)) {
+							int yy2 = yy+8;
+							//if (ray_map[n+4+6+(img_width*6)] != 0) yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
+							if ((yy2 > 0) && (yy2 < img_height)) {
+
+								if ((xx2 == 0) && (yy2 ==0)) {
+									xx2 = xx;
+									yy2 = yy;
+								}
 
 								int n0 = ((y * img_width) + x)*3;
 								for (int yyy = yy; yyy <= yy2; yyy++) {
 									for (int xxx = xx; xxx <= xx2; xxx++) {
 										int n2 = ((yyy * img_width) + xxx)*3;
+										if (img_buffer[n2] > 0) break;
 										img_buffer[n2] = img[n0];
 										img_buffer[n2+1] = img[n0+1];
 										img_buffer[n2+2] = img[n0+2];
