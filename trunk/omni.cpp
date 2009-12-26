@@ -29,10 +29,12 @@ omni::omni(int width, int height) {
 	feature_y = new short int[OMNI_MAX_FEATURES];
 
 	ray_map = NULL;
+	mirror_map = NULL;
 	calibration_map = NULL;
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
+	occupancy_grid = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -77,11 +79,17 @@ omni::~omni() {
 	if (calibration_map != NULL) {
 		delete[] calibration_map;
 	}
+	if (mirror_map != NULL) {
+		delete[] mirror_map;
+	}
 	if (ray_map != NULL) {
 		delete[] ray_map;
 	}
 	if (img_buffer != NULL)
 		delete[] img_buffer;
+	if (occupancy_grid != NULL) {
+		delete[] occupancy_grid;
+	}
 }
 
 /* Updates sliding sums and edge response values along a single row or column
@@ -1196,6 +1204,269 @@ float omni::intersection_ray_sphere(
   	  return(0);
 }
 
+void omni::rgb_to_hsv(
+    int r, int g, int b,
+    unsigned char& h,
+    unsigned char& s,
+    unsigned char& v)
+{
+
+    float red = r / 255.0f, green = g / 255.0f, blue = b / 255.0f;
+
+    float maxRGB = max(blue,max(red, green));
+    float minRGB = min(blue,min(red, green));
+
+    float hConvert = 0;
+    float vConvert = maxRGB;
+    float sConvert = (vConvert - (minRGB))/vConvert;
+
+    if ((red == maxRGB) &&
+        (green == minRGB))
+        hConvert = 5 + ((red - blue)/(red - green));
+
+    else if ((red == maxRGB) && (blue == minRGB))
+        hConvert = 1 - ((red - green)/(red - blue));
+
+    else if ((green == maxRGB) && (blue == minRGB))
+        hConvert = 1 + ((green - red)/(green -blue));
+
+    else if ((green == maxRGB) && (red == minRGB))
+        hConvert = 3 - ((green - blue)/(green - red));
+
+    else if ((blue == maxRGB) && (red == minRGB))
+        hConvert = 3 + ((blue - green)/(blue - red));
+
+    else if ((blue == maxRGB) && (green == minRGB))
+        hConvert = 5 - ((blue - red)/(blue - green));
+
+    hConvert = hConvert * 60;
+
+    if (hConvert < 0) hConvert += 360;
+
+    h = round(hConvert/360*31);
+    s = round(sConvert*255);
+    v = round(vConvert*255);
+}
+
+void omni::init_grid(
+    int grid_centre_x_mm,
+    int grid_centre_y_mm,
+	int grid_centre_z_mm,
+	int grid_cell_dimension_mm,
+	int grid_dimension_cells)
+{
+    this->grid_centre_x_mm = grid_centre_x_mm;
+    this->grid_centre_y_mm = grid_centre_y_mm;
+    this->grid_centre_z_mm = grid_centre_z_mm;
+    this->grid_cell_dimension_mm = grid_cell_dimension_mm;
+    this->grid_dimension_cells = grid_dimension_cells;
+
+    if (occupancy_grid != NULL) {
+    	delete[] occupancy_grid;
+    }
+	occupancy_grid = new unsigned int[grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2];
+	memset((void*)occupancy_grid,'\0',grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2*sizeof(unsigned int));
+}
+
+
+void omni::update_grid_map(
+	float mirror_diameter,
+	unsigned char* img,
+    int img_width,
+    int img_height)
+{
+	const int max_cols = 5;
+
+	if (occupancy_grid != NULL) {
+
+		int offset_x = (grid_dimension_cells/2) - (grid_centre_x_mm / grid_cell_dimension_mm);
+		int offset_y = (grid_dimension_cells/2) - (grid_centre_y_mm / grid_cell_dimension_mm);
+		int offset_z = (grid_dimension_cells/2) - (grid_centre_z_mm / grid_cell_dimension_mm);
+
+		int min_radius_cells = (int)(mirror_diameter / grid_cell_dimension_mm);
+		unsigned char h=0,s=0,v=0;
+		int grid_dimension_cells_sqr = grid_dimension_cells*grid_dimension_cells;
+		int dx,dy,dz,cell_x,cell_y,cell_z,r,length,idx,hue_bit;
+		int ray_start_x, ray_start_y, ray_start_z, ray_end_x, ray_end_y, ray_end_z;
+		int pixels = img_width*img_height;
+		int n = (pixels-1)*6;
+		for (int i = pixels-1; i >= 0; i--, n-=6) {
+			if (mirror_map[i] > 0) {
+
+				// extract the hue
+				rgb_to_hsv(img[i*3+2],img[i*3+1],img[i*3],h,s,v);
+				hue_bit = pow(2,h);
+
+				// calculate the start and end grid cell coordinates of the ray
+				ray_start_x = (ray_map[n] / grid_cell_dimension_mm) + offset_x;
+				ray_start_y = (ray_map[n+1] / grid_cell_dimension_mm) + offset_y;
+				ray_start_z = (ray_map[n+2] / grid_cell_dimension_mm) + offset_z;
+				ray_end_x = (ray_map[n+3] / grid_cell_dimension_mm) + offset_x;
+				ray_end_y = (ray_map[n+4] / grid_cell_dimension_mm) + offset_y;
+				ray_end_z = (ray_map[n+5] / grid_cell_dimension_mm) + offset_z;
+
+				dx = ray_end_x - ray_start_x;
+				dy = ray_end_y - ray_start_y;
+				dz = ray_end_z - ray_start_z;
+
+				// calculate the length of the ray
+				length = (int)sqrt(dx*dx + dy*dy + dz*dz);
+				if (length > min_radius_cells) {
+
+					// step along the length of the ray
+					for (r = length-1; r > min_radius_cells; r--) {
+						cell_x =  ray_start_x + (r * dx / length);
+						if ((cell_x < 0) || (cell_x >= grid_dimension_cells)) break;
+						cell_y =  ray_start_y + (r * dy / length);
+						if ((cell_y < 0) || (cell_y >= grid_dimension_cells)) break;
+						cell_z =  ray_start_z + (r * dz / length);
+						if ((cell_z < 0) || (cell_z >= grid_dimension_cells)) break;
+						idx = ((cell_z * grid_dimension_cells_sqr) +
+							   (cell_y * grid_dimension_cells) +
+							   cell_x)*2;
+						occupancy_grid[idx] |= hue_bit;
+						if (occupancy_grid[idx+1] < 4294967295u) {
+							occupancy_grid[idx+1]++;
+						}
+						else {
+							printf("grid cell counter overflow\n");
+						}
+					}
+				}
+			}
+		}
+
+		/* lookup table used for counting the number of set bits */
+		const unsigned char BitsSetTable256[] =
+		{
+			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+			4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
+		};
+
+		// knock out grid cells with too much colour variance
+		point_cloud.clear();
+		int average_hits = 0;
+		int no_of_cols,hits = 0;
+		for (int i = grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2-1; i >= 0; i-=2) {
+			if (occupancy_grid[i] > 0) {
+				bool is_valid = false;
+				if (occupancy_grid[i] > 1) {
+					unsigned int cols = occupancy_grid[i-1];
+					if (cols > 0) {
+						// count the number of colours
+						no_of_cols =
+							BitsSetTable256[cols & 0xff] +
+							BitsSetTable256[(cols >> 8) & 0xff] +
+							BitsSetTable256[(cols >> 16) & 0xff] +
+							BitsSetTable256[cols >> 24];
+
+						if (no_of_cols <= max_cols) {
+							average_hits += occupancy_grid[i];
+							hits++;
+							is_valid = true;
+							point_cloud.push_back(i-1);
+						}
+					}
+				}
+				if (!is_valid) {
+					occupancy_grid[i-1] = 0;
+					occupancy_grid[i] = 0;
+				}
+			}
+		}
+		if (hits > 0) average_hits /= hits;
+
+		unsigned int threshold = (unsigned int)(average_hits*300/100);
+		vector<int> new_point_cloud;
+		for (int i = (int)point_cloud.size()-1; i >= 0; i--) {
+			idx = point_cloud[i];
+			if (occupancy_grid[idx+1] > threshold) {
+				cell_z = idx / grid_dimension_cells_sqr;
+				cell_y = (idx - (cell_z*grid_dimension_cells_sqr)) / grid_dimension_cells;
+				cell_x = idx - (cell_z*grid_dimension_cells_sqr) - (cell_y*grid_dimension_cells);
+
+				cell_x /= 2;
+				cell_y /= 2;
+				cell_z /= 2;
+
+				cell_x -= offset_x;
+				cell_y -= offset_y;
+				cell_z -= offset_z;
+
+				cell_x *= grid_cell_dimension_mm;
+				cell_y *= grid_cell_dimension_mm;
+				cell_z *= grid_cell_dimension_mm;
+
+				new_point_cloud.push_back(cell_z);
+				new_point_cloud.push_back(cell_y);
+				new_point_cloud.push_back(cell_x);
+			}
+			occupancy_grid[idx+1] = 0;
+			occupancy_grid[idx] = 0;
+		}
+		point_cloud.clear();
+		for (int i = (int)new_point_cloud.size()-1; i >= 0; i--) {
+			point_cloud.push_back(new_point_cloud[i]);
+		}
+		//printf("threshold %d\n", (int)threshold);
+		//printf("points %d\n", (int)point_cloud.size()/3);
+
+	}
+}
+
+void omni::show_point_cloud(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	int min_x_mm, int max_x_mm,
+	int min_y_mm, int max_y_mm,
+	int min_z_mm, int max_z_mm)
+{
+	memset((void*)img,'\0',img_width*img_height*3);
+	int n,x,y;
+	int ww = img_width/2;
+	int hh = img_height/2;
+	for (int i = 0; i < (int)point_cloud.size(); i += 3) {
+		// XY
+        x = ((point_cloud[i] - min_x_mm) * ww / (max_x_mm - min_x_mm));
+        y = hh - 1 - ((point_cloud[i+1] - min_y_mm) * hh / (max_y_mm - min_y_mm));
+        n = ((y * img_width) + x) * 3;
+        img[n] = 255;
+        img[n+1] = 255;
+        img[n+2] = 255;
+
+        // XZ
+        x = ww + ((point_cloud[i] - min_x_mm) * ww / (max_x_mm - min_x_mm));
+        y = hh - 1 - ((point_cloud[i+2] - min_z_mm) * hh / (max_z_mm - min_z_mm));
+        n = ((y * img_width) + x) * 3;
+        img[n] = 255;
+        img[n+1] = 255;
+        img[n+2] = 255;
+
+        // YZ
+        x = ww + ((point_cloud[i+1] - min_y_mm) * ww / (max_y_mm - min_y_mm));
+        y = (2*hh) - 1 - ((point_cloud[i+2] - min_z_mm) * hh / (max_z_mm - min_z_mm));
+        n = ((y * img_width) + x) * 3;
+        img[n] = 255;
+        img[n+1] = 255;
+        img[n+2] = 255;
+	}
+}
+
 void omni::create_ray_map(
 	float mirror_diameter,
 	float dist_to_mirror_backing,
@@ -1211,6 +1482,8 @@ void omni::create_ray_map(
 	if (ray_map == NULL) {
 		ray_map = new int[img_width*img_height*6];
 		memset((void*)ray_map,'\0',img_width*img_height*6*sizeof(int));
+		mirror_map = new unsigned char[img_width*img_height];
+		memset((void*)mirror_map,'\0',img_width*img_height);
 	}
 
 	float half_pi = 3.1415927f/2;
@@ -1462,6 +1735,8 @@ void omni::create_ray_map(
 					ray_map[n*6+3] = (int)xx2;
 					ray_map[n*6+4] = (int)yy2;
 					ray_map[n*6+5] = (int)zz2;
+
+					mirror_map[n] = (unsigned char)(mirror+1);
 
 					if (no_of_mirrors > 1) {
 						if (!hits_backing) {
@@ -2343,17 +2618,121 @@ bool omni::load_configuration(
 			mirror_position[mirror*2+1] = y;
 		}
 
-		fscanf(file,"\nFocal length (mm) %.2f\n", &focal_length);
-		fscanf(file,"Mirror diameter (mm) %.2f\n", &mirror_diameter);
-		fscanf(file,"Outer radius (percent of image width) %.2f\n", &outer_radius_percent);
-		fscanf(file,"Inner radius (percent of image width) %.2f\n", &inner_radius_percent);
-		fscanf(file,"Distance from camera to mirror plane (mm) %.2f\n", &dist_to_mirror_centre);
-		fscanf(file,"Camera elevation (mm) %.2f\n", &camera_height);
-		fscanf(file,"Baseline (mm) %.2f\n", &baseline);
-		fscanf(file,"Mapping range (mm) %.2f\n", &range);
+		fscanf(file,"\nFocal length (mm) %f\n", &focal_length);
+		fscanf(file,"Mirror diameter (mm) %f\n", &mirror_diameter);
+		fscanf(file,"Outer radius (percent of image width) %f\n", &outer_radius_percent);
+		fscanf(file,"Inner radius (percent of image width) %f\n", &inner_radius_percent);
+		fscanf(file,"Distance from camera to mirror plane (mm) %f\n", &dist_to_mirror_centre);
+		fscanf(file,"Camera elevation (mm) %f\n", &camera_height);
+		fscanf(file,"Baseline (mm) %f\n", &baseline);
+		fscanf(file,"Mapping range (mm) %f\n", &range);
 
 		fclose(file);
 		loaded = true;
 	}
 	return(loaded);
+}
+
+/*!
+ * \brief returns the minimum squared distance between two 3D rays
+ */
+float omni::min_distance_between_rays(
+	float ray1_x_start,
+	float ray1_y_start,
+	float ray1_z_start,
+	float ray1_x_end,
+	float ray1_y_end,
+	float ray1_z_end,
+	float ray2_x_start,
+	float ray2_y_start,
+	float ray2_z_start,
+	float ray2_x_end,
+	float ray2_y_end,
+	float ray2_z_end,
+	float &dx,
+	float &dy,
+	float &dz,
+	float &x,
+	float &y,
+	float &z)
+{
+	float ux = ray1_x_end - ray1_x_start;
+	float uy = ray1_y_end - ray1_y_start;
+	float uz = ray1_z_end - ray1_z_start;
+
+	float vx = ray2_x_end - ray2_x_start;
+	float vy = ray2_y_end - ray2_y_start;
+	float vz = ray2_z_end - ray2_z_start;
+
+	float wx = ray1_x_start - ray2_x_start;
+	float wy = ray1_y_start - ray2_y_start;
+	float wz = ray1_z_start - ray2_z_start;
+
+    float a = ux*ux + uy*uy + uz*uz;
+    float b = ux*vx + uy*vy + uz*vz;
+    float c = vx*vx + vy*vy + vz*vz;
+    float d = ux*wx + uy*wy + uz*wz;
+    float e = vx*wx + vy*wy + vz*wz;
+    float D = a*c - b*b;
+    float sc, sN, sD = D;
+    float tc, tN, tD = D;
+
+    // compute the line parameters of the two closest points
+    if (D < 0.00000001f) { // the lines are almost parallel
+        sN = 0.0f; // force using point P0 on segment S1
+        sD = 1.0f; // to prevent possible division by 0.0 later
+        tN = e;
+        tD = c;
+    }
+    else {                // get the closest points on the infinite lines
+        sN = (b*e - c*d);
+        tN = (a*e - b*d);
+        if (sN < 0.0f) {       // sc < 0 => the s=0 edge is visible
+            sN = 0.0f;
+            tN = e;
+            tD = c;
+        }
+        else if (sN > sD) {  // sc > 1 => the s=1 edge is visible
+            sN = sD;
+            tN = e + b;
+            tD = c;
+        }
+    }
+
+    if (tN < 0.0f) {           // tc < 0 => the t=0 edge is visible
+        tN = 0.0f;
+        // recompute sc for this edge
+        if (-d < 0.0f)
+            sN = 0.0f;
+        else if (-d > a)
+            sN = sD;
+        else {
+            sN = -d;
+            sD = a;
+        }
+    }
+    else if (tN > tD) {      // tc > 1 => the t=1 edge is visible
+        tN = tD;
+        // recompute sc for this edge
+        if ((-d + b) < 0.0f)
+            sN = 0;
+        else if ((-d + b) > a)
+            sN = sD;
+        else {
+            sN = (-d + b);
+            sD = a;
+        }
+    }
+    // finally do the division to get sc and tc
+    sc = (fabs(sN) < 0.00000001f ? 0.0 : sN / sD);
+    tc = (fabs(tN) < 0.00000001f ? 0.0 : tN / tD);
+
+    // get the difference of the two closest points
+    dx = wx + (sc * ux) - (tc * vx);
+    dy = wy + (sc * uy) - (tc * vy);
+    dz = wz + (sc * uz) - (tc * vz);
+    x = wx + (sc * x);
+    y = wy + (sc * y);
+    z = wz + (sc * z);
+    return (dx*dx + dy*dy + dz*dz);
 }

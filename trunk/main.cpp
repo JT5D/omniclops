@@ -184,6 +184,9 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --elevation            Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
   opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
+  opt->addUsage( "     --gridcell             Occupancy grid cell size in millimetres");
+  opt->addUsage( "     --griddim              Occupancy grid dimension in cells");
+  opt->addUsage( "     --grid                 Show occupancy grid");
   opt->addUsage( "     --features             Show edge features");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
@@ -263,6 +266,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "mirrory4" );
   opt->setOption(  "saveconfig" );
   opt->setOption(  "loadconfig" );
+  opt->setOption(  "gridcell" );
+  opt->setOption(  "griddim" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -277,6 +282,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "ground" );
   opt->setFlag(  "overlay" );
   opt->setFlag(  "overlayangles" );
+  opt->setFlag(  "grid" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -363,7 +369,21 @@ int main(int argc, char* argv[]) {
 
   bool show_overlay_angles = false;
   bool show_overlay = false;
+  bool show_occupancy_grid = false;
+  if( opt->getFlag( "grid" ) ) {
+	  show_occupancy_grid = true;
+	  show_overlay_angles = false;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
   if( opt->getFlag( "overlay" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = true;
 	  show_lines = false;
@@ -375,6 +395,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "overlayangles" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = true;
 	  show_overlay = false;
 	  show_lines = false;
@@ -386,6 +407,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "ground" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
@@ -402,6 +424,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
@@ -413,6 +436,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
@@ -424,6 +448,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "lines" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = true;
@@ -435,6 +460,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
@@ -602,6 +628,16 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
+  int grid_cell_size = 64;
+  if( opt->getValue( "gridcell" ) != NULL  ) {
+	  grid_cell_size = atoi(opt->getValue("gridcell"));
+  }
+
+  int grid_dimension = 64;
+  if( opt->getValue( "griddim" ) != NULL  ) {
+	  grid_cell_size = atoi(opt->getValue("griddim"));
+  }
+
   float mirror_diameter = 60;
   if( opt->getValue( "diam" ) != NULL  ) {
 	  mirror_diameter = atof(opt->getValue("diam"));
@@ -628,6 +664,7 @@ int main(int argc, char* argv[]) {
 
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
+	  show_occupancy_grid = false;
 	  show_overlay_angles = false;
 	  show_overlay = false;
 	  show_lines = false;
@@ -811,6 +848,10 @@ int main(int argc, char* argv[]) {
   	mirror_position_pixels,
     ww,hh);
 
+  if (show_occupancy_grid) {
+      lcam->init_grid(0,0,0,grid_cell_size,grid_dimension);
+  }
+
   Match2D flow_matches[MAX_FLOW_MATCHES];
 
   /* load image from file */
@@ -972,6 +1013,22 @@ int main(int argc, char* argv[]) {
 
 	if (show_overlay_angles) {
 		lcam->show_ray_directions(l_,ww,hh);
+	}
+
+	if (show_occupancy_grid) {
+		lcam->update_grid_map(mirror_diameter,l_,ww,hh);
+
+    	int min_x_mm = -grid_dimension*grid_cell_size/2;
+    	int max_x_mm = grid_dimension*grid_cell_size/2;
+    	int min_y_mm = -grid_dimension*grid_cell_size/2;
+    	int max_y_mm = grid_dimension*grid_cell_size/2;
+    	int min_z_mm = -grid_dimension*grid_cell_size/2;
+    	int max_z_mm = grid_dimension*grid_cell_size/2;
+
+		lcam->show_point_cloud(l_,ww,hh,
+		    min_x_mm, max_x_mm,
+		    min_y_mm, max_y_mm,
+		    min_z_mm, max_z_mm);
 	}
 
 	if (optical_flow) {

@@ -24,8 +24,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <vector>
 #include <fstream>
+#include <algorithm>
 #include "drawing.h"
+using namespace std;
+
 
 #define OMNI_MAX_FEATURES           4000
 #define OMNI_MAX_IMAGE_WIDTH        1024
@@ -39,6 +43,12 @@
 #define pixindex(xx, yy)  ((yy * imgWidth + xx) * 3)
 
 class omni {
+protected:
+	void rgb_to_hsv(
+	    int r, int g, int b,
+	    unsigned char& h,
+	    unsigned char& s,
+	    unsigned char& v);
 public:
     unsigned int imgWidth, imgHeight;
 
@@ -68,6 +78,7 @@ public:
 
     /* maps raw image pixels to 3D rays */
     int* ray_map;
+    unsigned char* mirror_map;
 
     /* radial lines */
     int no_of_radial_lines;
@@ -78,6 +89,12 @@ public:
     unsigned int av_peaks;
     int* unwarp_lookup;
     int* unwarp_lookup_reverse;
+
+    int grid_centre_x_mm, grid_centre_y_mm, grid_centre_z_mm;
+    int grid_cell_dimension_mm;
+    int grid_dimension_cells;
+    unsigned int* occupancy_grid;
+    vector<int> point_cloud;
 
     int epipole;
 
@@ -243,6 +260,43 @@ public:
 		float &camera_height,
 		float &baseline,
 		float &range);
+    float min_distance_between_rays(
+    	float ray1_x_start,
+    	float ray1_y_start,
+    	float ray1_z_start,
+    	float ray1_x_end,
+    	float ray1_y_end,
+    	float ray1_z_end,
+    	float ray2_x_start,
+    	float ray2_y_start,
+    	float ray2_z_start,
+    	float ray2_x_end,
+    	float ray2_y_end,
+    	float ray2_z_end,
+    	float &dx,
+    	float &dy,
+    	float &dz,
+    	float &x,
+    	float &y,
+    	float &z);
+    void update_grid_map(
+    	float mirror_diameter,
+    	unsigned char* img,
+        int img_width,
+        int img_height);
+    void init_grid(
+        int grid_centre_x_mm,
+        int grid_centre_y_mm,
+    	int grid_centre_z_mm,
+    	int grid_cell_dimension_mm,
+    	int grid_dimension_cells);
+    void show_point_cloud(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int min_x_mm, int max_x_mm,
+    	int min_y_mm, int max_y_mm,
+    	int min_z_mm, int max_z_mm);
 
     void compass(int max_variance_degrees);
 
