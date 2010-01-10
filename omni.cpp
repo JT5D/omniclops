@@ -34,7 +34,6 @@ omni::omni(int width, int height) {
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
-	occupancy_grid = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -87,9 +86,6 @@ omni::~omni() {
 	}
 	if (img_buffer != NULL)
 		delete[] img_buffer;
-	if (occupancy_grid != NULL) {
-		delete[] occupancy_grid;
-	}
 }
 
 /* Updates sliding sums and edge response values along a single row or column
@@ -1243,188 +1239,224 @@ void omni::rgb_to_hsv(
 
     if (hConvert < 0) hConvert += 360;
 
-    h = round(hConvert/360*31);
+    h = round((hConvert*31)/360);
     s = round(sConvert*255);
     v = round(vConvert*255);
 }
 
-void omni::init_grid(
-    int grid_centre_x_mm,
-    int grid_centre_y_mm,
-	int grid_centre_z_mm,
-	int grid_cell_dimension_mm,
-	int grid_dimension_cells)
-{
-    this->grid_centre_x_mm = grid_centre_x_mm;
-    this->grid_centre_y_mm = grid_centre_y_mm;
-    this->grid_centre_z_mm = grid_centre_z_mm;
-    this->grid_cell_dimension_mm = grid_cell_dimension_mm;
-    this->grid_dimension_cells = grid_dimension_cells;
-
-    if (occupancy_grid != NULL) {
-    	delete[] occupancy_grid;
-    }
-	occupancy_grid = new unsigned int[grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2];
-	memset((void*)occupancy_grid,'\0',grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2*sizeof(unsigned int));
-}
-
-
-void omni::update_grid_map(
-	float mirror_diameter,
+void omni::voxel_paint(
+	int* ray_map,
+	int dist_to_mirror_backing_mm,
+	float mirror_diameter_mm,
+	int no_of_mirrors,
+	unsigned char* mirror_map,
 	unsigned char* img,
+	unsigned char* img_occlusions,
     int img_width,
-    int img_height)
+    int img_height,
+	int grid_cells_x,
+	int grid_cells_y,
+	int grid_cells_z,
+	int grid_cell_dimension_mm,
+	int grid_centre_x_mm,
+	int grid_centre_y_mm,
+	int grid_centre_z_mm,
+	int max_colour_variance,
+	vector<short> &occupied_voxels)
 {
-	const int max_cols = 5;
+	occupied_voxels.clear();
 
-	if (occupancy_grid != NULL) {
+	int pixels = img_width*img_height;
 
-		int offset_x = (grid_dimension_cells/2) - (grid_centre_x_mm / grid_cell_dimension_mm);
-		int offset_y = (grid_dimension_cells/2) - (grid_centre_y_mm / grid_cell_dimension_mm);
-		int offset_z = (grid_dimension_cells/2) - (grid_centre_z_mm / grid_cell_dimension_mm);
+	vector<unsigned char> voxel_colours[grid_cells_x*grid_cells_y];
+	vector<int> pixel_index[grid_cells_x*grid_cells_y];
+	vector<unsigned char> mirror_index[grid_cells_x*grid_cells_y];
+	int cam[10];
+	int colour_mean[10*3];
 
-		int min_radius_cells = (int)(mirror_diameter / grid_cell_dimension_mm);
-		unsigned char h=0,s=0,v=0;
-		int grid_dimension_cells_sqr = grid_dimension_cells*grid_dimension_cells;
-		int dx,dy,dz,cell_x,cell_y,cell_z,r,length,idx,hue_bit;
-		int ray_start_x, ray_start_y, ray_start_z, ray_end_x, ray_end_y, ray_end_z;
-		int pixels = img_width*img_height;
-		int n = (pixels-1)*6;
-		for (int i = pixels-1; i >= 0; i--, n-=6) {
-			if (mirror_map[i] > 0) {
+	int min_dist_cells = (int)(mirror_diameter_mm / grid_cell_dimension_mm);
 
-				// extract the hue
-				rgb_to_hsv(img[i*3+2],img[i*3+1],img[i*3],h,s,v);
-				hue_bit = pow(2,h);
+	int offset_x = (grid_cells_x/2) - (grid_centre_x_mm / grid_cell_dimension_mm);
+	int offset_y = (grid_cells_y/2) - (grid_centre_y_mm / grid_cell_dimension_mm);
+	//int offset_z = (grid_centre_z_mm / grid_cell_dimension_mm);
+
+	memset((void*)img_occlusions,'\0',pixels);
+
+	int layer_cell_index;
+	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
+	for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+
+		// paint colours for this layer
+		int n = (pixels - 1) * 6;
+		for (int i = pixels-1; i >= 0; i--, n -= 6) {
+			if ((mirror_map[i] > 0) && (img_occlusions[i] == 0)) {
 
 				// calculate the start and end grid cell coordinates of the ray
-				ray_start_x = (ray_map[n] / grid_cell_dimension_mm) + offset_x;
-				ray_start_y = (ray_map[n+1] / grid_cell_dimension_mm) + offset_y;
-				ray_start_z = (ray_map[n+2] / grid_cell_dimension_mm) + offset_z;
-				ray_end_x = (ray_map[n+3] / grid_cell_dimension_mm) + offset_x;
-				ray_end_y = (ray_map[n+4] / grid_cell_dimension_mm) + offset_y;
-				ray_end_z = (ray_map[n+5] / grid_cell_dimension_mm) + offset_z;
+				int ray_start_x_mm = ray_map[n];
+				int ray_start_y_mm = ray_map[n+1];
+				int ray_start_z_mm = ray_map[n+2];
+				int ray_end_x_mm = ray_map[n+3];
+				int ray_end_y_mm = ray_map[n+4];
+				int ray_end_z_mm = ray_map[n+5];
 
-				dx = ray_end_x - ray_start_x;
-				dy = ray_end_y - ray_start_y;
-				dz = ray_end_z - ray_start_z;
+				int dz = ray_end_z_mm - ray_start_z_mm;
+				if (abs(dz) > 0) {
+					int dz2 = ray_start_z_mm - (dist_to_mirror_backing_mm - layer_dist_mm);
 
-				// calculate the length of the ray
-				length = (int)sqrt(dx*dx + dy*dy + dz*dz);
-				if (length > min_radius_cells) {
+					int x = ray_start_x_mm + ((ray_end_x_mm - ray_start_x_mm) * dz2 / dz);
+					int cell_x = offset_x + (int)(x / grid_cell_dimension_mm);
+					if ((cell_x >= 0) && (cell_x < grid_cells_x)) {
+						int y = ray_start_y_mm + ((ray_end_y_mm - ray_start_y_mm) * dz2 / dz);
+						int cell_y = offset_y + (int)(y / grid_cell_dimension_mm);
+						if ((cell_y >= 0) && (cell_y < grid_cells_y)) {
 
-					// step along the length of the ray
-					for (r = length-1; r > min_radius_cells; r--) {
-						cell_x =  ray_start_x + (r * dx / length);
-						if ((cell_x < 0) || (cell_x >= grid_dimension_cells)) break;
-						cell_y =  ray_start_y + (r * dy / length);
-						if ((cell_y < 0) || (cell_y >= grid_dimension_cells)) break;
-						cell_z =  ray_start_z + (r * dz / length);
-						if ((cell_z < 0) || (cell_z >= grid_dimension_cells)) break;
-						idx = ((cell_z * grid_dimension_cells_sqr) +
-							   (cell_y * grid_dimension_cells) +
-							   cell_x)*2;
-						occupancy_grid[idx] |= hue_bit;
-						if (occupancy_grid[idx+1] < 4294967295u) {
-							occupancy_grid[idx+1]++;
-						}
-						else {
-							printf("grid cell counter overflow\n");
+							// colour of the ray
+							unsigned char r = img[i*3 + 2];
+							unsigned char g = img[i*3 + 1];
+							unsigned char b = img[i*3];
+
+							layer_cell_index = cell_y*grid_cells_x + cell_x;
+							voxel_colours[layer_cell_index].push_back(r);
+							voxel_colours[layer_cell_index].push_back(g);
+							voxel_colours[layer_cell_index].push_back(b);
+							pixel_index[layer_cell_index].push_back(i);
+							mirror_index[layer_cell_index].push_back(mirror_map[i] - 1);
 						}
 					}
 				}
 			}
 		}
 
-		/* lookup table used for counting the number of set bits */
-		const unsigned char BitsSetTable256[] =
-		{
-			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
-		};
+		// determine colour consistency
+		layer_cell_index = 0;
+		for (int gy = 0; gy < grid_cells_y; gy++) {
+			for (int gx = 0; gx < grid_cells_x; gx++, layer_cell_index++) {
 
-		// knock out grid cells with too much colour variance
-		point_cloud.clear();
-		int average_hits = 0;
-		int no_of_cols,hits = 0;
-		for (int i = grid_dimension_cells*grid_dimension_cells*grid_dimension_cells*2-1; i >= 0; i-=2) {
-			if (occupancy_grid[i] > 0) {
-				bool is_valid = false;
-				if (occupancy_grid[i] > 1) {
-					unsigned int cols = occupancy_grid[i-1];
-					if (cols > 0) {
-						// count the number of colours
-						no_of_cols =
-							BitsSetTable256[cols & 0xff] +
-							BitsSetTable256[(cols >> 8) & 0xff] +
-							BitsSetTable256[(cols >> 16) & 0xff] +
-							BitsSetTable256[cols >> 24];
+				if ((int)pixel_index[layer_cell_index].size() > 0) {
 
-						if (no_of_cols <= max_cols) {
-							average_hits += occupancy_grid[i];
-							hits++;
-							is_valid = true;
-							point_cloud.push_back(i-1);
+					memset((void*)cam,'\0',10*sizeof(int));
+					memset((void*)colour_mean,'\0',10*3*sizeof(int));
+					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
+						int mirror = mirror_index[layer_cell_index][sample];
+						cam[mirror]++;
+						colour_mean[mirror*3] += voxel_colours[layer_cell_index][sample*3];
+						colour_mean[mirror*3+1] += voxel_colours[layer_cell_index][sample*3+1];
+						colour_mean[mirror*3+2] += voxel_colours[layer_cell_index][sample*3+2];
+					}
+					int mean_r = 0;
+					int mean_g = 0;
+					int mean_b = 0;
+					int no_of_mirror_observations = 0;
+					for (int c = 0; c < 10; c++) {
+						if (cam[c] > 0) {
+							no_of_mirror_observations++;
+							colour_mean[c*3] /= cam[c];
+							colour_mean[c*3+1] /= cam[c];
+							colour_mean[c*3+2] /= cam[c];
+							mean_r += colour_mean[c*3];
+							mean_g += colour_mean[c*3+1];
+							mean_b += colour_mean[c*3+2];
 						}
 					}
-				}
-				if (!is_valid) {
-					occupancy_grid[i-1] = 0;
-					occupancy_grid[i] = 0;
+					if (no_of_mirror_observations >= no_of_mirrors-1) {
+						mean_r /= no_of_mirror_observations;
+						mean_g /= no_of_mirror_observations;
+						mean_b /= no_of_mirror_observations;
+						int colour_diff = 0;
+						for (int c = 0; c < 10; c++) {
+							if (cam[c] > 0) {
+								colour_diff +=
+									abs(colour_mean[c*3] - mean_r) +
+									abs(colour_mean[c*3+1] - mean_g) +
+									abs(colour_mean[c*3+2] - mean_b);
+							}
+						}
+						if (colour_diff < max_colour_variance*no_of_mirror_observations) {
+							// we have a winner - add it to the occlusions
+							for (int j = (int)pixel_index[layer_cell_index].size()-1; j >= 0; j--) {
+								img_occlusions[pixel_index[layer_cell_index][j]] = 1;
+							}
+							// create a voxel
+							occupied_voxels.push_back((short)gx);
+							occupied_voxels.push_back((short)gy);
+							occupied_voxels.push_back((short)layer);
+							occupied_voxels.push_back((short)mean_r);
+							occupied_voxels.push_back((short)mean_g);
+							occupied_voxels.push_back((short)mean_b);
+						}
+					}
+
+					voxel_colours[layer_cell_index].clear();
+					pixel_index[layer_cell_index].clear();
+					mirror_index[layer_cell_index].clear();
 				}
 			}
 		}
-		if (hits > 0) average_hits /= hits;
 
-		unsigned int threshold = (unsigned int)(average_hits*300/100);
-		vector<int> new_point_cloud;
-		for (int i = (int)point_cloud.size()-1; i >= 0; i--) {
-			idx = point_cloud[i];
-			if (occupancy_grid[idx+1] > threshold) {
-				cell_z = idx / grid_dimension_cells_sqr;
-				cell_y = (idx - (cell_z*grid_dimension_cells_sqr)) / grid_dimension_cells;
-				cell_x = idx - (cell_z*grid_dimension_cells_sqr) - (cell_y*grid_dimension_cells);
+	}
+}
 
-				cell_x /= 2;
-				cell_y /= 2;
-				cell_z /= 2;
+void omni::show_voxels(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	vector<short> &voxels,
+	int voxel_radius_pixels,
+	int view_type)
+{
+    int tx = 9999;
+    int ty = 9999;
+    int tz = 9999;
+    int bx = 0;
+    int by = 0;
+    int bz = 0;
 
-				cell_x -= offset_x;
-				cell_y -= offset_y;
-				cell_z -= offset_z;
+    // get the bounding box
+    for (int i = (int)voxels.size()-1; i >= 0; i-=6) {
+    	int x = voxels[i];
+    	int y = voxels[i+1];
+    	int z = voxels[i+2];
+    	if (x < tx) tx = x;
+    	if (x > bx) bx = x;
+    	if (y < ty) ty = y;
+    	if (y > by) by = y;
+    	if (z < tz) tz = z;
+    	if (z > bz) bz = z;
+    }
 
-				cell_x *= grid_cell_dimension_mm;
-				cell_y *= grid_cell_dimension_mm;
-				cell_z *= grid_cell_dimension_mm;
-
-				new_point_cloud.push_back(cell_z);
-				new_point_cloud.push_back(cell_y);
-				new_point_cloud.push_back(cell_x);
+    memset((void*)img, '\0',img_width*img_height*3);
+	for (int i = (int)voxels.size()-1; i >= 0; i-=6) {
+    	int x = (int)voxels[i];
+    	int y = (int)voxels[i+1];
+    	int z = (int)voxels[i+2];
+		switch(view_type) {
+			case 0: {
+				x = (x - tx) * img_height / (bx - tx);
+				y = (y - ty) * img_height / (by - ty);
+				break;
 			}
-			occupancy_grid[idx+1] = 0;
-			occupancy_grid[idx] = 0;
+			case 1: {
+				x = (x - tx) * img_height / (bx - tx);
+				y = (z - tz) * img_height / (bz - tz);
+				break;
+			}
+			case 2: {
+				x = (y - ty) * img_height / (by - ty);
+				y = (z - tz) * img_height / (bz - tz);
+				break;
+			}
 		}
-		point_cloud.clear();
-		for (int i = (int)new_point_cloud.size()-1; i >= 0; i--) {
-			point_cloud.push_back(new_point_cloud[i]);
+		for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
+			for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
+		        if ((xx > -1) && (xx < img_width) &&
+		            (yy > -1) && (yy < img_height)) {
+			        int n = ((yy * img_width) + xx) * 3;
+                    img[n+2] = (unsigned char)voxels[i+3];
+                    img[n+1] = (unsigned char)voxels[i+4];
+                    img[n] = (unsigned char)voxels[i+5];
+		        }
+			}
 		}
-		//printf("threshold %d\n", (int)threshold);
-		//printf("points %d\n", (int)point_cloud.size()/3);
-
 	}
 }
 
@@ -1437,33 +1469,46 @@ void omni::show_point_cloud(
 	int min_z_mm, int max_z_mm)
 {
 	memset((void*)img,'\0',img_width*img_height*3);
-	int n,x,y;
+	int n,x,y,z,idx,cell_x,cell_y,cell_z;
+	unsigned char r,g,b;
 	int ww = img_width/2;
 	int hh = img_height/2;
-	for (int i = 0; i < (int)point_cloud.size(); i += 3) {
+	int centre = grid_dimension_cells/2;
+	int grid_dimension_cells_sqr = grid_dimension_cells*grid_dimension_cells;
+	for (int i = (int)point_cloud.size()-1; i >= 0; i--) {
+
+		idx = point_cloud[i];
+		cell_z = idx / grid_dimension_cells_sqr;
+		cell_y = (idx - (cell_z*grid_dimension_cells_sqr)) / grid_dimension_cells;
+		cell_x = idx - (cell_z*grid_dimension_cells_sqr) - (cell_y*grid_dimension_cells);
+
+		b = occupancy_grid_colour[idx*3];
+		g = occupancy_grid_colour[idx*3+1];
+		r = occupancy_grid_colour[idx*3+2];
+
 		// XY
-        x = ((point_cloud[i] - min_x_mm) * ww / (max_x_mm - min_x_mm));
-        y = hh - 1 - ((point_cloud[i+1] - min_y_mm) * hh / (max_y_mm - min_y_mm));
+        x = ((((cell_x-centre)*grid_cell_dimension_mm) - min_x_mm) * ww / (max_x_mm - min_x_mm));
+        y = hh - 1 - ((((cell_y-centre)*grid_cell_dimension_mm) - min_y_mm) * hh / (max_y_mm - min_y_mm));
         n = ((y * img_width) + x) * 3;
-        img[n] = 255;
-        img[n+1] = 255;
-        img[n+2] = 255;
+        img[n] = b;
+        img[n+1] = g;
+        img[n+2] = r;
 
         // XZ
-        x = ww + ((point_cloud[i] - min_x_mm) * ww / (max_x_mm - min_x_mm));
-        y = hh - 1 - ((point_cloud[i+2] - min_z_mm) * hh / (max_z_mm - min_z_mm));
+        x = ww + ((((cell_x-centre)*grid_cell_dimension_mm) - min_x_mm) * ww / (max_x_mm - min_x_mm));
+        y = hh - 1 - ((((cell_z-centre)*grid_cell_dimension_mm) - min_z_mm) * hh / (max_z_mm - min_z_mm));
         n = ((y * img_width) + x) * 3;
-        img[n] = 255;
-        img[n+1] = 255;
-        img[n+2] = 255;
+        img[n] = b;
+        img[n+1] = g;
+        img[n+2] = r;
 
         // YZ
-        x = ww + ((point_cloud[i+1] - min_y_mm) * ww / (max_y_mm - min_y_mm));
-        y = (2*hh) - 1 - ((point_cloud[i+2] - min_z_mm) * hh / (max_z_mm - min_z_mm));
+        x = ww + ((((cell_y-centre)*grid_cell_dimension_mm) - min_y_mm) * ww / (max_y_mm - min_y_mm));
+        y = (2*hh) - 1 - ((((cell_z-centre)*grid_cell_dimension_mm) - min_z_mm) * hh / (max_z_mm - min_z_mm));
         n = ((y * img_width) + x) * 3;
-        img[n] = 255;
-        img[n+1] = 255;
-        img[n+2] = 255;
+        img[n] = b;
+        img[n+1] = g;
+        img[n+2] = r;
 	}
 }
 

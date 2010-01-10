@@ -628,7 +628,7 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
-  int grid_cell_size = 64;
+  int grid_cell_size = 8;
   if( opt->getValue( "gridcell" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("gridcell"));
   }
@@ -848,16 +848,17 @@ int main(int argc, char* argv[]) {
   	mirror_position_pixels,
     ww,hh);
 
-  if (show_occupancy_grid) {
-      lcam->init_grid(0,0,0,grid_cell_size,grid_dimension);
-  }
-
   Match2D flow_matches[MAX_FLOW_MATCHES];
+  unsigned char* img_occlusions = NULL;
 
   /* load image from file */
   if (load_filename != "") {
 	  cvReleaseImage(&prev);
 	  prev = cvLoadImage( load_filename.c_str(), CV_LOAD_IMAGE_COLOR );
+	  if (prev == NULL) {
+		  printf("Couldn't load %s\n", load_filename.c_str());
+		  return 0;
+	  }
       prev_ = (unsigned char *)prev->imageData;
   }
 
@@ -1016,19 +1017,38 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_occupancy_grid) {
-		lcam->update_grid_map(mirror_diameter,l_,ww,hh);
+		int grid_centre_x_mm = 0;
+		int grid_centre_y_mm = 0;
+		int grid_centre_z_mm = 0;
+		vector<short> occupied_voxels;
+		int max_colour_variance = 100;
+		if (img_occlusions == NULL) {
+			img_occlusions = new unsigned char[ww*hh];
+		}
 
-    	int min_x_mm = -grid_dimension*grid_cell_size/2;
-    	int max_x_mm = grid_dimension*grid_cell_size/2;
-    	int min_y_mm = -grid_dimension*grid_cell_size/2;
-    	int max_y_mm = grid_dimension*grid_cell_size/2;
-    	int min_z_mm = -grid_dimension*grid_cell_size/2;
-    	int max_z_mm = grid_dimension*grid_cell_size/2;
+		omni::voxel_paint(
+		    lcam->ray_map,
+		    dist_to_mirror_centre,
+			mirror_diameter,
+			no_of_mirrors,
+			lcam->mirror_map,
+			l_,
+			img_occlusions,
+			ww,hh,
+			grid_dimension,
+			grid_dimension,
+			grid_dimension,
+			grid_cell_size,
+			grid_centre_x_mm,
+			grid_centre_y_mm,
+			grid_centre_z_mm,
+			max_colour_variance,
+			occupied_voxels);
 
-		lcam->show_point_cloud(l_,ww,hh,
-		    min_x_mm, max_x_mm,
-		    min_y_mm, max_y_mm,
-		    min_z_mm, max_z_mm);
+    	int voxel_radius_pixels = 2;
+    	int view_type = 2;
+
+		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
 	}
 
 	if (optical_flow) {
@@ -1102,6 +1122,9 @@ int main(int argc, char* argv[]) {
   cvReleaseImage(&prev);
   cvReleaseImage(&flow);
 
+  if (img_occlusions == NULL) {
+	  delete[] img_occlusions;
+  }
   if (frame1_1C != NULL) {
 	  cvReleaseImage(&frame1_1C);
 	  cvReleaseImage(&frame2_1C);

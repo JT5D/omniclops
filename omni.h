@@ -93,7 +93,9 @@ public:
     int grid_centre_x_mm, grid_centre_y_mm, grid_centre_z_mm;
     int grid_cell_dimension_mm;
     int grid_dimension_cells;
-    unsigned int* occupancy_grid;
+    unsigned int* occupancy_grid_histograms;
+    unsigned char* occupancy_grid;
+    unsigned char* occupancy_grid_colour;
     vector<int> point_cloud;
 
     int epipole;
@@ -279,17 +281,6 @@ public:
     	float &x,
     	float &y,
     	float &z);
-    void update_grid_map(
-    	float mirror_diameter,
-    	unsigned char* img,
-        int img_width,
-        int img_height);
-    void init_grid(
-        int grid_centre_x_mm,
-        int grid_centre_y_mm,
-    	int grid_centre_z_mm,
-    	int grid_cell_dimension_mm,
-    	int grid_dimension_cells);
     void show_point_cloud(
     	unsigned char* img,
     	int img_width,
@@ -297,6 +288,32 @@ public:
     	int min_x_mm, int max_x_mm,
     	int min_y_mm, int max_y_mm,
     	int min_z_mm, int max_z_mm);
+    static void voxel_paint(
+    	int* ray_map,
+    	int dist_to_mirror_backing_mm,
+    	float mirror_diameter_mm,
+    	int no_of_mirrors,
+    	unsigned char* mirror_map,
+    	unsigned char* img,
+    	unsigned char* img_occlusions,
+        int img_width,
+        int img_height,
+    	int grid_cells_x,
+    	int grid_cells_y,
+    	int grid_cells_z,
+    	int grid_cell_dimension_mm,
+    	int grid_centre_x_mm,
+    	int grid_centre_y_mm,
+    	int grid_centre_z_mm,
+    	int max_colour_variance,
+    	vector<short> &occupied_voxels);
+    static void show_voxels(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	vector<short> &voxels,
+    	int voxel_radius_pixels,
+    	int view_type);
 
     void compass(int max_variance_degrees);
 
