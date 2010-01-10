@@ -1274,7 +1274,8 @@ void omni::voxel_paint(
 	int cam[10];
 	int colour_mean[10*3];
 
-	int min_dist_cells = (int)(mirror_diameter_mm / grid_cell_dimension_mm);
+	//int min_dist_cells = (int)(mirror_diameter_mm / grid_cell_dimension_mm);
+	int min_dist_cells = (int)(dist_to_mirror_backing_mm / grid_cell_dimension_mm);
 
 	int offset_x = (grid_cells_x/2) - (grid_centre_x_mm / grid_cell_dimension_mm);
 	int offset_y = (grid_cells_y/2) - (grid_centre_y_mm / grid_cell_dimension_mm);
@@ -1284,12 +1285,14 @@ void omni::voxel_paint(
 
 	int layer_cell_index;
 	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
-	for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	//for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	for (int layer = min_dist_cells; layer < min_dist_cells+10; layer++, layer_dist_mm += grid_cell_dimension_mm) {
 
 		// paint colours for this layer
 		int n = (pixels - 1) * 6;
 		for (int i = pixels-1; i >= 0; i--, n -= 6) {
-			if ((mirror_map[i] > 0) && (img_occlusions[i] == 0)) {
+			if ((mirror_map[i] > 0) &&
+				(img_occlusions[i] == 0)) {
 
 				// calculate the start and end grid cell coordinates of the ray
 				int ray_start_x_mm = ray_map[n];
@@ -1300,7 +1303,7 @@ void omni::voxel_paint(
 				int ray_end_z_mm = ray_map[n+5];
 
 				int dz = ray_end_z_mm - ray_start_z_mm;
-				if (abs(dz) > 0) {
+				if (dz < 0) {
 					int dz2 = ray_start_z_mm - (dist_to_mirror_backing_mm - layer_dist_mm);
 
 					int x = ray_start_x_mm + ((ray_end_x_mm - ray_start_x_mm) * dz2 / dz);
@@ -1333,15 +1336,21 @@ void omni::voxel_paint(
 			for (int gx = 0; gx < grid_cells_x; gx++, layer_cell_index++) {
 
 				if ((int)pixel_index[layer_cell_index].size() > 0) {
+					int test_r=0;
+					int test_g=0;
+					int test_b=0;
 
 					memset((void*)cam,'\0',10*sizeof(int));
 					memset((void*)colour_mean,'\0',10*3*sizeof(int));
 					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
 						int mirror = mirror_index[layer_cell_index][sample];
 						cam[mirror]++;
-						colour_mean[mirror*3] += voxel_colours[layer_cell_index][sample*3];
-						colour_mean[mirror*3+1] += voxel_colours[layer_cell_index][sample*3+1];
-						colour_mean[mirror*3+2] += voxel_colours[layer_cell_index][sample*3+2];
+						colour_mean[mirror*3] += (int)voxel_colours[layer_cell_index][sample*3];
+						colour_mean[mirror*3+1] += (int)voxel_colours[layer_cell_index][sample*3+1];
+						colour_mean[mirror*3+2] += (int)voxel_colours[layer_cell_index][sample*3+2];
+						test_r = (int)voxel_colours[layer_cell_index][sample*3];
+						test_g = (int)voxel_colours[layer_cell_index][sample*3+1];
+						test_b = (int)voxel_colours[layer_cell_index][sample*3+2];
 					}
 					int mean_r = 0;
 					int mean_g = 0;
@@ -1380,9 +1389,12 @@ void omni::voxel_paint(
 							occupied_voxels.push_back((short)gx);
 							occupied_voxels.push_back((short)gy);
 							occupied_voxels.push_back((short)layer);
-							occupied_voxels.push_back((short)mean_r);
-							occupied_voxels.push_back((short)mean_g);
-							occupied_voxels.push_back((short)mean_b);
+							//occupied_voxels.push_back((short)mean_r);
+							//occupied_voxels.push_back((short)mean_g);
+							//occupied_voxels.push_back((short)mean_b);
+							occupied_voxels.push_back((short)test_r);
+							occupied_voxels.push_back((short)test_g);
+							occupied_voxels.push_back((short)test_b);
 						}
 					}
 
@@ -1425,7 +1437,7 @@ void omni::show_voxels(
     }
 
     memset((void*)img, '\0',img_width*img_height*3);
-	for (int i = (int)voxels.size()-1; i >= 0; i-=6) {
+	for (int i = (int)voxels.size()-6; i >= 0; i-=6) {
     	int x = (int)voxels[i];
     	int y = (int)voxels[i+1];
     	int z = (int)voxels[i+2];
@@ -1443,6 +1455,41 @@ void omni::show_voxels(
 			case 2: {
 				x = (y - ty) * img_height / (by - ty);
 				y = (z - tz) * img_height / (bz - tz);
+				break;
+			}
+			case 3: {
+				int x0 = ((x - tx) * img_height / ((bx - tx)*2));
+				int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
+
+				for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+					for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+				        if ((xx > -1) && (xx < img_width) &&
+				            (yy > -1) && (yy < img_height)) {
+					        int n = ((yy * img_width) + xx) * 3;
+		                    img[n+2] = (unsigned char)voxels[i+3];
+		                    img[n+1] = (unsigned char)voxels[i+4];
+		                    img[n] = (unsigned char)voxels[i+5];
+				        }
+					}
+				}
+
+				x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
+				y0 = ((z - tz) * img_height / ((bz - tz)*2));
+
+				for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+					for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+				        if ((xx > -1) && (xx < img_width) &&
+				            (yy > -1) && (yy < img_height)) {
+					        int n = ((yy * img_width) + xx) * 3;
+		                    img[n+2] = (unsigned char)voxels[i+3];
+		                    img[n+1] = (unsigned char)voxels[i+4];
+		                    img[n] = (unsigned char)voxels[i+5];
+				        }
+					}
+				}
+
+				x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
+				y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
 				break;
 			}
 		}

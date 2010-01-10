@@ -628,12 +628,12 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
-  int grid_cell_size = 8;
+  int grid_cell_size = 4;
   if( opt->getValue( "gridcell" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("gridcell"));
   }
 
-  int grid_dimension = 64;
+  int grid_dimension = 256;
   if( opt->getValue( "griddim" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("griddim"));
   }
@@ -1021,7 +1021,7 @@ int main(int argc, char* argv[]) {
 		int grid_centre_y_mm = 0;
 		int grid_centre_z_mm = 0;
 		vector<short> occupied_voxels;
-		int max_colour_variance = 100;
+		int max_colour_variance = 150;
 		if (img_occlusions == NULL) {
 			img_occlusions = new unsigned char[ww*hh];
 		}
@@ -1046,7 +1046,7 @@ int main(int argc, char* argv[]) {
 			occupied_voxels);
 
     	int voxel_radius_pixels = 2;
-    	int view_type = 2;
+    	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
 	}
