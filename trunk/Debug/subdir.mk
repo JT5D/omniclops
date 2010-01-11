@@ -5,6 +5,7 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
 ../anyoption.cpp \
+../bitmap.cpp \
 ../drawing.cpp \
 ../fast.cpp \
 ../libcam.cpp \
@@ -15,6 +16,7 @@ CPP_SRCS += \
 
 OBJS += \
 ./anyoption.o \
+./bitmap.o \
 ./drawing.o \
 ./fast.o \
 ./libcam.o \
@@ -25,6 +27,7 @@ OBJS += \
 
 CPP_DEPS += \
 ./anyoption.d \
+./bitmap.d \
 ./drawing.d \
 ./fast.d \
 ./libcam.d \

@@ -3,8 +3,6 @@
 #include <iostream>
 #include <sstream>
 #include <stdio.h>
-//#include <windows.h>
-
 
 
 void TestResultDebugOut::startTests ()
