@@ -281,13 +281,6 @@ public:
     	float &x,
     	float &y,
     	float &z);
-    void show_point_cloud(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int min_x_mm, int max_x_mm,
-    	int min_y_mm, int max_y_mm,
-    	int min_z_mm, int max_z_mm);
     static void voxel_paint(
     	int* ray_map,
     	int dist_to_mirror_backing_mm,
@@ -314,6 +307,14 @@ public:
     	vector<short> &voxels,
     	int voxel_radius_pixels,
     	int view_type);
+    static void show_rays(
+    	unsigned char* mirror_map,
+    	int* ray_map,
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int radius_mm,
+    	int point_radius_pixels);
 
     void compass(int max_variance_degrees);
 

@@ -1286,7 +1286,7 @@ void omni::voxel_paint(
 	int layer_cell_index;
 	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
 	//for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
-	for (int layer = min_dist_cells; layer < min_dist_cells+10; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
 
 		// paint colours for this layer
 		int n = (pixels - 1) * 6;
@@ -1507,56 +1507,153 @@ void omni::show_voxels(
 	}
 }
 
-void omni::show_point_cloud(
+
+void omni::show_rays(
+	unsigned char* mirror_map,
+	int* ray_map,
 	unsigned char* img,
 	int img_width,
 	int img_height,
-	int min_x_mm, int max_x_mm,
-	int min_y_mm, int max_y_mm,
-	int min_z_mm, int max_z_mm)
+	int radius_mm,
+	int point_radius_pixels)
 {
-	memset((void*)img,'\0',img_width*img_height*3);
-	int n,x,y,z,idx,cell_x,cell_y,cell_z;
-	unsigned char r,g,b;
-	int ww = img_width/2;
-	int hh = img_height/2;
-	int centre = grid_dimension_cells/2;
-	int grid_dimension_cells_sqr = grid_dimension_cells*grid_dimension_cells;
-	for (int i = (int)point_cloud.size()-1; i >= 0; i--) {
+    memset((void*)img,'\0',img_width*img_height*3);
 
-		idx = point_cloud[i];
-		cell_z = idx / grid_dimension_cells_sqr;
-		cell_y = (idx - (cell_z*grid_dimension_cells_sqr)) / grid_dimension_cells;
-		cell_x = idx - (cell_z*grid_dimension_cells_sqr) - (cell_y*grid_dimension_cells);
+    int point_radius_sqr = point_radius_pixels*point_radius_pixels;
+    int n = 0;
+    for (int y = 0; y < img_height; y++) {
+    	for (int x = 0; x < img_width; x++, n++) {
+            if (mirror_map[n] > 0) {
+            	int mirror = mirror_map[n] - 1;
+				int ray_start_z_mm = ray_map[n*6 + 2];
+				int ray_end_x_mm = ray_map[n*6 + 3];
+				int ray_end_y_mm = ray_map[n*6 + 4];
+				int ray_end_z_mm = ray_map[n*6 + 5];
+				if (ray_end_z_mm < ray_start_z_mm) {
+					if ((ray_end_x_mm > -radius_mm) &&
+						(ray_end_x_mm < radius_mm) &&
+						(ray_end_y_mm > -radius_mm) &&
+						(ray_end_y_mm < radius_mm)) {
+						int xx = (ray_end_x_mm + radius_mm) * img_height / (radius_mm*2);
+						int yy = (ray_end_y_mm + radius_mm) * img_height / (radius_mm*2);
+						if ((xx > 0) && (xx < img_width-1) &&
+						    (yy > 0) && (yy < img_height-1)) {
 
-		b = occupancy_grid_colour[idx*3];
-		g = occupancy_grid_colour[idx*3+1];
-		r = occupancy_grid_colour[idx*3+2];
+						    for (int yy2 = yy-point_radius_pixels; yy2 <= yy+point_radius_pixels; yy2++) {
+						    	int dy = yy2 - yy;
+							    for (int xx2 = xx-point_radius_pixels; xx2 <= xx+point_radius_pixels; xx2++) {
+							    	int dx = xx2 - xx;
 
-		// XY
-        x = ((((cell_x-centre)*grid_cell_dimension_mm) - min_x_mm) * ww / (max_x_mm - min_x_mm));
-        y = hh - 1 - ((((cell_y-centre)*grid_cell_dimension_mm) - min_y_mm) * hh / (max_y_mm - min_y_mm));
-        n = ((y * img_width) + x) * 3;
-        img[n] = b;
-        img[n+1] = g;
-        img[n+2] = r;
+							    	if (dx*dx + dy*dy < point_radius_sqr) {
 
-        // XZ
-        x = ww + ((((cell_x-centre)*grid_cell_dimension_mm) - min_x_mm) * ww / (max_x_mm - min_x_mm));
-        y = hh - 1 - ((((cell_z-centre)*grid_cell_dimension_mm) - min_z_mm) * hh / (max_z_mm - min_z_mm));
-        n = ((y * img_width) + x) * 3;
-        img[n] = b;
-        img[n+1] = g;
-        img[n+2] = r;
+										int n2 = ((yy2*img_width) + xx2)*3;
+										switch(mirror) {
+											case 0: {
+												//img[n2] = 255;
+												break;
+											}
+											case 1: {
+												//img[n2+1] = 255;
+												break;
+											}
+											case 2: {
+												//img[n2+2] = 255;
+												break;
+											}
+											case 3: {
+												//img[n2+1] = 255;
+												//img[n2+2] = 255;
+												break;
+											}
+											case 4: {
+												img[n2] = 255;
+												img[n2+2] = 255;
+												break;
+											}
+										}
 
-        // YZ
-        x = ww + ((((cell_y-centre)*grid_cell_dimension_mm) - min_y_mm) * ww / (max_y_mm - min_y_mm));
-        y = (2*hh) - 1 - ((((cell_z-centre)*grid_cell_dimension_mm) - min_z_mm) * hh / (max_z_mm - min_z_mm));
-        n = ((y * img_width) + x) * 3;
-        img[n] = b;
-        img[n+1] = g;
-        img[n+2] = r;
-	}
+							    	}
+							    }
+						    }
+						}
+					}
+				}
+            }
+    	}
+    }
+
+    n = 0;
+    for (int y = 0; y < img_height; y++) {
+    	for (int x = 0; x < img_width; x++, n++) {
+            if (mirror_map[n] > 0) {
+            	int mirror = mirror_map[n] - 1;
+				int ray_start_x_mm = ray_map[n*6];
+				int ray_start_y_mm = ray_map[n*6 + 1];
+				int ray_start_z_mm = ray_map[n*6 + 2];
+				int ray_end_x_mm = ray_map[n*6 + 3];
+				int ray_end_y_mm = ray_map[n*6 + 4];
+				int ray_end_z_mm = ray_map[n*6 + 5];
+				if (ray_end_z_mm < ray_start_z_mm) {
+					if ((ray_end_x_mm > -radius_mm) &&
+						(ray_end_x_mm < radius_mm) &&
+						(ray_end_y_mm > -radius_mm) &&
+						(ray_end_y_mm < radius_mm)) {
+						int xx = (ray_start_x_mm + radius_mm) * img_height / (radius_mm*2);
+						int yy = (ray_start_y_mm + radius_mm) * img_height / (radius_mm*2);
+						if ((xx > 0) && (xx < img_width-1) &&
+						    (yy > 0) && (yy < img_height-1)) {
+
+						    for (int yy2 = yy-point_radius_pixels; yy2 <= yy+point_radius_pixels; yy2++) {
+						    	int dy = yy2 - yy;
+							    for (int xx2 = xx-point_radius_pixels; xx2 <= xx+point_radius_pixels; xx2++) {
+							    	int dx = xx2 - xx;
+
+							    	if (dx*dx + dy*dy < point_radius_sqr) {
+
+										int n2 = ((yy2*img_width) + xx2)*3;
+										switch(mirror) {
+											case 0: {
+												img[n2] = 255;
+												img[n2+1] = 0;
+												img[n2+2] = 0;
+												break;
+											}
+											case 1: {
+												img[n2] = 0;
+												img[n2+1] = 255;
+												img[n2+2] = 0;
+												break;
+											}
+											case 2: {
+												img[n2] = 0;
+												img[n2+1] = 0;
+												img[n2+2] = 255;
+												break;
+											}
+											case 3: {
+												img[n2] = 0;
+												img[n2+1] = 255;
+												img[n2+2] = 255;
+												break;
+											}
+											case 4: {
+												img[n2+1] = 0;
+												img[n2] = 255;
+												img[n2+2] = 255;
+												break;
+											}
+										}
+
+							    	}
+							    }
+						    }
+						}
+					}
+				}
+            }
+    	}
+    }
+
 }
 
 void omni::create_ray_map(

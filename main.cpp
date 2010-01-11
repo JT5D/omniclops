@@ -38,6 +38,10 @@
 #include "fast.h"
 #include "libcam.h"
 
+#include "cppunitlite/TestHarness.h"
+#include "cppunitlite/TestResultStdErr.h"
+#include "unittests/tests_ray_map.h"
+
 #define VERSION 0.2
 #define MAX_FLOW_MATCHES 150
 
@@ -147,6 +151,14 @@ optical_flow_termination_criteria, 0);
 	}
 }
 
+/*!
+ * \brief run all unit tests
+ */
+void RunUnitTests()
+{
+    TestResultStdErr result;
+    TestRegistry::runAllTests(result);
+}
 
 int main(int argc, char* argv[]) {
   int ww = 640;
@@ -226,6 +238,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --mirrory3             Relative y coordinate of the fourth mirror as a percent of image height");
   opt->addUsage( "     --mirrorx4             Relative x coordinate of the fifth mirror as a percent of image width");
   opt->addUsage( "     --mirrory4             Relative y coordinate of the fifth mirror as a percent of image height");
+  opt->addUsage( "     --tests                Run unit tests");
   opt->addUsage( "     --help                 Show help");
   opt->addUsage( "" );
 
@@ -283,6 +296,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "overlay" );
   opt->setFlag(  "overlayangles" );
   opt->setFlag(  "grid" );
+  opt->setFlag(  "tests" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -292,6 +306,12 @@ int main(int argc, char* argv[]) {
       opt->printUsage();
       delete opt;
       return(0);
+  }
+
+  if ( opt->getFlag("tests") ) {
+	  RunUnitTests();
+	  delete opt;
+	  return(0);
   }
 
   if( opt->getFlag( "version" ) || opt->getFlag( 'V' ) )
@@ -1049,6 +1069,12 @@ int main(int argc, char* argv[]) {
     	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
+
+		omni::show_rays(
+		    lcam->mirror_map,
+		    lcam->ray_map,
+		    l_,ww,hh,
+		    200,2);
 	}
 
 	if (optical_flow) {
