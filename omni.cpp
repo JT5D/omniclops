@@ -1549,20 +1549,20 @@ void omni::show_rays(
 										int n2 = ((yy2*img_width) + xx2)*3;
 										switch(mirror) {
 											case 0: {
-												//img[n2] = 255;
+												img[n2] = 255;
 												break;
 											}
 											case 1: {
-												//img[n2+1] = 255;
+												img[n2+1] = 255;
 												break;
 											}
 											case 2: {
-												//img[n2+2] = 255;
+												img[n2+2] = 255;
 												break;
 											}
 											case 3: {
-												//img[n2+1] = 255;
-												//img[n2+2] = 255;
+												img[n2+1] = 255;
+												img[n2+2] = 255;
 												break;
 											}
 											case 4: {
