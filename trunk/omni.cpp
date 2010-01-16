@@ -1313,8 +1313,8 @@ void omni::voxel_paint(
 
 	int layer_cell_index;
 	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
-	for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
-	//for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	//for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
 
 		// paint colours for this layer
 		int n = (pixels - 1) * 6;
@@ -1571,6 +1571,9 @@ void omni::show_voxels(
 
 void omni::reproject(
 	unsigned char* ground_img,
+	int* ground_height_mm,
+	int camera_to_backing_dist_mm,
+	int camera_height_mm,
 	int img_width,
 	int img_height,
 	int tx_mm,
@@ -1582,7 +1585,9 @@ void omni::reproject(
 	int ray_map_width,
 	int ray_map_height)
 {
-	int min_dist = 2*2;
+	int min_dist = (bx_mm - tx_mm) / img_width;
+	if (min_dist < 2) min_dist = 2;
+	min_dist = min_dist*min_dist;
 	int ray_map_pixels = ray_map_width*ray_map_height;
 
 	memset((void*)reprojected_img,'\0',ray_map_width*ray_map_height*3);
@@ -1598,10 +1603,23 @@ void omni::reproject(
 				  (ground_img[n+1] == 0) &&
 				  (ground_img[n+2] == 0))) {
 				pixel_list.clear();
+
+				int z_mm = camera_to_backing_dist_mm - (ground_height_mm[y*img_width + x] - camera_height_mm);
+				float z_fraction = z_mm / (float)camera_to_backing_dist_mm;
+
 				for (int i = ray_map_pixels-1; i >= 0; i--) {
 					if (ray_map[i*6 + 2] != 0) {
-						dx = ray_map[i*6 + 3] - x_mm;
-						dy = ray_map[i*6 + 4] - y_mm;
+
+						int start_x_mm = ray_map[i*6];
+						int start_y_mm = ray_map[i*6 + 1];
+						int end_x_mm = ray_map[i*6 + 3];
+						int end_y_mm = ray_map[i*6 + 4];
+
+						int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+
+						dx = ray_x_mm - x_mm;
+						dy = ray_y_mm - y_mm;
 						dist = dx*dx + dy*dy;
 						if (dist < min_dist) {
 							pixel_list.push_back(i);
@@ -1614,6 +1632,60 @@ void omni::reproject(
 					reprojected_img[n2] = ground_img[n];
 					reprojected_img[n2 + 1] = ground_img[n + 1];
 					reprojected_img[n2 + 2] = ground_img[n + 2];
+				}
+			}
+		}
+	}
+
+}
+
+void omni::project(
+	unsigned char* ray_map_img,
+	int plane_height_mm,
+	int camera_to_backing_dist_mm,
+	int camera_height_mm,
+	int ray_map_width,
+	int ray_map_height,
+	int tx_mm,
+	int ty_mm,
+	int bx_mm,
+	int by_mm,
+	int* ray_map,
+	unsigned char* projected_img,
+	int projected_img_width,
+	int projected_img_height)
+{
+	int min_dist = (bx_mm - tx_mm) / projected_img_width;
+	if (min_dist < 2) min_dist = 2;
+	min_dist = min_dist*min_dist;
+
+	memset((void*)projected_img,'\0',ray_map_width*ray_map_height*3);
+
+	int z_mm = camera_to_backing_dist_mm - (plane_height_mm - camera_height_mm);
+	float z_fraction = z_mm / (float)camera_to_backing_dist_mm;
+
+	int dx,dy,dist,n = 0;
+	for (int y = 0; y < ray_map_height; y++) {
+		for (int x = 0; x < ray_map_width; x++, n++) {
+			if (ray_map[n*6 + 2] != 0) {
+
+				int start_x_mm = ray_map[n*6];
+				int start_y_mm = ray_map[n*6 + 1];
+				int end_x_mm = ray_map[n*6 + 3];
+				int end_y_mm = ray_map[n*6 + 4];
+
+				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+
+				int plane_x = (ray_x_mm - tx_mm) * projected_img_width / (bx_mm - tx_mm);
+				if ((plane_x > -1) && (plane_x < projected_img_width)) {
+				    int plane_y = (ray_y_mm - ty_mm) * projected_img_height / (by_mm - ty_mm);
+				    if ((plane_y > -1) && (plane_y < projected_img_height)) {
+				    	int n2 = ((plane_y * projected_img_width) + plane_x)*3;
+				    	projected_img[n2] = ray_map_img[n*3];
+				    	projected_img[n2 + 1] = ray_map_img[n*3 + 1];
+				    	projected_img[n2 + 2] = ray_map_img[n*3 + 2];
+				    }
 				}
 			}
 		}

@@ -317,6 +317,9 @@ public:
     	int point_radius_pixels);
     static void reproject(
     	unsigned char* ground_img,
+    	int* ground_height_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
     	int img_width,
     	int img_height,
     	int tx_mm,
@@ -327,6 +330,22 @@ public:
     	unsigned char* reprojected_img,
     	int ray_map_width,
     	int ray_map_height);
+    static void project(
+    	unsigned char* ray_map_img,
+    	int plane_height_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int ray_map_width,
+    	int ray_map_height,
+    	int tx_mm,
+    	int ty_mm,
+    	int bx_mm,
+    	int by_mm,
+    	int* ray_map,
+    	unsigned char* projected_img,
+    	int projected_img_width,
+    	int projected_img_height);
+
 
     void compass(int max_variance_degrees);
 
