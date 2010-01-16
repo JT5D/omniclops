@@ -34,7 +34,6 @@
 #include "anyoption.h"
 #include "drawing.h"
 #include "omni.h"
-//#include "motionmodel.h"
 #include "fast.h"
 #include "libcam.h"
 
@@ -161,6 +160,10 @@ void RunUnitTests()
 }
 
 int main(int argc, char* argv[]) {
+
+  //RunUnitTests();
+  //return(0);
+
   int ww = 640;
   int hh = 480;
   int skip_frames = 1;
@@ -648,12 +651,12 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
-  int grid_cell_size = 4;
+  int grid_cell_size = 32;
   if( opt->getValue( "gridcell" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("gridcell"));
   }
 
-  int grid_dimension = 256;
+  int grid_dimension = 64;
   if( opt->getValue( "griddim" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("griddim"));
   }
@@ -1041,7 +1044,7 @@ int main(int argc, char* argv[]) {
 		int grid_centre_y_mm = 0;
 		int grid_centre_z_mm = 0;
 		vector<short> occupied_voxels;
-		int max_colour_variance = 150;
+		int min_correlation = 6;
 		if (img_occlusions == NULL) {
 			img_occlusions = new unsigned char[ww*hh];
 		}
@@ -1062,19 +1065,13 @@ int main(int argc, char* argv[]) {
 			grid_centre_x_mm,
 			grid_centre_y_mm,
 			grid_centre_z_mm,
-			max_colour_variance,
+			min_correlation,
 			occupied_voxels);
 
     	int voxel_radius_pixels = 2;
     	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
-
-		omni::show_rays(
-		    lcam->mirror_map,
-		    lcam->ray_map,
-		    l_,ww,hh,
-		    200,2);
 	}
 
 	if (optical_flow) {
