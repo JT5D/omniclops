@@ -24,7 +24,7 @@ omni::omni(int width, int height) {
 	imgWidth = width;
 	imgHeight = height;
 
-	/* array storing x coordinates of detected features */
+	// array storing x coordinates of detected features
 	feature_x = new short int[OMNI_MAX_FEATURES];
 	feature_y = new short int[OMNI_MAX_FEATURES];
 
@@ -35,16 +35,16 @@ omni::omni(int width, int height) {
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
 
-	/* array storing the number of features detected on each row */
+	// array storing the number of features detected on each row
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
 			/ OMNI_VERTICAL_SAMPLING];
 	features_per_col = new unsigned short int[OMNI_MAX_IMAGE_WIDTH
 			/ OMNI_HORIZONTAL_SAMPLING];
 
-	/* buffer which stores sliding sum */
+	// buffer which stores sliding sum
 	row_sum = new int[OMNI_MAX_IMAGE_WIDTH];
 
-	/* buffer used to find peaks in edge space */
+	// buffer used to find peaks in edge space
 	row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
 	temp_row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
 
@@ -55,13 +55,18 @@ omni::omni(int width, int height) {
 	radial_lines = NULL;
 	prev_no_of_radial_lines = 0;
 	prev_radial_lines = NULL;
+
 }
 
 omni::~omni() {
+
 	delete[] feature_x;
+	delete[] feature_y;
 	delete[] features_per_row;
+	delete[] features_per_col;
 	delete[] row_sum;
 	delete[] row_peaks;
+	delete[] temp_row_peaks;
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -86,6 +91,7 @@ omni::~omni() {
 	}
 	if (img_buffer != NULL)
 		delete[] img_buffer;
+
 }
 
 /* Updates sliding sums and edge response values along a single row or column
@@ -1261,18 +1267,40 @@ void omni::voxel_paint(
 	int grid_centre_x_mm,
 	int grid_centre_y_mm,
 	int grid_centre_z_mm,
-	int max_colour_variance,
+	int min_correlation,
 	vector<short> &occupied_voxels)
 {
+    /* lookup table used for counting the number of set bits */
+    const unsigned char BitsSetTable256[] =
+    {
+            0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+            4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
+    };
+
 	occupied_voxels.clear();
 
 	int pixels = img_width*img_height;
 
+	vector<unsigned int> voxel_histogram[grid_cells_x*grid_cells_y+1];
 	vector<unsigned char> voxel_colours[grid_cells_x*grid_cells_y];
 	vector<int> pixel_index[grid_cells_x*grid_cells_y];
 	vector<unsigned char> mirror_index[grid_cells_x*grid_cells_y];
-	int cam[10];
-	int colour_mean[10*3];
+	int cam[no_of_mirrors];
+	int colour_mean[no_of_mirrors*3];
 
 	//int min_dist_cells = (int)(mirror_diameter_mm / grid_cell_dimension_mm);
 	int min_dist_cells = (int)(dist_to_mirror_backing_mm / grid_cell_dimension_mm);
@@ -1285,14 +1313,15 @@ void omni::voxel_paint(
 
 	int layer_cell_index;
 	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
-	//for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
-	for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
+	//for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
 
 		// paint colours for this layer
 		int n = (pixels - 1) * 6;
 		for (int i = pixels-1; i >= 0; i--, n -= 6) {
 			if ((mirror_map[i] > 0) &&
 				(img_occlusions[i] == 0)) {
+				int mirror_idx = mirror_map[i] - 1;
 
 				// calculate the start and end grid cell coordinates of the ray
 				int ray_start_x_mm = ray_map[n];
@@ -1318,12 +1347,19 @@ void omni::voxel_paint(
 							unsigned char g = img[i*3 + 1];
 							unsigned char b = img[i*3];
 
+							int histogram_index = (r/32)*64 + (g/32)*8 + (b/32);
+
 							layer_cell_index = cell_y*grid_cells_x + cell_x;
+							if ((int)voxel_histogram[layer_cell_index].size() == 0) {
+								voxel_histogram[layer_cell_index].resize(16*no_of_mirrors,0);
+							}
+							voxel_histogram[layer_cell_index][(histogram_index/32) + (mirror_idx*16)] |= (unsigned int)pow(2,histogram_index % 32);
+
 							voxel_colours[layer_cell_index].push_back(r);
 							voxel_colours[layer_cell_index].push_back(g);
 							voxel_colours[layer_cell_index].push_back(b);
 							pixel_index[layer_cell_index].push_back(i);
-							mirror_index[layer_cell_index].push_back(mirror_map[i] - 1);
+							mirror_index[layer_cell_index].push_back(mirror_idx);
 						}
 					}
 				}
@@ -1336,15 +1372,67 @@ void omni::voxel_paint(
 			for (int gx = 0; gx < grid_cells_x; gx++, layer_cell_index++) {
 
 				if ((int)pixel_index[layer_cell_index].size() > 0) {
+
+					memset((void*)cam,'\0',no_of_mirrors*sizeof(int));
+					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
+						int mirror = mirror_index[layer_cell_index][sample];
+						cam[mirror]++;
+					}
+
+					int correlation = 0;
+					int anticorrelation = 0;
+
+					int no_of_mirror_observations = 0;
+					for (int mirror0 = 0; mirror0 < no_of_mirrors; mirror0++) {
+						if (cam[mirror0] > 0) {
+							no_of_mirror_observations++;
+							for (int mirror1 = mirror0+1; mirror1 < no_of_mirrors; mirror1++) {
+								if (cam[mirror1] > 0) {
+                                    for (int idx = 0; idx < 16; idx++) {
+
+                                        int n2 = voxel_histogram[layer_cell_index][idx + (mirror0*16)];
+                                        unsigned int anti = 0;
+                                        for (int bit = 0; bit < 32; bit++) {
+                                            anti <<= 1;
+                                            anti |= n2 & 1;
+                                            n2 >>= 1;
+                                        }
+
+                                    	unsigned int match = voxel_histogram[layer_cell_index][idx+(mirror0*16)] & voxel_histogram[layer_cell_index][idx+(mirror1*16)];
+                                    	if (match > 0) {
+                                    		correlation +=
+                                                BitsSetTable256[match & 0xff] +
+                                                BitsSetTable256[(match >> 8) & 0xff] +
+                                                BitsSetTable256[(match >> 16) & 0xff] +
+                                                BitsSetTable256[match >> 24];
+                                    	}
+                                    	match = anti & voxel_histogram[layer_cell_index][idx+(mirror1*16)];
+                                    	if (match > 0) {
+                                    		anticorrelation +=
+                                                BitsSetTable256[match & 0xff] +
+                                                BitsSetTable256[(match >> 8) & 0xff] +
+                                                BitsSetTable256[(match >> 16) & 0xff] +
+                                                BitsSetTable256[match >> 24];
+                                    	}
+
+                                    }
+								}
+							}
+						}
+					}
+
+
 					int test_r=0;
 					int test_g=0;
 					int test_b=0;
 
-					memset((void*)cam,'\0',10*sizeof(int));
-					memset((void*)colour_mean,'\0',10*3*sizeof(int));
+					memset((void*)colour_mean,'\0',no_of_mirrors*3*sizeof(int));
 					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
 						int mirror = mirror_index[layer_cell_index][sample];
-						cam[mirror]++;
+						unsigned char r = voxel_colours[layer_cell_index][sample*3];
+						unsigned char g = voxel_colours[layer_cell_index][sample*3+1];
+						unsigned char b = voxel_colours[layer_cell_index][sample*3+2];
+
 						colour_mean[mirror*3] += (int)voxel_colours[layer_cell_index][sample*3];
 						colour_mean[mirror*3+1] += (int)voxel_colours[layer_cell_index][sample*3+1];
 						colour_mean[mirror*3+2] += (int)voxel_colours[layer_cell_index][sample*3+2];
@@ -1352,50 +1440,22 @@ void omni::voxel_paint(
 						test_g = (int)voxel_colours[layer_cell_index][sample*3+1];
 						test_b = (int)voxel_colours[layer_cell_index][sample*3+2];
 					}
-					int mean_r = 0;
-					int mean_g = 0;
-					int mean_b = 0;
-					int no_of_mirror_observations = 0;
-					for (int c = 0; c < 10; c++) {
-						if (cam[c] > 0) {
-							no_of_mirror_observations++;
-							colour_mean[c*3] /= cam[c];
-							colour_mean[c*3+1] /= cam[c];
-							colour_mean[c*3+2] /= cam[c];
-							mean_r += colour_mean[c*3];
-							mean_g += colour_mean[c*3+1];
-							mean_b += colour_mean[c*3+2];
+					if ((no_of_mirror_observations >= no_of_mirrors-1) &&
+						(correlation >= min_correlation)) {
+						// we have a winner - add it to the occlusions
+						for (int j = (int)pixel_index[layer_cell_index].size()-1; j >= 0; j--) {
+							img_occlusions[pixel_index[layer_cell_index][j]] = 1;
 						}
-					}
-					if (no_of_mirror_observations >= no_of_mirrors-1) {
-						mean_r /= no_of_mirror_observations;
-						mean_g /= no_of_mirror_observations;
-						mean_b /= no_of_mirror_observations;
-						int colour_diff = 0;
-						for (int c = 0; c < 10; c++) {
-							if (cam[c] > 0) {
-								colour_diff +=
-									abs(colour_mean[c*3] - mean_r) +
-									abs(colour_mean[c*3+1] - mean_g) +
-									abs(colour_mean[c*3+2] - mean_b);
-							}
-						}
-						if (colour_diff < max_colour_variance*no_of_mirror_observations) {
-							// we have a winner - add it to the occlusions
-							for (int j = (int)pixel_index[layer_cell_index].size()-1; j >= 0; j--) {
-								img_occlusions[pixel_index[layer_cell_index][j]] = 1;
-							}
-							// create a voxel
-							occupied_voxels.push_back((short)gx);
-							occupied_voxels.push_back((short)gy);
-							occupied_voxels.push_back((short)layer);
-							//occupied_voxels.push_back((short)mean_r);
-							//occupied_voxels.push_back((short)mean_g);
-							//occupied_voxels.push_back((short)mean_b);
-							occupied_voxels.push_back((short)test_r);
-							occupied_voxels.push_back((short)test_g);
-							occupied_voxels.push_back((short)test_b);
-						}
+						// create a voxel
+						occupied_voxels.push_back((short)gx);
+						occupied_voxels.push_back((short)gy);
+						occupied_voxels.push_back((short)layer);
+						//occupied_voxels.push_back((short)mean_r);
+						//occupied_voxels.push_back((short)mean_g);
+						//occupied_voxels.push_back((short)mean_b);
+						occupied_voxels.push_back((short)test_r);
+						occupied_voxels.push_back((short)test_g);
+						occupied_voxels.push_back((short)test_b);
 					}
 
 					voxel_colours[layer_cell_index].clear();
@@ -1437,74 +1497,128 @@ void omni::show_voxels(
     }
 
     memset((void*)img, '\0',img_width*img_height*3);
-	for (int i = (int)voxels.size()-6; i >= 0; i-=6) {
-    	int x = (int)voxels[i];
-    	int y = (int)voxels[i+1];
-    	int z = (int)voxels[i+2];
-		switch(view_type) {
-			case 0: {
-				x = (x - tx) * img_height / (bx - tx);
-				y = (y - ty) * img_height / (by - ty);
-				break;
-			}
-			case 1: {
-				x = (x - tx) * img_height / (bx - tx);
-				y = (z - tz) * img_height / (bz - tz);
-				break;
-			}
-			case 2: {
-				x = (y - ty) * img_height / (by - ty);
-				y = (z - tz) * img_height / (bz - tz);
-				break;
-			}
-			case 3: {
-				int x0 = ((x - tx) * img_height / ((bx - tx)*2));
-				int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
+    if ((bx - tx > 0) && (by - ty > 0)) {
+		for (int i = (int)voxels.size()-6; i >= 0; i-=6) {
+			int x = (int)voxels[i];
+			int y = (int)voxels[i+1];
+			int z = (int)voxels[i+2];
+			switch(view_type) {
+				case 0: {
+					x = (x - tx) * img_height / (bx - tx);
+					y = (y - ty) * img_height / (by - ty);
+					break;
+				}
+				case 1: {
+					x = (x - tx) * img_height / (bx - tx);
+					y = (z - tz) * img_height / (bz - tz);
+					break;
+				}
+				case 2: {
+					x = (y - ty) * img_height / (by - ty);
+					y = (z - tz) * img_height / (bz - tz);
+					break;
+				}
+				case 3: {
+					int x0 = ((x - tx) * img_height / ((bx - tx)*2));
+					int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
 
-				for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-					for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-				        if ((xx > -1) && (xx < img_width) &&
-				            (yy > -1) && (yy < img_height)) {
-					        int n = ((yy * img_width) + xx) * 3;
-		                    img[n+2] = (unsigned char)voxels[i+3];
-		                    img[n+1] = (unsigned char)voxels[i+4];
-		                    img[n] = (unsigned char)voxels[i+5];
-				        }
+					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+							if ((xx > -1) && (xx < img_width) &&
+								(yy > -1) && (yy < img_height)) {
+								int n = ((yy * img_width) + xx) * 3;
+								img[n+2] = (unsigned char)voxels[i+3];
+								img[n+1] = (unsigned char)voxels[i+4];
+								img[n] = (unsigned char)voxels[i+5];
+							}
+						}
+					}
+
+					x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
+					y0 = ((z - tz) * img_height / ((bz - tz)*2));
+
+					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+							if ((xx > -1) && (xx < img_width) &&
+								(yy > -1) && (yy < img_height)) {
+								int n = ((yy * img_width) + xx) * 3;
+								img[n+2] = (unsigned char)voxels[i+3];
+								img[n+1] = (unsigned char)voxels[i+4];
+								img[n] = (unsigned char)voxels[i+5];
+							}
+						}
+					}
+
+					x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
+					y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
+					break;
+				}
+			}
+			for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
+				for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
+					if ((xx > -1) && (xx < img_width) &&
+						(yy > -1) && (yy < img_height)) {
+						int n = ((yy * img_width) + xx) * 3;
+						img[n+2] = (unsigned char)voxels[i+3];
+						img[n+1] = (unsigned char)voxels[i+4];
+						img[n] = (unsigned char)voxels[i+5];
 					}
 				}
-
-				x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
-				y0 = ((z - tz) * img_height / ((bz - tz)*2));
-
-				for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-					for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-				        if ((xx > -1) && (xx < img_width) &&
-				            (yy > -1) && (yy < img_height)) {
-					        int n = ((yy * img_width) + xx) * 3;
-		                    img[n+2] = (unsigned char)voxels[i+3];
-		                    img[n+1] = (unsigned char)voxels[i+4];
-		                    img[n] = (unsigned char)voxels[i+5];
-				        }
-					}
-				}
-
-				x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
-				y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
-				break;
 			}
 		}
-		for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
-			for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
-		        if ((xx > -1) && (xx < img_width) &&
-		            (yy > -1) && (yy < img_height)) {
-			        int n = ((yy * img_width) + xx) * 3;
-                    img[n+2] = (unsigned char)voxels[i+3];
-                    img[n+1] = (unsigned char)voxels[i+4];
-                    img[n] = (unsigned char)voxels[i+5];
-		        }
+    }
+}
+
+void omni::reproject(
+	unsigned char* ground_img,
+	int img_width,
+	int img_height,
+	int tx_mm,
+	int ty_mm,
+	int bx_mm,
+	int by_mm,
+	int* ray_map,
+	unsigned char* reprojected_img,
+	int ray_map_width,
+	int ray_map_height)
+{
+	int min_dist = 2*2;
+	int ray_map_pixels = ray_map_width*ray_map_height;
+
+	memset((void*)reprojected_img,'\0',ray_map_width*ray_map_height*3);
+
+	vector<int> pixel_list;
+	int dx,dy,dist,n = 0;
+	for (int y = 0; y < img_height; y++) {
+		int y_mm = ty_mm + (y * (by_mm - ty_mm) / img_height);
+		for (int x = 0; x < img_width; x++, n += 3) {
+			int x_mm = tx_mm + (x * (bx_mm - tx_mm) / img_width);
+
+			if (!((ground_img[n] == 0) &&
+				  (ground_img[n+1] == 0) &&
+				  (ground_img[n+2] == 0))) {
+				pixel_list.clear();
+				for (int i = ray_map_pixels-1; i >= 0; i--) {
+					if (ray_map[i*6 + 2] != 0) {
+						dx = ray_map[i*6 + 3] - x_mm;
+						dy = ray_map[i*6 + 4] - y_mm;
+						dist = dx*dx + dy*dy;
+						if (dist < min_dist) {
+							pixel_list.push_back(i);
+						}
+					}
+				}
+
+				for (int p = (int)pixel_list.size()-1; p >= 0; p--) {
+					int n2 = pixel_list[p]*3;
+					reprojected_img[n2] = ground_img[n];
+					reprojected_img[n2 + 1] = ground_img[n + 1];
+					reprojected_img[n2 + 2] = ground_img[n + 2];
+				}
 			}
 		}
 	}
+
 }
 
 
@@ -1851,8 +1965,10 @@ void omni::create_ray_map(
 					n = (y * img_width) + x;
 
 					angle = 0;
+					//if (r > 0) angle = (float)atan2(dx,dy);
 					if (r > 0) angle = (float)atan2(dx,dy);
 
+					float angle2 = -mirror_rotation + angle;
 					angle = -mirror_rotation - angle;
 
 				    float xx0 = calibration_radius[r_tilted*4]*sin(angle);
@@ -1888,6 +2004,8 @@ void omni::create_ray_map(
 					ray_map[n*6] = (int)xx2;
 					ray_map[n*6+1] = (int)yy2;
 					ray_map[n*6+2] = (int)zz2;
+
+					angle = angle2;
 
 					xx0 = calibration_radius[r_tilted*4+2]*sin(angle);
 					yy0 = calibration_radius[r_tilted*4+2]*cos(angle);

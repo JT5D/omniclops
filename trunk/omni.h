@@ -298,7 +298,7 @@ public:
     	int grid_centre_x_mm,
     	int grid_centre_y_mm,
     	int grid_centre_z_mm,
-    	int max_colour_variance,
+    	int min_correlation,
     	vector<short> &occupied_voxels);
     static void show_voxels(
     	unsigned char* img,
@@ -315,6 +315,18 @@ public:
     	int img_height,
     	int radius_mm,
     	int point_radius_pixels);
+    static void reproject(
+    	unsigned char* ground_img,
+    	int img_width,
+    	int img_height,
+    	int tx_mm,
+    	int ty_mm,
+    	int bx_mm,
+    	int by_mm,
+    	int* ray_map,
+    	unsigned char* reprojected_img,
+    	int ray_map_width,
+    	int ray_map_height);
 
     void compass(int max_variance_degrees);
 
