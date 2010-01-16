@@ -237,8 +237,13 @@ TEST (RayMap5MirrorReproject, MyTest)
 	  float mirror_position[5*2];
 	  float mirror_position_pixels[5*2];
 	  unsigned char* ground_img = new unsigned char[ww*hh*3];
+	  unsigned char* projected_img = new unsigned char[ww*hh*3];
+	  int* ground_height_mm = new int[ww*hh];
 	  unsigned char* reprojected_img = new unsigned char[ww*hh*3];
  	  Bitmap* bmp;
+
+ 	  memset((void*)ground_height_mm,'\0',ww*hh*sizeof(int));
+ 	  memset((void*)projected_img,'\0',ww*hh*3);
 
 	  mirror_position_pixels[0] = 19.00;
 	  mirror_position_pixels[1] = 20.00;
@@ -276,7 +281,7 @@ TEST (RayMap5MirrorReproject, MyTest)
 	  	dist_to_mirror_backing,
 	  	focal_length,
 	  	outer_radius,
-	  	camera_height,
+	  	0,
 	  	no_of_mirrors,
 	  	mirror_position,
 	  	mirror_position_pixels,
@@ -296,6 +301,9 @@ TEST (RayMap5MirrorReproject, MyTest)
 
     omni::reproject(
 	  	ground_img,
+	  	ground_height_mm,
+	  	dist_to_mirror_backing,
+		camera_height,
 	  	ww,hh,
 	  	tx_mm, ty_mm,
 	  	bx_mm, by_mm,
@@ -340,16 +348,50 @@ TEST (RayMap5MirrorReproject, MyTest)
 	bmp->SavePPM(filename.c_str());
 	delete bmp;
 
+	omni::project(
+		reprojected_img,
+		0,
+	  	dist_to_mirror_backing,
+		camera_height,
+	  	ww,hh,
+		tx_mm, ty_mm,
+		bx_mm, by_mm,
+		lcam.ray_map,
+		projected_img,
+		ww,hh);
+
+	bmp = new Bitmap(projected_img, ww, hh, 3);
+	filename = "test_RayMap5MirrorProject.ppm";
+	bmp->SavePPM(filename.c_str());
+	delete bmp;
+
+	int projection_hits = 0;
+	int projection_misses = 0;
+	for (int i = ww*hh*3-3; i >= 0; i-=3) {
+		if ((projected_img[i+1] > 0) ||
+			(projected_img[i+2] > 0)) {
+			if ((ground_img[i+1] == projected_img[i+1]) ||
+				(ground_img[i+2] == projected_img[i+2])) {
+				projection_hits++;
+			}
+			else {
+				projection_misses++;
+			}
+		}
+	}
+
 	delete[] ground_img;
+	delete[] ground_height_mm;
 	delete[] reprojected_img;
+	delete[] projected_img;
 
 	for (int m = 0; m < no_of_mirrors; m++) {
 	    CHECK(dot_position[m*2] < 0);
 	    CHECK(dot_position[m*2 + 1] < 0);
 	}
 
-	//CHECK_GREATER_THAN(84, min_radius);
-	//CHECK_LESS_THAN(93, max_radius);
+	CHECK(projection_hits > 2000);
+	CHECK(projection_hits > projection_misses);
 }
 
 

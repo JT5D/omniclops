@@ -651,12 +651,12 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
-  int grid_cell_size = 32;
+  int grid_cell_size = 4;
   if( opt->getValue( "gridcell" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("gridcell"));
   }
 
-  int grid_dimension = 64;
+  int grid_dimension = 128;
   if( opt->getValue( "griddim" ) != NULL  ) {
 	  grid_cell_size = atoi(opt->getValue("griddim"));
   }
@@ -1044,7 +1044,7 @@ int main(int argc, char* argv[]) {
 		int grid_centre_y_mm = 0;
 		int grid_centre_z_mm = 0;
 		vector<short> occupied_voxels;
-		int min_correlation = 6;
+		int min_correlation = 0;
 		if (img_occlusions == NULL) {
 			img_occlusions = new unsigned char[ww*hh];
 		}
