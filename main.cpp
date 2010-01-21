@@ -163,8 +163,8 @@ void RunUnitTests()
 
 int main(int argc, char* argv[]) {
 
-  RunUnitTests();
-  return(0);
+  //RunUnitTests();
+  //return(0);
 
   int ww = 640;
   int hh = 480;
@@ -1055,6 +1055,10 @@ int main(int argc, char* argv[]) {
 		int bx_mm = range_mm;
 		int by_mm = range_mm;
 
+		int mirror_index = -1;
+		int min_r_mm = 0;
+		int max_r_mm = 60;
+
 		if (colour_difference == NULL) {
 			colour_difference = new int[ww*hh*2];
 		}
@@ -1070,6 +1074,11 @@ int main(int argc, char* argv[]) {
 			tx_mm, ty_mm,
 			bx_mm, by_mm,
 			lcam->ray_map,
+			lcam->mirror_map,
+			lcam->mirror_lookup,
+			mirror_index,
+			min_r_mm,
+			max_r_mm,
 			l_,
 			ww, hh,
 			colour_difference);
