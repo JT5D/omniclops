@@ -78,7 +78,8 @@ public:
 
     /* maps raw image pixels to 3D rays */
     int* ray_map;
-    unsigned char* mirror_map;
+    unsigned char* mirror_map; // mirror numbers
+    float* mirror_lookup; // radii and angles
 
     /* radial lines */
     int no_of_radial_lines;
@@ -100,7 +101,7 @@ public:
 
     int epipole;
 
-    bool intersection(
+    static bool intersection(
         float x0,
         float y0,
         float x1,
@@ -317,7 +318,8 @@ public:
     	int point_radius_pixels);
     static void reproject(
     	unsigned char* ground_img,
-    	int* ground_height_mm,
+    	int plane_height_mm,
+    	float focal_length_mm,
     	int camera_to_backing_dist_mm,
     	int camera_height_mm,
     	int img_width,
@@ -333,6 +335,7 @@ public:
     static void project(
     	unsigned char* ray_map_img,
     	int plane_height_mm,
+    	float focal_length_mm,
     	int camera_to_backing_dist_mm,
     	int camera_height_mm,
     	int ray_map_width,
@@ -344,8 +347,89 @@ public:
     	int* ray_map,
     	unsigned char* projected_img,
     	int projected_img_width,
-    	int projected_img_height);
+    	int projected_img_height,
+    	int* colour_difference);
+    static void create_obstacle(
+    	int* ground_height_mm,
+    	unsigned char* ground_img,
+    	int ground_width,
+    	int ground_height,
+    	int tx_mm, int ty_mm,
+    	int bx_mm, int by_mm,
+    	int obstacle_tx_mm, int obstacle_ty_mm,
+    	int obstacle_bx_mm, int obstacle_by_mm,
+    	int height_mm,
+    	int width_mm,
+    	int r, int g, int b);
+    static void create_ground_grid(
+    	int* ground_height_mm,
+    	unsigned char* ground_img,
+    	int ground_width,
+    	int ground_height,
+    	int tx_mm, int ty_mm,
+    	int bx_mm, int by_mm,
+    	int grid_tx_mm, int grid_ty_mm,
+    	int grid_bx_mm, int grid_by_mm,
+    	int grid_dimension_mm,
+    	int height_mm,
+    	int line_width_mm,
+    	int r, int g, int b);
+    static void show_mirror_lookup(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	float* lookup,
+    	bool show_radius,
+    	float outer_radius_percent);
 
+    static void create_ray_map_mirror_inner(
+    	int centre_x_pixels,
+    	int centre_y_pixels,
+    	int centre_x_mm,
+    	int centre_y_mm,
+    	int radius_pixels,
+    	int* ray_map,
+    	float* mirror_lookup,
+    	int ray_map_width,
+    	int ray_map_height,
+    	float tilt_radians,
+    	float rotate_radians,
+    	float mirror_diameter_mm,
+    	float dist_to_mirror_centre_mm,
+    	float camera_height_mm,
+    	float centre_x,
+    	float centre_y,
+    	float centre_z,
+    	float r,
+    	bool negative);
+    static void create_ray_map_mirror(
+    	int centre_x_pixels,
+    	int centre_y_pixels,
+    	int centre_x_mm,
+    	int centre_y_mm,
+    	int radius_pixels,
+    	int* ray_map,
+    	float* mirror_lookup,
+    	int ray_map_width,
+    	int ray_map_height,
+    	float tilt_radians,
+    	float rotate_radians,
+    	float mirror_diameter_mm,
+    	float dist_to_mirror_backing_mm,
+    	float camera_height_mm);
+    static void create_ray_map(
+    	float mirror_diameter_mm,
+    	float dist_to_mirror_backing_mm,
+    	float focal_length,
+    	float outer_radius_percent,
+    	float camera_height_mm,
+    	int no_of_mirrors,
+    	float* mirror_position,
+    	float* mirror_position_pixels,
+        int img_width,
+        int img_height,
+        int* ray_map,
+        float* mirror_lookup);
 
     void compass(int max_variance_degrees);
 
