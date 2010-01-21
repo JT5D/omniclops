@@ -1633,11 +1633,12 @@ void omni::reproject(
 			if (!((ground_img[n*3] == 0) &&
 				  (ground_img[n*3+1] == 0) &&
 				  (ground_img[n*3+2] == 0))) {
-				for (int p = (int)reprojected_pixels[n].size()-1; p >= 0; p--) {
-					int n2 = reprojected_pixels[n][p]*3;
-					reprojected_img[n2] = ground_img[n*3];
-					reprojected_img[n2 + 1] = ground_img[n*3 + 1];
-					reprojected_img[n2 + 2] = ground_img[n*3 + 2];
+				int n2 = y*img_width + (img_width-1-x);
+				for (int p = (int)reprojected_pixels[n2].size()-1; p >= 0; p--) {
+					int n3 = reprojected_pixels[n2][p]*3;
+					reprojected_img[n3] = ground_img[n*3];
+					reprojected_img[n3 + 1] = ground_img[n*3 + 1];
+					reprojected_img[n3 + 2] = ground_img[n*3 + 2];
 				}
 			}
 		}
@@ -1659,6 +1660,11 @@ void omni::project(
 	int bx_mm,
 	int by_mm,
 	int* ray_map,
+	unsigned char* mirror_map,
+	float* mirror_lookup,
+	int mirror_index,
+	int min_r_mm,
+	int max_r_mm,
 	unsigned char* projected_img,
 	int projected_img_width,
 	int projected_img_height,
@@ -1676,59 +1682,64 @@ void omni::project(
 	int n = 0;
 	for (int y = 0; y < ray_map_height; y++) {
 		for (int x = 0; x < ray_map_width; x++, n++) {
-			if ((ray_map[n*6 + 2] != 0) &&
-				(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
+			if ((mirror_map[n] > 0) &&
+				((mirror_map[n]-1 == mirror_index) || (mirror_index == -1))) {
+				if ((mirror_lookup[n*2] >= min_r_mm) &&
+					(mirror_lookup[n*2] <= max_r_mm)) {
+					if ((ray_map[n*6 + 2] != 0) &&
+						(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
 
-				int start_x_mm = ray_map[n*6];
-				int start_y_mm = ray_map[n*6 + 1];
-				int end_x_mm = ray_map[n*6 + 3];
-				int end_y_mm = ray_map[n*6 + 4];
+						int start_x_mm = ray_map[n*6];
+						int start_y_mm = ray_map[n*6 + 1];
+						int end_x_mm = ray_map[n*6 + 3];
+						int end_y_mm = ray_map[n*6 + 4];
 
-				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+						int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
 
-				int plane_x = (ray_x_mm - tx_mm) * projected_img_width / w;
-				int r =  1+((abs(ray_x_mm) + abs(ray_y_mm))*4/projected_img_width);
-				if (r > 5) r = 5;
-				if ((plane_x > r) && (plane_x < projected_img_width-r-1)) {
-				    int plane_y = (ray_y_mm - ty_mm) * projected_img_height / h;
-				    if ((plane_y > r) && (plane_y < projected_img_height-r-1)) {
+						int plane_x = (ray_x_mm - tx_mm) * projected_img_width / w;
+						int r =  1+((abs(ray_x_mm) + abs(ray_y_mm))*4/projected_img_width);
+						if (r > 5) r = 5;
+						if ((plane_x > r) && (plane_x < projected_img_width-r-1)) {
+							int plane_y = (ray_y_mm - ty_mm) * projected_img_height / h;
+							if ((plane_y > r) && (plane_y < projected_img_height-r-1)) {
 
-				    	for (int py = plane_y-r; py <= plane_y+r; py++) {
-				    		for (int px = plane_x-r; px <= plane_x+r; px++) {
+								for (int py = plane_y-r; py <= plane_y+r; py++) {
+									for (int px = plane_x-r; px <= plane_x+r; px++) {
 
-								int n2 = (py * projected_img_width) + px;
-								//int n2 = (plane_y * projected_img_width) + plane_x;
-								int n3 = n2*3;
-								if ((projected_img[n3] == 0) &&
-									(projected_img[n3+1] == 0) &&
-									(projected_img[n3+2] == 0)) {
+										int n2 = (py * projected_img_width) + (ray_map_width-1-px);
+										int n3 = n2*3;
+										if ((projected_img[n3] == 0) &&
+											(projected_img[n3+1] == 0) &&
+											(projected_img[n3+2] == 0)) {
 
-									// update plane colour
-									projected_img[n3] = ray_map_img[n*3];
-									projected_img[n3 + 1] = ray_map_img[n*3 + 1];
-									projected_img[n3 + 2] = ray_map_img[n*3 + 2];
-								}
-								else {
+											// update plane colour
+											projected_img[n3] = ray_map_img[n*3];
+											projected_img[n3 + 1] = ray_map_img[n*3 + 1];
+											projected_img[n3 + 2] = ray_map_img[n*3 + 2];
+										}
+										else {
 
-									if (colour_difference != NULL) {
-										// colour difference
-										colour_difference[n2*2] +=
-											abs(ray_map_img[n*3] - projected_img[n3]) +
-											abs(ray_map_img[n*3 + 1] - projected_img[n3 + 1]) +
-											abs(ray_map_img[n*3 + 2] - projected_img[n3 + 2]);
-										colour_difference[n2*2 + 1]++;
+											if (colour_difference != NULL) {
+												// colour difference
+												colour_difference[n2*2] +=
+													abs(ray_map_img[n*3] - projected_img[n3]) +
+													abs(ray_map_img[n*3 + 1] - projected_img[n3 + 1]) +
+													abs(ray_map_img[n*3 + 2] - projected_img[n3 + 2]);
+												colour_difference[n2*2 + 1]++;
+											}
+
+											// update plane colour
+											projected_img[n3] += (ray_map_img[n*3] - projected_img[n3])/2;
+											projected_img[n3 + 1] += (ray_map_img[n*3 + 1] - projected_img[n3 + 1])/2;
+											projected_img[n3 + 2] += (ray_map_img[n*3 + 2] - projected_img[n3 + 2])/2;
+
+										}
 									}
-
-									// update plane colour
-									projected_img[n3] += (ray_map_img[n*3] - projected_img[n3])/2;
-									projected_img[n3 + 1] += (ray_map_img[n*3 + 1] - projected_img[n3 + 1])/2;
-									projected_img[n3 + 2] += (ray_map_img[n*3 + 2] - projected_img[n3 + 2])/2;
-
 								}
-				    		}
-				    	}
-				    }
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1914,7 +1925,7 @@ void omni::create_ray_map(
 		float tilt_radians = (float)atan2(mirror_dist_from_backing_centre, dist_to_mirror_backing_mm + focal_length);
 
 		// rotation of the mirror on the backing plane (xy)
-		float rotate_radians = (float)atan2(mirror_position[mirror*2], -mirror_position[mirror*2+1]);
+		float rotate_radians = (float)atan2(mirror_position[mirror*2], mirror_position[mirror*2+1]);
 
 		// distance to the centre of the mirror
 		float dist_to_mirror_centre_mm = (float)sqrt(mirror_dist_from_backing_centre*mirror_dist_from_backing_centre + (dist_to_mirror_backing_mm+focal_length)*(dist_to_mirror_backing_mm+focal_length));
@@ -2007,8 +2018,16 @@ void omni::create_ray_map_mirror_inner(
 		float ray_end_y4 = (float)((sin(rotate_radians) * ray_end_x3) + (cos(rotate_radians) * ray_end_y3));
 		float ray_end_z4 = ray_end_z3 + camera_height_mm;
 
-		int px = centre_x_pixels + (int)((sphere_x4 - centre_x) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
-		int py = centre_y_pixels + (int)((sphere_y4 - centre_y) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
+		// rotate
+		float sphere_x5 = (float)((cos(-rotate_radians+3.1415927f) * sphere_x2) - (sin(-rotate_radians+3.1415927f) * sphere_y2));
+		float sphere_y5 = (float)((sin(-rotate_radians) * sphere_x2) + (cos(-rotate_radians) * sphere_y2));
+
+		//int px = centre_x_pixels + (int)((sphere_x4 - centre_x) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
+		//int py = centre_y_pixels + (int)((sphere_y4 - centre_y) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
+		int px = centre_x_pixels + (int)(sphere_x5 * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
+		int py = centre_y_pixels + (int)(sphere_y5 * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
+		//int px = centre_x_pixels + (int)(r * sin(ang_radians+rotate_radians));
+		//int py = centre_y_pixels + (int)(r * cos(ang_radians+rotate_radians));
 		if ((px > -1) && (px < ray_map_width) &&
 			(py > -1) && (py < ray_map_height)) {
 

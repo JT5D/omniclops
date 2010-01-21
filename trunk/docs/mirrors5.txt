@@ -20,4 +20,4 @@ Inner radius (percent of image width) 30.00
 Distance from camera to mirror plane (mm) 150.00
 Camera elevation (mm) 0.00
 Baseline (mm) 100.00
-Mapping range (mm) 500.00
+Mapping range (mm) 250.00

@@ -385,6 +385,11 @@ TEST (RayMap5MirrorReproject, MyTest)
 		tx_mm, ty_mm,
 		bx_mm, by_mm,
 		lcam.ray_map,
+    	lcam.mirror_map,
+    	lcam.mirror_lookup,
+    	-1,
+    	0,
+    	(int)(mirror_diameter/2),
 		projected_img_,
 		ww,hh,
 		colour_difference);
@@ -504,7 +509,7 @@ TEST (MirrorHeight, MyTest)
 					  max_height[mirror*3+2] = height_mm;
 				  }
 			  }
-		}
+		 }
 	}
 
 	for (int i = 0; i < no_of_mirrors; i++) {
@@ -518,14 +523,43 @@ TEST (MirrorHeight, MyTest)
 
 	// check positions of the highest points
 	int search_radius = 40;
-	for (int i = 0; i < no_of_mirrors; i++) {
-		int x = mirror_position_pixels[i*2]*ww/100;
-		int y = mirror_position_pixels[i*2+1]*hh/100;
-		CHECK(max_height[i*3] > x - search_radius);
-		CHECK(max_height[i*3] < x + search_radius);
-		CHECK(max_height[i*3+1] > y - search_radius);
-		CHECK(max_height[i*3+1] < y + search_radius);
-	}
+
+	int radius_pixels = outer_radius * ww / 200;
+	int x = (mirror_position_pixels[0*2]*ww/100) - (radius_pixels*50/100);
+	int y = (mirror_position_pixels[0*2+1]*hh/100) - (radius_pixels*50/100);
+	CHECK(max_height[0*3] > x - search_radius);
+	CHECK(max_height[0*3] < x + search_radius);
+	CHECK(max_height[0*3+1] > y - search_radius);
+	CHECK(max_height[0*3+1] < y + search_radius);
+
+	x = (mirror_position_pixels[1*2]*ww/100) - (radius_pixels*50/100);
+	y = (mirror_position_pixels[1*2+1]*hh/100) + (radius_pixels*50/100);
+	CHECK(max_height[1*3] > x - search_radius);
+	CHECK(max_height[1*3] < x + search_radius);
+	CHECK(max_height[1*3+1] > y - search_radius);
+	CHECK(max_height[1*3+1] < y + search_radius);
+
+	x = (mirror_position_pixels[2*2]*ww/100) + (radius_pixels*50/100);
+	y = (mirror_position_pixels[2*2+1]*hh/100) + (radius_pixels*50/100);
+	CHECK(max_height[2*3] > x - search_radius);
+	CHECK(max_height[2*3] < x + search_radius);
+	CHECK(max_height[2*3+1] > y - search_radius);
+	CHECK(max_height[2*3+1] < y + search_radius);
+
+	x = (mirror_position_pixels[3*2]*ww/100) + (radius_pixels*50/100);
+	y = (mirror_position_pixels[3*2+1]*hh/100) - (radius_pixels*50/100);
+	CHECK(max_height[3*3] > x - search_radius);
+	CHECK(max_height[3*3] < x + search_radius);
+	CHECK(max_height[3*3+1] > y - search_radius);
+	CHECK(max_height[3*3+1] < y + search_radius);
+
+	x = (mirror_position_pixels[4*2]*ww/100);
+	y = (mirror_position_pixels[4*2+1]*hh/100);
+	CHECK(max_height[4*3] > x - search_radius);
+	CHECK(max_height[4*3] < x + search_radius);
+	CHECK(max_height[4*3+1] > y - search_radius);
+	CHECK(max_height[4*3+1] < y + search_radius);
+
 
 	// check that the peaks are approximately the same height
 	CHECK(abs(max_height[4*3+2] - max_height[0*3+2]) < 10);
@@ -535,7 +569,7 @@ TEST (MirrorHeight, MyTest)
 }
 
 
-TEST (SingleMirrorGroundPlane, MyTest)
+TEST (MirrorGroundPlane, MyTest)
 {
 	  float mirror_diameter = 60;
 	  float dist_to_mirror_backing = 150;
@@ -552,7 +586,6 @@ TEST (SingleMirrorGroundPlane, MyTest)
  	  IplImage *output_image=cvCreateImage(cvSize(ww, hh), 8, 3);
  	  unsigned char *output_image_=(unsigned char *)output_image->imageData;
 	  memset((void*)output_image_, '\0', ww*hh*3);
-
 
 	  mirror_position_pixels[0] = 19.00;
 	  mirror_position_pixels[1] = 20.00;
@@ -708,7 +741,7 @@ TEST (SingleMirrorGroundPlane, MyTest)
 				  }
 			  }
 		  }
-		  string filename = "test_SingleMirror";
+		  string filename = "test_Mirror";
 		  switch(m) {
 		  case 0: { filename += "0"; break; }
 		  case 1: { filename += "1"; break; }
@@ -728,6 +761,29 @@ TEST (SingleMirrorGroundPlane, MyTest)
 	  CHECK(projection_centre[1] > 220);
 	  CHECK(projection_centre[2] < 340);
 	  CHECK(projection_centre[3] < 260);
+
+	  //printf("centre %d %d %d %d\n", projection_positions[0],projection_positions[1],projection_positions[2],projection_positions[3]);
+	  //printf("centre %d %d %d %d\n", projection_positions[4],projection_positions[5],projection_positions[6],projection_positions[7]);
+	  CHECK(projection_positions[0] > 190);
+	  CHECK(projection_positions[1] > 140);
+	  CHECK(projection_positions[2] < 410);
+	  CHECK(projection_positions[3] < 360);
+	  CHECK(projection_positions[4] > 440);
+	  CHECK(projection_positions[5] > 120);
+	  CHECK(projection_positions[6] < 465);
+	  CHECK(projection_positions[7] < 150);
+
+	  //printf("centre %d %d %d %d\n", projection_positions[8],projection_positions[9],projection_positions[10],projection_positions[11]);
+	  //printf("centre %d %d %d %d\n", projection_positions[12],projection_positions[13],projection_positions[14],projection_positions[15]);
+	  CHECK(projection_positions[8] > 200);
+	  CHECK(projection_positions[9] > 120);
+	  CHECK(projection_positions[10] < 420);
+	  CHECK(projection_positions[11] < 340);
+	  CHECK(projection_positions[12] > 440);
+	  CHECK(projection_positions[13] > 330);
+	  CHECK(projection_positions[14] < 465);
+	  CHECK(projection_positions[15] < 360);
+
 }
 
 
