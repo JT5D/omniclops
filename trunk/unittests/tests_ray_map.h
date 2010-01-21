@@ -231,7 +231,7 @@ TEST (RayMap5Mirror, MyTest)
 	CHECK_LESS_THAN(30, max_radius);
 
 	int prev_r = -1;
-	for (int r = 1; r < ww; r++) {
+	for (int r = 1; r < ww; r+=4) {
 		if (radius_points[r] > 0) {
 			if (prev_r > -1) {
                 CHECK(prev_r <= radius_points[r])
