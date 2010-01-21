@@ -388,12 +388,14 @@ public:
     	float outer_radius_percent);
 
     static void create_ray_map_mirror_inner(
+    	int mirror,
     	int centre_x_pixels,
     	int centre_y_pixels,
     	int centre_x_mm,
     	int centre_y_mm,
     	int radius_pixels,
     	int* ray_map,
+    	unsigned char* mirror_map,
     	float* mirror_lookup,
     	int ray_map_width,
     	int ray_map_height,
@@ -408,12 +410,14 @@ public:
     	float r,
     	bool negative);
     static void create_ray_map_mirror(
+    	int mirror,
     	int centre_x_pixels,
     	int centre_y_pixels,
     	int centre_x_mm,
     	int centre_y_mm,
     	int radius_pixels,
     	int* ray_map,
+    	unsigned char* mirror_map,
     	float* mirror_lookup,
     	int ray_map_width,
     	int ray_map_height,
@@ -434,6 +438,7 @@ public:
         int img_width,
         int img_height,
         int* ray_map,
+        unsigned char* mirror_map,
         float* mirror_lookup);
 
     void compass(int max_variance_degrees);
