@@ -40,6 +40,8 @@
 #include "cppunitlite/TestHarness.h"
 #include "cppunitlite/TestResultStdErr.h"
 #include "unittests/tests_ray_map.h"
+#include "unittests/tests_mirror_lookup.h"
+#include "unittests/tests_volumetric.h"
 
 #define VERSION 0.2
 #define MAX_FLOW_MATCHES 150
@@ -161,8 +163,8 @@ void RunUnitTests()
 
 int main(int argc, char* argv[]) {
 
-  //RunUnitTests();
-  //return(0);
+  RunUnitTests();
+  return(0);
 
   int ww = 640;
   int hh = 480;
@@ -797,6 +799,7 @@ int main(int argc, char* argv[]) {
   }
 
   IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
+  IplImage *buf=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *prev=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *flow=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *frame1_1C = NULL;
@@ -806,8 +809,10 @@ int main(int argc, char* argv[]) {
   IplImage *pyramid1 = NULL;
   IplImage *pyramid2 = NULL;
   unsigned char *l_=(unsigned char *)l->imageData;
+  unsigned char *buf_=(unsigned char *)buf->imageData;
   unsigned char *prev_=(unsigned char *)prev->imageData;
   unsigned char *flow_=(unsigned char *)flow->imageData;
+  int* colour_difference = NULL;
 
   /* feature detection params */
   int inhibition_radius = 6;
@@ -859,13 +864,17 @@ int main(int argc, char* argv[]) {
 	}
   }
 
+
+  float cam_height = camera_height;
+  if (show_occupancy_grid) cam_height = 0;
+
   /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
   	mirror_diameter,
   	dist_to_mirror_centre,
   	focal_length,
   	outer_radius,
-  	camera_height,
+  	cam_height,
   	no_of_mirrors,
   	mirror_position,
   	mirror_position_pixels,
@@ -1040,6 +1049,32 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_occupancy_grid) {
+
+		int tx_mm = -range_mm;
+		int ty_mm = -range_mm;
+		int bx_mm = range_mm;
+		int by_mm = range_mm;
+
+		if (colour_difference == NULL) {
+			colour_difference = new int[ww*hh*2];
+		}
+		memcpy((void*)buf_,(void*)l_,ww*hh*3);
+
+		omni::project(
+			buf_,
+			0,
+			focal_length,
+			dist_to_mirror_centre,
+			camera_height,
+		  	ww,hh,
+			tx_mm, ty_mm,
+			bx_mm, by_mm,
+			lcam->ray_map,
+			l_,
+			ww, hh,
+			colour_difference);
+
+/*
 		int grid_centre_x_mm = 0;
 		int grid_centre_y_mm = 0;
 		int grid_centre_z_mm = 0;
@@ -1072,6 +1107,7 @@ int main(int argc, char* argv[]) {
     	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
+		*/
 	}
 
 	if (optical_flow) {
@@ -1142,8 +1178,13 @@ int main(int argc, char* argv[]) {
 	  cvDestroyWindow(image_title.c_str());
   }
   cvReleaseImage(&l);
+  cvReleaseImage(&buf);
   cvReleaseImage(&prev);
   cvReleaseImage(&flow);
+
+  if (colour_difference != NULL) {
+	  delete[] colour_difference;
+  }
 
   if (img_occlusions == NULL) {
 	  delete[] img_occlusions;
