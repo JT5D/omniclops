@@ -1064,6 +1064,7 @@ int main(int argc, char* argv[]) {
 		}
 		memcpy((void*)buf_,(void*)l_,ww*hh*3);
 
+		/*
 		omni::project(
 			buf_,
 			0,
@@ -1082,8 +1083,8 @@ int main(int argc, char* argv[]) {
 			l_,
 			ww, hh,
 			colour_difference);
+*/
 
-/*
 		int grid_centre_x_mm = 0;
 		int grid_centre_y_mm = 0;
 		int grid_centre_z_mm = 0;
@@ -1116,7 +1117,7 @@ int main(int argc, char* argv[]) {
     	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
-		*/
+
 	}
 
 	if (optical_flow) {
