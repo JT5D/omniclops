@@ -1600,50 +1600,50 @@ void omni::show_height_field(
 					px = x;
 					py = y;
 					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3+2];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3];
 					break;
 				}
 				case 1: {
 					px = x;
 					py = img_height - 1 - (height_mm * img_height / max_height_mm);
 					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3+2];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3];
 					break;
 				}
 				case 2: {
 					px = x;
 					py = img_height - 1 - (height_mm * img_height / max_height_mm);
 					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3+2];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3];
 					break;
 				}
 				case 3: {
 					px = x/2;
-					py = img_height-1-(img_height/4)-(y/2);
+					py = (img_height/4) + (y/2);
 					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3+2];
 
 					px = (img_width/2) + (x/2);
-					py = img_height - 1 - (y/2);
+					py = img_height - 1 - (height_mm*(img_height/2)/max_height_mm);
 					n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3+2];
 
 					px = (img_width/2) + (x/2);
-					py = (img_height/2) - 1 - (y/2);
+					py = (img_height/2) - 1 - (height_mm*(img_height/2)/max_height_mm);
 					n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n+2];
-					img[n2+1] = height_field_colour[n+1];
-					img[n2+2] = height_field_colour[n];
+					img[n2] = height_field_colour[n*3];
+					img[n2+1] = height_field_colour[n*3+1];
+					img[n2+2] = height_field_colour[n*3+2];
 
 					break;
 				}
@@ -1851,7 +1851,7 @@ void omni::reconstruct_volume(
 
     	// thresholds
     	int plane_occupancy_threshold = average_plane_occupancy * 150/100;
-    	short cell_occupancy_threshold = (short)(average_occupancy_probability * 150/100);
+    	short cell_occupancy_threshold = (short)(average_occupancy_probability * 50/100);
 
     	// apply thresholds
     	for (int plane = no_of_planes - 1; plane >= 0; plane--) {

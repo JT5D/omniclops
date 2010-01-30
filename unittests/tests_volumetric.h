@@ -202,7 +202,7 @@ TEST (ReconstructVolume, MyTest)
 		average_height /= hits;
 	}
 	CHECK(max > 0);
-	printf("average height %d\n", average_height);
+	//printf("average height %d\n", average_height);
 
 	cvReleaseImage(&ground_img);
 	cvReleaseImage(&projected_img);
@@ -296,7 +296,7 @@ TEST (PhotometricConsistency, MyTest)
 
   	printf("Reprojection\n");
 
-  	int ground_height_mm2 = 100;
+  	int ground_height_mm2 = 50;
     omni::reproject(
 	  	ground_img_,
 	  	ground_height_mm2,
