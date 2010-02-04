@@ -150,6 +150,7 @@ TEST (ReconstructVolume, MyTest)
 	int min_patch_observations = 3;
 	unsigned char* height_field_img = new unsigned char[ww*hh*3];
 	short* height_field = new short[ww*hh];
+	int* plane_occupancy = new int[no_of_planes];
 
 	omni::reconstruct_volume(
 		reprojected_img_,
@@ -162,6 +163,7 @@ TEST (ReconstructVolume, MyTest)
 		ww, hh,
 		tx_mm, ty_mm,
 		bx_mm, by_mm,
+		0,0,
 		lcam.ray_map,
 		lcam.mirror_map,
 		lcam.mirror_lookup,
@@ -171,7 +173,8 @@ TEST (ReconstructVolume, MyTest)
 		height_field,
 		height_field_img,
 		patch_size_pixels,
-		min_patch_observations);
+		min_patch_observations,
+		plane_occupancy);
 
 	filename = "test_VolumeOverhead.png";
 	memcpy((void*)projected_img_, (void*)height_field_img,ww*hh*3);
@@ -210,6 +213,7 @@ TEST (ReconstructVolume, MyTest)
 	delete[] colour_difference;
 	delete[] height_field_img;
 	delete[] height_field;
+	delete[] plane_occupancy;
 }
 
 
@@ -227,7 +231,7 @@ TEST (PhotometricConsistency, MyTest)
 	  float mirror_position[5*2];
 	  float mirror_position_pixels[5*2];
 
-	  int* colour_difference = new int[ww*hh*2];
+	  int* colour_difference = new int[ww*hh*6];
 
  	  IplImage *ground_img=cvCreateImage(cvSize(ww, hh), 8, 3);
  	  unsigned char *ground_img_=(unsigned char *)ground_img->imageData;
