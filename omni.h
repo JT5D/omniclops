@@ -454,6 +454,8 @@ public:
     	int ty_mm,
     	int bx_mm,
     	int by_mm,
+    	int camera_base_width_mm,
+    	int camera_base_height_mm,
     	int* ray_map,
     	unsigned char* mirror_map,
     	float* mirror_lookup,
@@ -464,7 +466,8 @@ public:
     	short* height_field,
     	unsigned char* height_field_img,
     	int patch_size_pixels,
-    	int min_patch_observations);
+    	int min_patch_observations,
+    	int* plane_occupancy);
     static void show_height_field(
     	unsigned char* img,
     	int img_width,
@@ -475,6 +478,59 @@ public:
     	int height_field_width,
     	int height_field_height,
     	int view_type);
+    static void show_plane_occupancy(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	int no_of_planes,
+    	int* plane_occupancy);
+    static void match_features_on_plane(
+    	vector<int> &features,
+    	vector<vector<int> > &features_on_plane,
+    	int no_of_mirrors,
+    	unsigned char* ray_map_img,
+    	int plane_height_mm,
+    	float focal_length_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int ray_map_width,
+    	int ray_map_height,
+    	int* ray_map,
+    	unsigned char* mirror_map,
+    	int mirror_index,
+    	float pixel_diameter_mm,
+    	vector<int> &voxels,
+    	vector<int> &projected_points,
+    	vector<int> &matched_features,
+    	int minimum_matching_score_percent,
+    	int &ray_radius_mm,
+    	bool remove_matched_pixels);
+    static void show_voxels(
+    	unsigned char* ray_map_img,
+    	int tx_mm,
+    	int ty_mm,
+    	int bx_mm,
+    	int by_mm,
+    	vector<int> &voxels,
+    	int img_width,
+    	int img_height,
+    	unsigned char* result);
+    static void voxels_from_features(
+    	vector<int> &features,
+    	unsigned char* ray_map_img,
+    	int ray_map_width,
+    	int ray_map_height,
+    	int start_plane_height_mm,
+    	int end_plane_height_mm,
+    	int no_of_planes,
+    	float focal_length_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int* ray_map,
+    	unsigned char* mirror_map,
+    	int outer_radius_percent,
+    	int mirror_diameter_mm,
+    	vector<int> &voxels);
 
     void compass(int max_variance_degrees);
 

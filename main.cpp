@@ -20,6 +20,8 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+    --grid --mirrors 5 --loadconfig /home/motters/develop/omniclops/docs/mirrors5.txt --dist 150 --elevation 200 --range 500
 */
 
 #include <iostream>
@@ -42,6 +44,7 @@
 #include "unittests/tests_ray_map.h"
 #include "unittests/tests_mirror_lookup.h"
 #include "unittests/tests_volumetric.h"
+#include "unittests/tests_feature_matching.h"
 
 #define VERSION 0.2
 #define MAX_FLOW_MATCHES 150
@@ -216,6 +219,8 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --raypaths             Saves image showing ray paths");
   opt->addUsage( "     --rays                 Saves file containing rays for each observed edge feature");
   opt->addUsage( "     --fov                  Field of view in degrees");
+  opt->addUsage( "     --basewidth            Width of the camera base in mm");
+  opt->addUsage( "     --baseheight           Height of the camera base in mm");
   opt->addUsage( " -f  --fps                  Frames per second");
   opt->addUsage( " -s  --skip                 Skip this number of frames");
   opt->addUsage( " -V  --version              Show version number");
@@ -286,6 +291,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "loadconfig" );
   opt->setOption(  "gridcell" );
   opt->setOption(  "griddim" );
+  opt->setOption(  "basewidth" );
+  opt->setOption(  "baseheight" );
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -639,6 +646,7 @@ int main(int argc, char* argv[]) {
   float camera_height = 0;
   if( opt->getValue( "elevation" ) != NULL  ) {
 	  camera_height = atof(opt->getValue("elevation"));
+	  //printf("elevation: %f\n", camera_height);
   }
 
   std::string save_ray_paths_image = "";
@@ -651,6 +659,15 @@ int main(int argc, char* argv[]) {
   if( opt->getValue( "rays" ) != NULL  ) {
 	  save_rays = opt->getValue("rays");
 	  if (save_rays == "") save_rays = "rays.dat";
+  }
+
+  int camera_base_width_mm = 0;
+  int camera_base_height_mm = 0;
+  if( opt->getValue( "basewidth" ) != NULL  ) {
+	  camera_base_width_mm = atoi(opt->getValue("basewidth"));
+  }
+  if( opt->getValue( "baseheight" ) != NULL  ) {
+	  camera_base_height_mm = atoi(opt->getValue("baseheight"));
   }
 
   int grid_cell_size = 4;
@@ -813,6 +830,9 @@ int main(int argc, char* argv[]) {
   unsigned char *prev_=(unsigned char *)prev->imageData;
   unsigned char *flow_=(unsigned char *)flow->imageData;
   int* colour_difference = NULL;
+  short* height_field = NULL;
+  int* plane_occupancy = NULL;
+  unsigned char* height_field_img = NULL;
 
   /* feature detection params */
   int inhibition_radius = 6;
@@ -1050,6 +1070,12 @@ int main(int argc, char* argv[]) {
 
 	if (show_occupancy_grid) {
 
+		int start_plane_height_mm = (int)camera_height;
+		int end_plane_height_mm = 0;
+		int no_of_planes = 20;
+		int patch_size_pixels = 8;
+		int min_patch_observations = 3;
+
 		int tx_mm = -range_mm;
 		int ty_mm = -range_mm;
 		int bx_mm = range_mm;
@@ -1061,8 +1087,11 @@ int main(int argc, char* argv[]) {
 
 		if (colour_difference == NULL) {
 			colour_difference = new int[ww*hh*2];
+			height_field = new short[ww*hh];
+			height_field_img = new unsigned char[ww*hh*3];
+			plane_occupancy = new int[no_of_planes];
 		}
-		memcpy((void*)buf_,(void*)l_,ww*hh*3);
+		//memcpy((void*)buf_,(void*)l_,ww*hh*3);
 
 		/*
 		omni::project(
@@ -1083,7 +1112,7 @@ int main(int argc, char* argv[]) {
 			l_,
 			ww, hh,
 			colour_difference);
-*/
+
 
 		int grid_centre_x_mm = 0;
 		int grid_centre_y_mm = 0;
@@ -1117,6 +1146,42 @@ int main(int argc, char* argv[]) {
     	int view_type = 3;
 
 		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
+		*/
+
+		omni::reconstruct_volume(
+			l_,
+			start_plane_height_mm,
+			end_plane_height_mm,
+			no_of_planes,
+			focal_length,
+			(int)dist_to_mirror_centre,
+			(int)camera_height,
+			ww, hh,
+			tx_mm, ty_mm,
+			bx_mm, by_mm,
+			camera_base_width_mm,
+			camera_base_height_mm,
+			lcam->ray_map,
+			lcam->mirror_map,
+			lcam->mirror_lookup,
+			buf_,
+			ww, hh,
+			colour_difference,
+			height_field,
+			height_field_img,
+			patch_size_pixels,
+			min_patch_observations,
+			plane_occupancy);
+/*
+	    omni::show_height_field(
+	    	l_,
+	    	ww,hh,
+	    	(int)dist_to_mirror_centre,
+	    	height_field,
+	    	height_field_img,
+	    	ww,hh,3);
+*/
+	    omni::show_plane_occupancy(l_,ww,hh,no_of_planes,plane_occupancy);
 
 	}
 
@@ -1195,7 +1260,13 @@ int main(int argc, char* argv[]) {
   if (colour_difference != NULL) {
 	  delete[] colour_difference;
   }
-
+  if (height_field != NULL) {
+	  delete[] height_field;
+	  delete[] height_field_img;
+  }
+  if (plane_occupancy != NULL) {
+	  delete[] plane_occupancy;
+  }
   if (img_occlusions == NULL) {
 	  delete[] img_occlusions;
   }

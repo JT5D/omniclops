@@ -18,6 +18,6 @@ Mirror diameter (mm) 60.00
 Outer radius (percent of image width) 37.00
 Inner radius (percent of image width) 30.00
 Distance from camera to mirror plane (mm) 150.00
-Camera elevation (mm) 0.00
+Camera elevation (mm) 1600.00
 Baseline (mm) 100.00
-Mapping range (mm) 250.00
+Mapping range (mm) 600.00
