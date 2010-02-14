@@ -1606,6 +1606,109 @@ void omni::show_voxels(
     }
 }
 
+void omni::show_feature_voxels(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	vector<short> &voxels,
+	int view_type)
+{
+    int tx = 99999;
+    int ty = 99999;
+    int tz = 99999;
+    int bx = 0;
+    int by = 0;
+    int bz = 0;
+
+    // get the bounding box
+    for (int i = (int)voxels.size()-8; i >= 0; i-=8) {
+    	int x = voxels[i];
+    	int y = voxels[i+1];
+    	int z = voxels[i+2];
+    	if (x < tx) tx = x;
+    	if (x > bx) bx = x;
+    	if (y < ty) ty = y;
+    	if (y > by) by = y;
+    	if (z < tz) tz = z;
+    	if (z > bz) bz = z;
+    }
+
+    if (bz == tz) bz = tz+1;
+
+    memset((void*)img, '\0',img_width*img_height*3);
+    if ((bx - tx > 0) && (by - ty > 0) && (bz - tz > 0)) {
+		for (int i = (int)voxels.size()-8; i >= 0; i -= 8) {
+			int x = (int)voxels[i];
+			int y = (int)voxels[i+1];
+			int z = (int)voxels[i+2];
+			int voxel_radius_pixels = (int)voxels[i+6] * img_width / (bx - tx);
+			switch(view_type) {
+				case 0: {
+					x = (x - tx) * img_height / (bx - tx);
+					y = (y - ty) * img_height / (by - ty);
+					break;
+				}
+				case 1: {
+					x = (x - tx) * img_height / (bx - tx);
+					y = (z - tz) * img_height / (bz - tz);
+					break;
+				}
+				case 2: {
+					x = (y - ty) * img_height / (by - ty);
+					y = (z - tz) * img_height / (bz - tz);
+					break;
+				}
+				case 3: {
+					int x0 = ((x - tx) * img_height / ((bx - tx)*2));
+					int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
+
+					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+							if ((xx > -1) && (xx < img_width) &&
+								(yy > -1) && (yy < img_height)) {
+								int n = ((yy * img_width) + xx) * 3;
+								img[n+2] = (unsigned char)voxels[i+3];
+								img[n+1] = (unsigned char)voxels[i+4];
+								img[n] = (unsigned char)voxels[i+5];
+							}
+						}
+					}
+
+					x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
+					y0 = ((z - tz) * img_height / ((bz - tz)*2));
+
+					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
+						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
+							if ((xx > -1) && (xx < img_width) &&
+								(yy > -1) && (yy < img_height)) {
+								int n = ((yy * img_width) + xx) * 3;
+								img[n+2] = (unsigned char)voxels[i+3];
+								img[n+1] = (unsigned char)voxels[i+4];
+								img[n] = (unsigned char)voxels[i+5];
+							}
+						}
+					}
+
+					x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
+					y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
+					break;
+				}
+			}
+			for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
+				for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
+					if ((xx > -1) && (xx < img_width) &&
+						(yy > -1) && (yy < img_height)) {
+						int n = ((yy * img_width) + xx) * 3;
+						img[n+2] = (unsigned char)voxels[i+3];
+						img[n+1] = (unsigned char)voxels[i+4];
+						img[n] = (unsigned char)voxels[i+5];
+					}
+				}
+			}
+		}
+    }
+}
+
 void omni::show_height_field(
 	unsigned char* img,
 	int img_width,
@@ -2133,10 +2236,11 @@ void omni::voxels_from_features(
 	int camera_to_backing_dist_mm,
 	int camera_height_mm,
 	int* ray_map,
+	int no_of_mirrors,
 	unsigned char* mirror_map,
 	int outer_radius_percent,
 	int mirror_diameter_mm,
-	vector<int> &voxels)
+	vector<short> &voxels)
 {
 	voxels.clear();
 	vector<vector<int> > features_on_plane;
@@ -2148,7 +2252,12 @@ void omni::voxels_from_features(
 	int minimum_matching_score_percent = 0;
 	float pixel_diameter_mm = mirror_diameter_mm / (float)(outer_radius_percent * ray_map_width / 200);
 	pixel_diameter_mm *= mult;
-	bool remove_matched_pixels = true;
+	bool remove_matched_pixels = false;
+
+	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
+		vector<int> f;
+		features_on_plane.push_back(f);
+	}
 
 	for (int p = 0; p < no_of_planes; p++) {
 		int plane_height_mm = start_plane_height_mm + ((end_plane_height_mm - start_plane_height_mm) * p / no_of_planes);
@@ -2178,17 +2287,20 @@ void omni::voxels_from_features(
 		ray_radius_mm /= mult;
 
 		for (int i = (int)vox.size()-4; i >= 0; i -= 4) {
-			int n = vox[i];
-			int x_mm = vox[i+1];
-			int y_mm = vox[i+2];
-			int score = vox[i+3];
+			short n = (short)vox[i]*3;
+			short x_mm = (short)vox[i+1];
+			short y_mm = (short)vox[i+2];
+			short score = (short)vox[i+3];
 
-			voxels.push_back(n);
-			voxels.push_back(x);
-			voxels.push_back(y);
-			voxels.push_back(plane_height_mm);
-			voxels.push_back(ray_radius_mm);
+			voxels.push_back(x_mm);
+			voxels.push_back(y_mm);
+			voxels.push_back((short)plane_height_mm);
+			voxels.push_back((short)ray_map_img[n+2]);
+			voxels.push_back((short)ray_map_img[n+1]);
+			voxels.push_back((short)ray_map_img[n]);
+			voxels.push_back((short)ray_radius_mm);
 			voxels.push_back(score);
+
 		}
 	}
 }

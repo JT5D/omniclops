@@ -166,8 +166,8 @@ void RunUnitTests()
 
 int main(int argc, char* argv[]) {
 
-  RunUnitTests();
-  return(0);
+  //RunUnitTests();
+  //return(0);
 
   int ww = 640;
   int hh = 480;
