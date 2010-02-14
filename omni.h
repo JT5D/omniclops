@@ -527,10 +527,17 @@ public:
     	int camera_to_backing_dist_mm,
     	int camera_height_mm,
     	int* ray_map,
+    	int no_of_mirrors,
     	unsigned char* mirror_map,
     	int outer_radius_percent,
     	int mirror_diameter_mm,
-    	vector<int> &voxels);
+    	vector<short> &voxels);
+    static void show_feature_voxels(
+    	unsigned char* img,
+    	int img_width,
+    	int img_height,
+    	vector<short> &voxels,
+    	int view_type);
 
     void compass(int max_variance_degrees);
 
