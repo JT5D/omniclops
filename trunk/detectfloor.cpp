@@ -220,9 +220,14 @@ void detectfloor::detect(
 	unsigned char* img,
 	int* ray_map,
 	unsigned char* mirror_map,
+	unsigned char* feature_map,
     int ground_plane_tollerance_mm,
     int image_plane_tollerance_pixels,
     int max_range_mm,
+    int camera_tx,
+    int camera_ty,
+    int camera_bx,
+    int camera_by,
     vector<int> &floor_features)
 {
 	floor_features.clear();
@@ -232,13 +237,15 @@ void detectfloor::detect(
 	    int fy = features[f+1];
 	    int n = fy*ray_map_width + fx;
 
-	    if (mirror_map[n] == no_of_mirrors) {
-			if ((mirror_map[n-10] != no_of_mirrors) ||
-				(mirror_map[n+10] != no_of_mirrors) ||
-				(mirror_map[n-(ray_map_width*10)] != no_of_mirrors) ||
-				(mirror_map[n+(ray_map_width*10)] != no_of_mirrors)) {
-				features.erase(features.begin()+f);
-				features.erase(features.begin()+f);
+	    if (!((fx > camera_tx) && (fx < camera_bx) && (fy > camera_ty) && (fy < camera_by))) {
+			if (mirror_map[n] == no_of_mirrors) {
+				if ((mirror_map[n-10] != no_of_mirrors) ||
+					(mirror_map[n+10] != no_of_mirrors) ||
+					(mirror_map[n-(ray_map_width*10)] != no_of_mirrors) ||
+					(mirror_map[n+(ray_map_width*10)] != no_of_mirrors)) {
+					features.erase(features.begin()+f);
+					features.erase(features.begin()+f);
+				}
 			}
 	    }
 	}
@@ -274,8 +281,17 @@ void detectfloor::detect(
         mirror_map,
         ground_plane_tollerance_mm,
         max_range_mm,
-        //floor_features);
         reprojected_features);
+
+    int w = ray_map_width/image_plane_tollerance_pixels;
+    int h = ray_map_height/image_plane_tollerance_pixels;
+    memset((void*)feature_map, '\0', w*h);
+    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
+    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
+    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
+    	int n2 = fy1 * w + fx1;
+    	feature_map[n2] = 1;
+    }
 
     // find matching features
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
@@ -283,22 +299,15 @@ void detectfloor::detect(
     	int fy0 = features[f0 + 1];
     	int n = fy0 * ray_map_width + fx0;
     	if ((mirror_map[n] > 0) && (mirror_map[n] != no_of_mirrors)) {
-    	    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
-    	    	int fx1 = reprojected_features[f1];
-    	    	int fy1 = reprojected_features[f1 + 1];
-    	    	int n2 = fy1 * ray_map_width + fx1;
-    	    	if (mirror_map[n2] == mirror_map[n]) {
-    	    		int dx = fx1 - fx0;
-    	    		if ((dx > -image_plane_tollerance_pixels) && (dx < image_plane_tollerance_pixels)) {
-        	    		int dy = fy1 - fy0;
-        	    		if ((dy > -image_plane_tollerance_pixels) && (dy < image_plane_tollerance_pixels)) {
-        	    			floor_features.push_back(fx0);
-        	    			floor_features.push_back(fy0);
-        	    			break;
-        	    		}
-    	    		}
-    	    	}
-    	    }
+    		int fx1 = fx0 / image_plane_tollerance_pixels;
+    		int fy1 = fy0 / image_plane_tollerance_pixels;
+    		int n2 = fy1 * w + fx1;
+    		if ((n2 > -1) && (n2 < w*h)) {
+    		    if (feature_map[n2] != 0) {
+    			    floor_features.push_back(fx0);
+    			    floor_features.push_back(fy0);
+    		    }
+    		}
     	}
     }
 
@@ -335,9 +344,37 @@ void detectfloor::detect(
 
     floor_features.clear();
 
+    /*
+    memset((void*)feature_map, '\0', (w+1)*(h+1));
+    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
+    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
+    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
+    	int n2 = fy1 * w + fx1;
+    	feature_map[n2] = 1;
+    }
+    */
+
     // find matching features in the original mirror
 	int z_mm = (camera_to_backing_dist_mm + focal_length_mm) - (floor_height_mm + focal_length_mm - camera_height_mm);
 	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
+
+	/*
+    for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
+    	int fx0 = features[f0];
+    	int fy0 = features[f0 + 1];
+    	int n = fy0 * ray_map_width + fx0;
+    	if ((mirror_map[n] > 0) && (mirror_map[n] != no_of_mirrors)) {
+    		int fx1 = fx0 / image_plane_tollerance_pixels;
+    		int fy1 = fy0 / image_plane_tollerance_pixels;
+    		int n2 = fy1 * w + fx1;
+    		if (featuremap[n2] != 0) {
+    			floor_features.push_back(fx0);
+    			floor_features.push_back(fy0);
+    		}
+    	}
+    }
+    */
+
 
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
     	int fx0 = features[f0];
@@ -350,7 +387,9 @@ void detectfloor::detect(
     	    	int fy1 = reprojected_features[f1 + 1];
     	    	int n2 = fy1 * ray_map_width + fx1;
     	    	if ((mirror_map[n2] == no_of_mirrors) &&
-    	    	    (ray_map[n2*6 + 5] < ray_map[n2*6 + 2]-20)) {
+    	    	    (ray_map[n2*6 + 5] < ray_map[n2*6 + 2]-20) &&
+    	    	    (!((fx1 > camera_tx) && (fx1 < camera_bx) && (fy1 > camera_ty) && (fy1 < camera_by)))) {
+
     	    		int dx = fx1 - fx0;
     	    		if ((dx > -image_plane_tollerance_pixels) && (dx < image_plane_tollerance_pixels)) {
         	    		int dy = fy1 - fy0;

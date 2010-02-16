@@ -31,6 +31,7 @@ omni::omni(int width, int height) {
 	ray_map = NULL;
 	mirror_lookup = NULL;
 	mirror_map = NULL;
+	feature_map = NULL;
 	calibration_map = NULL;
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
@@ -68,6 +69,9 @@ omni::~omni() {
 	delete[] row_sum;
 	delete[] row_peaks;
 	delete[] temp_row_peaks;
+	if (feature_map != NULL) {
+		delete[] feature_map;
+	}
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -3218,6 +3222,7 @@ void omni::create_ray_map(
 		mirror_map = new unsigned char[img_width*img_height];
 		memset((void*)mirror_map,'\0',img_width*img_height);
 		mirror_lookup = new float[img_width*img_height*2];
+		feature_map = new unsigned char[(img_width/2)*(img_height/2)];
 	}
 
 	float half_pi = 3.1415927f/2;
