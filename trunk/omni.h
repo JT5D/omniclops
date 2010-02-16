@@ -31,7 +31,7 @@
 using namespace std;
 
 
-#define OMNI_MAX_FEATURES           4000
+#define OMNI_MAX_FEATURES           10000
 #define OMNI_MAX_IMAGE_WIDTH        1024
 #define OMNI_MAX_IMAGE_HEIGHT       1024
 #define OMNI_VERTICAL_SAMPLING      4
@@ -538,6 +538,33 @@ public:
     	int img_height,
     	vector<short> &voxels,
     	int view_type);
+    static void project_features(
+    	vector<int> &features,
+    	int mirror_index,
+    	int plane_height_mm,
+    	float focal_length_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int ray_map_width,
+    	int ray_map_height,
+    	int* ray_map,
+    	unsigned char* mirror_map,
+    	int max_range_mm,
+        vector<int> &projected_features);
+    static void reproject_features(
+    	vector<int> &plane_features,
+    	int mirror_index,
+    	int plane_height_mm,
+    	float focal_length_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int* ray_map,
+    	int ray_map_width,
+    	int ray_map_height,
+        unsigned char* mirror_map,
+        int ground_plane_tollerance_mm,
+        int max_range_mm,
+        vector<int> &reprojected_features);
 
     void compass(int max_variance_degrees);
 
