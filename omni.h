@@ -79,6 +79,7 @@ public:
     /* maps raw image pixels to 3D rays */
     int* ray_map;
     unsigned char* mirror_map; // mirror numbers
+    unsigned char* feature_map; // used during projection/reprojection
     float* mirror_lookup; // radii and angles
 
     /* radial lines */

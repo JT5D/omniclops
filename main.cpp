@@ -1304,27 +1304,67 @@ int main(int argc, char* argv[]) {
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
 		int ground_plane_tollerance_mm = 300;
-		int image_plane_tollerance_pixels = 1;
+		int image_plane_tollerance_pixels = 2;
+		int camera_width_pixels = (int)((outer_radius * ww / 200) * 45/100);
+		int camera_height_pixels = (int)((outer_radius * ww / 200) * 30/100);
+		int x_offset = -5;
+		int y_offset = 0;
+		int camera_tx = (mirror_position_pixels[(no_of_mirrors-1)*2]*ww/100) - (camera_width_pixels/2) + x_offset;
+		int camera_ty = (mirror_position_pixels[(no_of_mirrors-1)*2+1]*hh/100) - (camera_height_pixels/2) + y_offset;
+		int camera_bx = camera_tx + camera_width_pixels;
+		int camera_by = camera_ty + camera_height_pixels;
 		int max_range_mm = 5000;
 		detectfloor::detect(
 			features,
 			no_of_mirrors,
 			ww,hh,
-			0,
+			1000,
 			focal_length,
 			(int)dist_to_mirror_centre,
 			(int)camera_height,
 			l_,
 			lcam->ray_map,
 			lcam->mirror_map,
+			lcam->feature_map,
 			ground_plane_tollerance_mm,
 			image_plane_tollerance_pixels,
 			max_range_mm,
+			camera_tx,
+			camera_ty,
+			camera_bx,
+			camera_by,
 			floor_features);
 
 		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
 			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
 		}
+
+		/*
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_tx,camera_ty,
+			camera_bx,camera_ty,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_bx,camera_ty,
+			camera_bx,camera_by,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_bx,camera_by,
+			camera_tx,camera_by,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_tx,camera_by,
+			camera_tx,camera_ty,
+			255,0,0,
+			0,false);
+        */
 	}
 
 	if (optical_flow) {

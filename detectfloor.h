@@ -60,9 +60,14 @@ public:
 		unsigned char* img,
 		int* ray_map,
 		unsigned char* mirror_map,
+		unsigned char* feature_map,
 	    int ground_plane_tollerance_mm,
 	    int image_plane_tollerance_pixels,
 	    int max_range_mm,
+	    int camera_tx,
+	    int camera_ty,
+	    int camera_bx,
+	    int camera_by,
 	    vector<int> &floor_features);
 
 	static void get_closest_features(
