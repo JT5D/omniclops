@@ -2595,6 +2595,177 @@ void omni::match_features_on_plane(
 	}
 }
 
+/*!
+ * \brief project the given image features onto the given height plane
+ * \param features list of features in image coordinates
+ * \param mirror_index index number of the mirror from which features will be projected
+ * \param plane_height_mm height that features are to be projected to
+ * \param focal_length_mm focal length of the camera
+ * \param camera_to_backing_dist_mm distance between the camera and the mirror backing plane
+ * \param camera_height_mm height of the camera above the ground
+ * \param ray_map_width width of the camera image
+ * \param ray_map_height height of the camera image
+ * \param ray_map lookup table containing ray vectors
+ * \param mirror_map map containing mirror indexes
+ * \param max_range_mm maximum range in mm
+ * \param projected_features returned projected features (x,y)
+ */
+void omni::project_features(
+	vector<int> &features,
+	int mirror_index,
+	int plane_height_mm,
+	float focal_length_mm,
+	int camera_to_backing_dist_mm,
+	int camera_height_mm,
+	int ray_map_width,
+	int ray_map_height,
+	int* ray_map,
+	unsigned char* mirror_map,
+	int max_range_mm,
+    vector<int> &projected_features)
+{
+	projected_features.clear();
+
+	int z_mm = (int)(camera_to_backing_dist_mm + focal_length_mm - (plane_height_mm + focal_length_mm - camera_height_mm));
+	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
+
+	for (int f = 0; f < (int)features.size(); f += 2) {
+		int fx = features[f];
+		int fy = features[f+1];
+
+		int n = fy*ray_map_width + fx;
+
+		int mirror = mirror_map[n] - 1;
+		if ((mirror > -1) &&
+			((mirror == mirror_index) || (mirror_index == -1))) {
+			if ((ray_map[n*6 + 2] != 0) &&
+				(ray_map[n*6 + 5] < ray_map[n*6 + 2]-20)) {
+
+				int start_x_mm = ray_map[n*6];
+				int start_y_mm = ray_map[n*6 + 1];
+				int end_x_mm = ray_map[n*6 + 3];
+				int end_y_mm = ray_map[n*6 + 4];
+
+				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+
+				if ((ray_x_mm > -max_range_mm) && (ray_x_mm < max_range_mm) &&
+					(ray_y_mm > -max_range_mm) && (ray_y_mm < max_range_mm)) {
+				    projected_features.push_back(ray_x_mm);
+				    projected_features.push_back(ray_y_mm);
+				}
+
+			}
+		}
+	}
+}
+
+/*!
+ * \brief reproject features from a plane (typically the ground) into image coordinates
+ * \param plane_features features on the plane
+ * \param mirror_index index number of the mirror
+ * \param plane_height_mm height of the plane above the ground
+ * \param focal_length_mm focal length of the camera
+ * \param camera_to_backing_dist_mm distance between the camera and the mirror backing plane
+ * \param camera_height_mm height of the camera above the ground
+ * \param ray_map lookup table containing ray vectors
+ * \param ray_map_width width of the image
+ * \param ray_map_height height of the image
+ * \param mirror_map lookup table containing mirror indexes
+ * \param ground_plane_tollerance_mm tollerance for matching rays on the plane
+ * \param max_range_mm maximum range in millimetres
+ * \param reprojected_features returned reprojected features in image coordinates
+ */
+void omni::reproject_features(
+	vector<int> &plane_features,
+	int mirror_index,
+	int plane_height_mm,
+	float focal_length_mm,
+	int camera_to_backing_dist_mm,
+	int camera_height_mm,
+	int* ray_map,
+	int ray_map_width,
+	int ray_map_height,
+    unsigned char* mirror_map,
+    int ground_plane_tollerance_mm,
+    int max_range_mm,
+    vector<int> &reprojected_features)
+{
+	reprojected_features.clear();
+
+	int z_mm = (camera_to_backing_dist_mm + focal_length_mm) - (plane_height_mm + focal_length_mm - camera_height_mm);
+	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
+
+	int bounding_box_tx = 99999;
+	int bounding_box_ty = 99999;
+	int bounding_box_bx = -99999;
+	int bounding_box_by = -99999;
+	for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
+		int x = plane_features[f];
+		int y = plane_features[f + 1];
+		if (x < bounding_box_tx) bounding_box_tx = x;
+		if (y < bounding_box_ty) bounding_box_ty = y;
+		if (x > bounding_box_bx) bounding_box_bx = x;
+		if (y > bounding_box_by) bounding_box_by = y;
+	}
+	bounding_box_tx -= ground_plane_tollerance_mm;
+	bounding_box_ty -= ground_plane_tollerance_mm;
+	bounding_box_bx += ground_plane_tollerance_mm;
+	bounding_box_by += ground_plane_tollerance_mm;
+
+	if (bounding_box_tx < -max_range_mm) bounding_box_tx = -max_range_mm;
+	if (bounding_box_ty < -max_range_mm) bounding_box_ty = -max_range_mm;
+	if (bounding_box_bx > max_range_mm) bounding_box_bx = max_range_mm;
+	if (bounding_box_by > max_range_mm) bounding_box_by = max_range_mm;
+
+	int bounding_box_width = bounding_box_bx - bounding_box_tx;
+	int bounding_box_height = bounding_box_by - bounding_box_ty;
+	int w = (bounding_box_width / ground_plane_tollerance_mm)+1;
+	int h = (bounding_box_height / ground_plane_tollerance_mm)+1;
+	short ground_features[w*h];
+	memset((void*)ground_features,'\0',w*h*sizeof(short));
+	for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
+		int x = (plane_features[f] - bounding_box_tx) * w / (bounding_box_bx - bounding_box_tx);
+		int y = (plane_features[f+1] - bounding_box_ty) * h / (bounding_box_by - bounding_box_ty);
+		int n = y*w + x;
+		ground_features[n] = (short)(f+1);
+	}
+
+	int n = 0;
+	int i = 0;
+	for (int y = 0; y < ray_map_height; y++) {
+		for (int x = 0; x < ray_map_width; x++, i += 6, n++) {
+
+			if ((ray_map[i + 2] != 0) &&
+				(ray_map[i + 5] < ray_map[i + 2]-20) &&
+				((mirror_index == -1) || (mirror_map[n]-1 == mirror_index))) {
+
+				int start_x_mm = ray_map[i];
+				int start_y_mm = ray_map[i + 1];
+				int end_x_mm = ray_map[i + 3];
+				int end_y_mm = ray_map[i + 4];
+
+				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+				if ((ray_x_mm > bounding_box_tx) && (ray_x_mm < bounding_box_bx)) {
+					int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+					if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
+
+						int xx = (ray_x_mm - bounding_box_tx) * w / bounding_box_width;
+						int yy = (ray_y_mm - bounding_box_ty) * h / bounding_box_height;
+						int n = yy*w + xx;
+						int f = (int)ground_features[n]-1;
+						if (f > -1) {
+							reprojected_features.push_back(x);
+							reprojected_features.push_back(y);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
 void omni::show_voxels(
 	unsigned char* ray_map_img,
 	int tx_mm,

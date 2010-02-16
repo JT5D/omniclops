@@ -22,6 +22,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     --grid --mirrors 5 --loadconfig /home/motters/develop/omniclops/docs/mirrors5.txt --dist 150 --elevation 200 --range 500
+
+    --dev /dev/video1 --nearfeatures --mirrors 5 --radius 36 --inner 0 --mirrorx0 19 --mirrory0 14 --mirrorx1 19 --mirrory1 77 --mirrorx2 82 --mirrory2 77 --mirrorx3 83 --mirrory3 17 --mirrorx4 49 --mirrory4 45 --elevation 1650
 */
 
 #include <iostream>
@@ -36,6 +38,7 @@
 #include "anyoption.h"
 #include "drawing.h"
 #include "omni.h"
+#include "detectfloor.h"
 #include "fast.h"
 #include "libcam.h"
 
@@ -208,6 +211,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --griddim              Occupancy grid dimension in cells");
   opt->addUsage( "     --grid                 Show occupancy grid");
   opt->addUsage( "     --features             Show edge features");
+  opt->addUsage( "     --nearfeatures         Show nearby edge features");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
   opt->addUsage( "     --ground               Show ground plane");
@@ -309,6 +313,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "overlayangles" );
   opt->setFlag(  "grid" );
   opt->setFlag(  "tests" );
+  opt->setFlag(  "nearfeatures" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -402,6 +407,21 @@ int main(int argc, char* argv[]) {
   bool show_overlay_angles = false;
   bool show_overlay = false;
   bool show_occupancy_grid = false;
+  bool show_close_features = false;
+
+  if( opt->getFlag( "nearfeatures" ) ) {
+	  show_occupancy_grid = false;
+	  show_overlay_angles = false;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+	  show_close_features = true;
+  }
+
   if( opt->getFlag( "grid" ) ) {
 	  show_occupancy_grid = true;
 	  show_overlay_angles = false;
@@ -412,6 +432,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "overlay" ) ) {
@@ -424,6 +445,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "overlayangles" ) ) {
@@ -436,6 +458,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "ground" ) ) {
@@ -448,6 +471,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   bool optical_flow = false;
@@ -465,6 +489,7 @@ int main(int argc, char* argv[]) {
 	  show_features = true;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
@@ -477,6 +502,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  unwarp_features = true;
 	  show_FAST = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "lines" ) ) {
@@ -489,6 +515,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
@@ -501,6 +528,7 @@ int main(int argc, char* argv[]) {
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
+	  show_close_features = false;
   }
 
   float baseline = 100;
@@ -835,7 +863,7 @@ int main(int argc, char* argv[]) {
   unsigned char* height_field_img = NULL;
 
   /* feature detection params */
-  int inhibition_radius = 6;
+  int inhibition_radius = 4;
   unsigned int minimum_response = 250;
 
   omni* lcam = new omni(ww, hh);
@@ -886,7 +914,7 @@ int main(int argc, char* argv[]) {
 
 
   float cam_height = camera_height;
-  if (show_occupancy_grid) cam_height = 0;
+  if ((show_occupancy_grid) || (show_ground_features)) cam_height = 0;
 
   /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
@@ -902,6 +930,7 @@ int main(int argc, char* argv[]) {
 
   Match2D flow_matches[MAX_FLOW_MATCHES];
   unsigned char* img_occlusions = NULL;
+  vector<int> features;
 
   /* load image from file */
   if (load_filename != "") {
@@ -932,6 +961,7 @@ int main(int argc, char* argv[]) {
 
 	/* display the features */
 	if ((show_features) ||
+		(show_close_features) ||
 		(unwarp_features) ||
 		(edges_filename != "") ||
 		(radial_lines_filename != "") ||
@@ -941,7 +971,7 @@ int main(int argc, char* argv[]) {
 
 		int inner = (int)inner_radius;
 		int outer = (int)outer_radius;
-		if (unwarp_image) {
+		if ((unwarp_image) || (no_of_mirrors > 1)) {
 			inner = 0;
 			outer = 9999;
 		}
@@ -959,6 +989,8 @@ int main(int argc, char* argv[]) {
 		if ((!show_lines) &&
 			(!unwarp_features)) {
 
+			features.clear();
+
 			/* vertically oriented features */
 			int row = 0;
 			int feats_remaining = lcam->features_per_row[row];
@@ -968,7 +1000,13 @@ int main(int argc, char* argv[]) {
 				int x = (int)lcam->feature_x[f] / OMNI_SUB_PIXEL;
 				int y = 4 + (row * OMNI_VERTICAL_SAMPLING);
 
-				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				features.push_back(x);
+				features.push_back(y);
+
+				if ((!show_close_features) &&
+					(!show_ground_features)) {
+				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				}
 
 				/* move to the next row */
 				if (feats_remaining <= 0) {
@@ -986,7 +1024,13 @@ int main(int argc, char* argv[]) {
 				int y = (int)lcam->feature_y[f] / OMNI_SUB_PIXEL;
 				int x = 4 + (col * OMNI_HORIZONTAL_SAMPLING);
 
-				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				features.push_back(x);
+				features.push_back(y);
+
+				if ((!show_close_features) &&
+					(!show_ground_features)) {
+				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
+				}
 
 				/* move to the next column */
 				if (feats_remaining <= 0) {
@@ -1048,7 +1092,7 @@ int main(int argc, char* argv[]) {
 	    lcam->show_ground_plane(l_,ww,hh,range_mm);
 	}
 
-	if (show_ground_features) {
+	if ((show_ground_features) && (no_of_mirrors == 1)) {
 	    lcam->show_ground_plane_features(l_,ww,hh,range_mm,no_of_feats,no_of_feats_horizontal);
 	}
 
@@ -1183,6 +1227,104 @@ int main(int argc, char* argv[]) {
 */
 	    omni::show_plane_occupancy(l_,ww,hh,no_of_planes,plane_occupancy);
 
+	}
+
+	if (show_close_features) {
+		vector<int> closest_features;
+		vector<int> closest_features2;
+		vector<vector<unsigned char> > floor_colour;
+		for (int col = 0; col < 3; col++) {
+			vector<unsigned char> fcolour;
+			floor_colour.push_back(fcolour);
+		}
+		int angular_increment_degrees = 4;
+		int cam_width = 28;
+		int cam_height = 15;
+		int centre_x = (int)(mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100);
+		int centre_y = (int)(mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100);
+		detectfloor::get_closest_features(
+			features,
+			centre_x,
+			centre_y,
+			no_of_mirrors-1,
+			ww, hh,
+			l_,
+			lcam->mirror_map,
+			angular_increment_degrees,
+			cam_width, cam_height,
+			closest_features,
+			floor_colour);
+
+/*
+		for (int m = 0; m < no_of_mirrors; m++) {
+			detectfloor::find_floor_using_colour(
+				features,
+				floor_colour,
+				m,
+				ww, hh,
+				l_,
+				lcam->mirror_map,
+				true,
+				0,255,0,
+				0,
+				closest_features2);
+		}
+*/
+		for (int i = 0; i < (int)closest_features.size(); i += 2) {
+			drawing::drawCross(l_, ww, hh, closest_features[i], closest_features[i+1], 2, 255, 0, 0, 0);
+		}
+
+		drawing::drawLine(
+			l_, ww, hh,
+			centre_x - cam_width, centre_y-cam_height,
+			centre_x + cam_width, centre_y-cam_height,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			centre_x - cam_width, centre_y-cam_height,
+			centre_x - cam_width, centre_y+cam_height,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			centre_x - cam_width, centre_y+cam_height,
+			centre_x + cam_width, centre_y+cam_height,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			centre_x + cam_width, centre_y-cam_height,
+			centre_x + cam_width, centre_y+cam_height,
+			255,0,0,
+			0,false);
+
+	}
+
+	if ((show_ground_features) && (no_of_mirrors > 1)) {
+		vector<int> floor_features;
+		int ground_plane_tollerance_mm = 300;
+		int image_plane_tollerance_pixels = 1;
+		int max_range_mm = 5000;
+		detectfloor::detect(
+			features,
+			no_of_mirrors,
+			ww,hh,
+			0,
+			focal_length,
+			(int)dist_to_mirror_centre,
+			(int)camera_height,
+			l_,
+			lcam->ray_map,
+			lcam->mirror_map,
+			ground_plane_tollerance_mm,
+			image_plane_tollerance_pixels,
+			max_range_mm,
+			floor_features);
+
+		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
+			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
+		}
 	}
 
 	if (optical_flow) {
