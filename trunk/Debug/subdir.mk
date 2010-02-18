@@ -7,6 +7,7 @@ CPP_SRCS += \
 ../anyoption.cpp \
 ../bitmap.cpp \
 ../detectfloor.cpp \
+../detectverticals.cpp \
 ../drawing.cpp \
 ../fast.cpp \
 ../libcam.cpp \
@@ -19,6 +20,7 @@ OBJS += \
 ./anyoption.o \
 ./bitmap.o \
 ./detectfloor.o \
+./detectverticals.o \
 ./drawing.o \
 ./fast.o \
 ./libcam.o \
@@ -31,6 +33,7 @@ CPP_DEPS += \
 ./anyoption.d \
 ./bitmap.d \
 ./detectfloor.d \
+./detectverticals.d \
 ./drawing.d \
 ./fast.d \
 ./libcam.d \

@@ -85,20 +85,6 @@ public:
         vector<int> &closest_features,
         vector<vector<unsigned char> > &floor_colour);
 
-	static void find_floor_using_colour(
-		vector<int> &features,
-		vector<vector<unsigned char> > &floor_colour,
-		int mirror_index,
-		int ray_map_width,
-		int ray_map_height,
-		unsigned char* img,
-
-		unsigned char* mirror_map,
-		bool update_image,
-		int r, int g, int b,
-		int tollerance,
-	    vector<int> &closest_features);
-
 };
 
 #endif /* DETECTFLOOR_H_ */
