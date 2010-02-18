@@ -1,14 +1,26 @@
 /*
- * detectfloor.cpp
- *
- *  Created on: 15-Feb-2010
- *      Author: motters
- */
+    used to detect the floor in an omnidirectional image
+    Copyright (C) 2010 Bob Mottram
+    fuzzgun@gmail.com
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include "detectfloor.h"
 
 /*!
- * \brief returns the closest features to the centre of the mirror
+ * \brief returns the closest features to the centre of the mirror.  This is a bit hacky, and not recommended
  * \param features list of features in image coordinates
  * \param mirror_centre_x_pixels x coordinate of the centre of the mirror
  * \param mirror_centre_y_pixels y coordinate of the centre of the mirror
@@ -161,53 +173,29 @@ void detectfloor::get_closest_features(
     }
 }
 
-void detectfloor::find_floor_using_colour(
-	vector<int> &features,
-	vector<vector<unsigned char> > &floor_colour,
-	int mirror_index,
-	int ray_map_width,
-	int ray_map_height,
-	unsigned char* img,
-	unsigned char* mirror_map,
-	bool update_image,
-	int r, int g, int b,
-	int tollerance,
-    vector<int> &closest_features)
-{
-	closest_features.clear();
-	bool matched;
-	int n = 0;
-	for (int y = 0; y < ray_map_height; y++) {
-		for (int x = 0; x < ray_map_width; x++, n++) {
-			int mirror = mirror_map[n] - 1;
-			if (mirror == mirror_index) {
-				for (int col = 0; col < 3; col++) {
-					matched = false;
-					for (int i = (int)floor_colour[col].size()-1; i >= 0; i--) {
-				        int diff = (int)img[n*3 + col] - (int)floor_colour[col][i];
-				        if ((diff >= -tollerance) && (diff <= tollerance)) {
-				        	matched = true;
-				        	break;
-				        }
-					}
-					if (!matched) {
-                        break;
-					}
-					else {
-						if (col == 2) {
-							if (update_image) {
-								img[n*3] = b;
-								img[n*3 + 1] = g;
-								img[n*3 + 2] = r;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
+/*!
+ * \brief detect features close to the floor
+ * \param features list of image features
+ * \param no_of_mirrors number of mirrors
+ * \param ray_map_width width of the image
+ * \param ray_map_height height of the image
+ * \param floor_height_mm height of the floor
+ * \param focal_length_mm focal length of the camera
+ * \param camera_to_backing_dist_mm distance between the camera and the mirror backing
+ * \param camera_height_mm height of the camera above the ground
+ * \param img colour image data
+ * \param ray_map lookup table containing ray vectors
+ * \param mirror_map lookup table containing mirror indexes
+ * \param feature_map buffer used to store feature indexes
+ * \param ground_plane_tollerance_mm tollerance for matching features on the ground plane
+ * \param image_plane_tollerance_pixels tollerance for matching features on the image plane
+ * \param max_range_mm maximum ranging distance
+ * \param camera_tx bounding box for the camera
+ * \param camera_ty bounding box for the camera
+ * \param camera_bx bounding box for the camera
+ * \param camera_by bounding box for the camera
+ * \param floor_features returned features close to the floor
+ */
 void detectfloor::detect(
 	vector<int> &features,
 	int no_of_mirrors,
@@ -344,37 +332,9 @@ void detectfloor::detect(
 
     floor_features.clear();
 
-    /*
-    memset((void*)feature_map, '\0', (w+1)*(h+1));
-    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
-    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
-    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
-    	int n2 = fy1 * w + fx1;
-    	feature_map[n2] = 1;
-    }
-    */
-
     // find matching features in the original mirror
 	int z_mm = (camera_to_backing_dist_mm + focal_length_mm) - (floor_height_mm + focal_length_mm - camera_height_mm);
 	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
-
-	/*
-    for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
-    	int fx0 = features[f0];
-    	int fy0 = features[f0 + 1];
-    	int n = fy0 * ray_map_width + fx0;
-    	if ((mirror_map[n] > 0) && (mirror_map[n] != no_of_mirrors)) {
-    		int fx1 = fx0 / image_plane_tollerance_pixels;
-    		int fy1 = fy0 / image_plane_tollerance_pixels;
-    		int n2 = fy1 * w + fx1;
-    		if (featuremap[n2] != 0) {
-    			floor_features.push_back(fx0);
-    			floor_features.push_back(fy0);
-    		}
-    	}
-    }
-    */
-
 
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
     	int fx0 = features[f0];

@@ -39,6 +39,7 @@
 #include "drawing.h"
 #include "omni.h"
 #include "detectfloor.h"
+#include "detectverticals.h"
 #include "fast.h"
 #include "libcam.h"
 
@@ -1318,7 +1319,7 @@ int main(int argc, char* argv[]) {
 			features,
 			no_of_mirrors,
 			ww,hh,
-			1000,
+			500,
 			focal_length,
 			(int)dist_to_mirror_centre,
 			(int)camera_height,
