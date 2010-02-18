@@ -41,29 +41,44 @@ protected:
 		int ray_map_height,
 		unsigned char* mirror_map,
 	    vector<int> &vertical_features);
-	static void get_possible_verticals(
+
+	static void get_vertical_features_centre(
 		vector<int> &features,
-		int* mirror_centre_pixels,
+		float* mirror_position_pixels,
 		int min_radius_pixels,
 		int max_radius_pixels,
 		int no_of_mirrors,
 		int ray_map_width,
+		int ray_map_height,
+		unsigned char* mirror_map,
+	    vector<int> &possible_verticals);
+
+	static void get_possible_verticals(
+		vector<int> &features,
+		float* mirror_centre_pixels,
+		int min_radius_pixels,
+		int max_radius_pixels,
+		int no_of_mirrors,
+		int ray_map_width,
+		int ray_map_height,
 		unsigned char* mirror_map,
 	    vector<int> &possible_verticals);
 
 public:
-	static void show(
+	static void show_point_cloud(
 		unsigned char* img,
 		int width,
 		int height,
-		vector<int> &points,
-		int max_range_mm);
+		vector<int> &point_cloud,
+		int max_range_mm,
+		int max_height_mm,
+		int view_type);
 
 	static void get_point_cloud(
 		vector<int> &features,
 		vector<int> &floor_features,
-		int* mirror_centre_pixels,
-		int outer_radius_percent,
+		float* mirror_position_pixels,
+		float outer_radius_percent,
 		int min_radius_percent,
 		int max_radius_percent,
 		int no_of_mirrors,
@@ -71,6 +86,7 @@ public:
 		int ray_map_height,
 		int* ray_map,
 		unsigned char* mirror_map,
+		int min_range_mm,
 		int max_range_mm,
 		int max_height_mm,
 		int max_vertical_separation_per_metre,

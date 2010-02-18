@@ -179,6 +179,7 @@ int main(int argc, char* argv[]) {
   bool show_FAST = false;
   bool show_features = false;
   bool show_ground_features = false;
+  bool show_point_cloud = false;
   bool show_ground = false;
   bool show_lines = false;
   bool unwarp_features = false;
@@ -215,6 +216,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --nearfeatures         Show nearby edge features");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
+  opt->addUsage( "     --pointcloud           Show point cloud");
   opt->addUsage( "     --ground               Show ground plane");
   opt->addUsage( "     --overlay              Show overlaid ray intersections with the image plane");
   opt->addUsage( "     --overlayangles        Show overlaid ray angles with the image plane");
@@ -309,6 +311,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "features" );
   opt->setFlag(  "lines" );
   opt->setFlag(  "groundfeatures" );
+  opt->setFlag(  "pointcloud" );
   opt->setFlag(  "ground" );
   opt->setFlag(  "overlay" );
   opt->setFlag(  "overlayangles" );
@@ -417,6 +420,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -430,6 +434,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -443,6 +448,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -456,6 +462,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -469,6 +476,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = true;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -487,6 +495,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = true;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -500,6 +509,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  unwarp_features = true;
 	  show_FAST = false;
@@ -513,6 +523,7 @@ int main(int argc, char* argv[]) {
 	  show_lines = true;
 	  show_ground = false;
 	  show_ground_features = false;
+	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -526,6 +537,21 @@ int main(int argc, char* argv[]) {
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = true;
+	  show_point_cloud = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+	  show_close_features = false;
+  }
+
+  if( opt->getFlag( "pointcloud" ) ) {
+	  show_occupancy_grid = false;
+	  show_overlay_angles = false;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_point_cloud = true;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -915,7 +941,11 @@ int main(int argc, char* argv[]) {
 
 
   float cam_height = camera_height;
-  if ((show_occupancy_grid) || (show_ground_features)) cam_height = 0;
+  if ((show_occupancy_grid) ||
+	  (show_ground_features) ||
+	  (show_point_cloud)) {
+	  cam_height = 0;
+  }
 
   /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
@@ -968,6 +998,7 @@ int main(int argc, char* argv[]) {
 		(radial_lines_filename != "") ||
 		(save_rays != "") ||
 		(show_ground_features) ||
+		(show_point_cloud) ||
 		(show_lines)) {
 
 		int inner = (int)inner_radius;
@@ -1005,7 +1036,8 @@ int main(int argc, char* argv[]) {
 				features.push_back(y);
 
 				if ((!show_close_features) &&
-					(!show_ground_features)) {
+					(!show_ground_features) &&
+					(!show_point_cloud)) {
 				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 				}
 
@@ -1029,7 +1061,8 @@ int main(int argc, char* argv[]) {
 				features.push_back(y);
 
 				if ((!show_close_features) &&
-					(!show_ground_features)) {
+					(!show_ground_features) &&
+                    (!show_point_cloud)) {
 				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 				}
 
@@ -1302,9 +1335,10 @@ int main(int argc, char* argv[]) {
 
 	}
 
-	if ((show_ground_features) && (no_of_mirrors > 1)) {
+	if (((show_ground_features) || (show_point_cloud)) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
-		int ground_plane_tollerance_mm = 300;
+		int floor_height_mm = 0;
+		int ground_plane_tollerance_mm = 200 + (floor_height_mm / 20);
 		int image_plane_tollerance_pixels = 2;
 		int camera_width_pixels = (int)((outer_radius * ww / 200) * 45/100);
 		int camera_height_pixels = (int)((outer_radius * ww / 200) * 30/100);
@@ -1314,12 +1348,12 @@ int main(int argc, char* argv[]) {
 		int camera_ty = (mirror_position_pixels[(no_of_mirrors-1)*2+1]*hh/100) - (camera_height_pixels/2) + y_offset;
 		int camera_bx = camera_tx + camera_width_pixels;
 		int camera_by = camera_ty + camera_height_pixels;
-		int max_range_mm = 5000;
+		int max_range_mm = 100000;
 		detectfloor::detect(
 			features,
 			no_of_mirrors,
 			ww,hh,
-			500,
+			floor_height_mm,
 			focal_length,
 			(int)dist_to_mirror_centre,
 			(int)camera_height,
@@ -1336,36 +1370,78 @@ int main(int argc, char* argv[]) {
 			camera_by,
 			floor_features);
 
-		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
-			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
+		if (!show_point_cloud) {
+		    for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
+			    drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
+		    }
+			/*
+			drawing::drawLine(
+				l_, ww, hh,
+				camera_tx,camera_ty,
+				camera_bx,camera_ty,
+				255,0,0,
+				0,false);
+			drawing::drawLine(
+				l_, ww, hh,
+				camera_bx,camera_ty,
+				camera_bx,camera_by,
+				255,0,0,
+				0,false);
+			drawing::drawLine(
+				l_, ww, hh,
+				camera_bx,camera_by,
+				camera_tx,camera_by,
+				255,0,0,
+				0,false);
+			drawing::drawLine(
+				l_, ww, hh,
+				camera_tx,camera_by,
+				camera_tx,camera_ty,
+				255,0,0,
+				0,false);
+	        */
 		}
+		else {
 
-		/*
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_tx,camera_ty,
-			camera_bx,camera_ty,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_bx,camera_ty,
-			camera_bx,camera_by,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_bx,camera_by,
-			camera_tx,camera_by,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_tx,camera_by,
-			camera_tx,camera_ty,
-			255,0,0,
-			0,false);
-        */
+			int min_radius_percent = 60;
+			int max_radius_percent = 95;
+			int max_vertical_separation_per_metre = 100000;
+			int max_intersection_samples = 8000;
+			vector<int> vertical_features;
+		    vector<int> point_cloud;
+		    int min_range_mm = 500;
+		    int max_height_mm = 3000;
+
+		    max_range_mm = 3000;
+
+		    detectverticals::get_point_cloud(
+				features,
+				floor_features,
+				mirror_position_pixels,
+				outer_radius,
+				min_radius_percent,
+				max_radius_percent,
+				no_of_mirrors,
+				ww,hh,
+				lcam->ray_map,
+				lcam->mirror_map,
+				min_range_mm,
+				max_range_mm,
+				max_height_mm,
+				max_vertical_separation_per_metre,
+				max_intersection_samples,
+				vertical_features,
+			    point_cloud);
+
+		    //printf("points: %d\n", (int)point_cloud.size()/3);
+
+		    detectverticals::show_point_cloud(
+			    l_,ww,hh,
+			    point_cloud,
+			    max_range_mm,
+			    max_height_mm,
+			    3);
+		}
 	}
 
 	if (optical_flow) {

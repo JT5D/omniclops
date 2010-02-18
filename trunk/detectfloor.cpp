@@ -238,7 +238,7 @@ void detectfloor::detect(
 	    }
 	}
 
-	// project features from one mirror to the floor plane
+	// project features from centre mirror to the floor plane
 	vector<int> projected_features;
     omni::project_features(
     	features,
@@ -281,7 +281,7 @@ void detectfloor::detect(
     	feature_map[n2] = 1;
     }
 
-    // find matching features
+    // find matching features in peripheral mirrors
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
     	int fx0 = features[f0];
     	int fy0 = features[f0 + 1];
@@ -299,7 +299,7 @@ void detectfloor::detect(
     	}
     }
 
-	// project floor features from other mirrors to the floor plane
+	// project floor features from peripheral mirrors to the floor plane
     omni::project_features(
     	floor_features,
     	-1,
@@ -314,7 +314,7 @@ void detectfloor::detect(
     	max_range_mm,
         projected_features);
 
-    //reproject floor plane features back into the single mirror image plane
+    //reproject floor plane features back into the centre mirror image plane
     omni::reproject_features(
     	projected_features,
     	no_of_mirrors-1,
@@ -332,56 +332,36 @@ void detectfloor::detect(
 
     floor_features.clear();
 
-    // find matching features in the original mirror
-	int z_mm = (camera_to_backing_dist_mm + focal_length_mm) - (floor_height_mm + focal_length_mm - camera_height_mm);
-	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
+    memset((void*)feature_map, '\0', w*h);
+    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
+    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
+    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
+    	int n2 = fy1 * w + fx1;
+    	feature_map[n2] = 1;
+    }
 
+    // find matching features in centre mirror
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
     	int fx0 = features[f0];
     	int fy0 = features[f0 + 1];
-    	int n = fy0 * ray_map_width + fx0;
-    	if ((mirror_map[n] == no_of_mirrors) &&
-    		(ray_map[n*6 + 5] < ray_map[n*6 + 2]-20)) {
-    	    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
-    	    	int fx1 = reprojected_features[f1];
-    	    	int fy1 = reprojected_features[f1 + 1];
-    	    	int n2 = fy1 * ray_map_width + fx1;
-    	    	if ((mirror_map[n2] == no_of_mirrors) &&
-    	    	    (ray_map[n2*6 + 5] < ray_map[n2*6 + 2]-20) &&
-    	    	    (!((fx1 > camera_tx) && (fx1 < camera_bx) && (fy1 > camera_ty) && (fy1 < camera_by)))) {
 
-    	    		int dx = fx1 - fx0;
-    	    		if ((dx > -image_plane_tollerance_pixels) && (dx < image_plane_tollerance_pixels)) {
-        	    		int dy = fy1 - fy0;
-        	    		if ((dy > -image_plane_tollerance_pixels) && (dy < image_plane_tollerance_pixels)) {
+    	if (!((fx0 > camera_tx) && (fx0 < camera_bx) &&
+    		(fy0 > camera_ty) && (fy0 < camera_by))) {
 
-        					int start_x_mm = ray_map[n*6];
-        					int start_y_mm = ray_map[n*6 + 1];
-        					int end_x_mm = ray_map[n*6 + 3];
-        					int end_y_mm = ray_map[n*6 + 4];
+			int n = fy0 * ray_map_width + fx0;
+			if (mirror_map[n] == no_of_mirrors) {
+				int fx1 = fx0 / image_plane_tollerance_pixels;
+				int fy1 = fy0 / image_plane_tollerance_pixels;
+				int n2 = fy1 * w + fx1;
+				if ((n2 > -1) && (n2 < w*h)) {
+					if (feature_map[n2] != 0) {
+						floor_features.push_back(fx0);
+						floor_features.push_back(fy0);
+					}
+				}
+			}
 
-        					int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-        					if ((ray_x_mm > -max_range_mm) && (ray_x_mm < max_range_mm)) {
-        						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-        						if ((ray_y_mm > -max_range_mm) && (ray_y_mm < max_range_mm)) {
-
-
-        							if ((mirror_map[n-10] == no_of_mirrors) &&
-        							    (mirror_map[n+10] == no_of_mirrors) &&
-        							    (mirror_map[n-(ray_map_width*10)] == no_of_mirrors) &&
-        							    (mirror_map[n+(ray_map_width*10)] == no_of_mirrors)) {
-
-        	    			            floor_features.push_back(fx0);
-        	    			            floor_features.push_back(fy0);
-        	    			            break;
-        							}
-        						}
-        					}
-
-        	    		}
-    	    		}
-    	    	}
-    	    }
     	}
     }
+
 }
