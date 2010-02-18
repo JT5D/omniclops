@@ -67,17 +67,14 @@ void detectverticals::get_vertical_features(
 void detectverticals::get_possible_verticals(
 	vector<int> &features,
 	int* mirror_centre_pixels,
-	int min_radius_percent,
-	int max_radius_percent,
+	int min_radius_pixels,
+	int max_radius_pixels,
 	int no_of_mirrors,
 	int ray_map_width,
 	unsigned char* mirror_map,
     vector<int> &possible_verticals)
 {
 	possible_verticals.clear();
-
-	int min_radius_pixels = min_radius_percent * ray_map_width / 100;
-    int max_radius_pixels = max_radius_percent * ray_map_width / 100;
 
     min_radius_pixels *= min_radius_pixels;
     max_radius_pixels *= max_radius_pixels;
@@ -100,10 +97,11 @@ void detectverticals::get_possible_verticals(
 }
 
 
-void detectverticals::detect(
+void detectverticals::get_point_cloud(
 	vector<int> &features,
 	vector<int> &floor_features,
 	int* mirror_centre_pixels,
+	int outer_radius_percent,
 	int min_radius_percent,
 	int max_radius_percent,
 	int no_of_mirrors,
@@ -112,10 +110,17 @@ void detectverticals::detect(
 	int* ray_map,
 	unsigned char* mirror_map,
 	int max_range_mm,
+	int max_height_mm,
+	int max_vertical_separation_per_metre,
+	int max_intersection_samples,
 	vector<int> &vertical_features,
-    vector<int> &points)
+    vector<int> &point_cloud)
 {
-	points.clear();
+	int outer_radius_pixels = outer_radius_percent * ray_map_width / 200;
+	int min_radius_pixels = outer_radius_pixels * min_radius_percent / 100;
+	int max_radius_pixels = outer_radius_pixels * max_radius_percent / 100;
+
+	point_cloud.clear();
 	int max_range_mm_sqr = max_range_mm*max_range_mm;
 
 	// find vertical features within the centre mirror
@@ -133,53 +138,111 @@ void detectverticals::detect(
 	get_possible_verticals(
 		features,
 		mirror_centre_pixels,
-		min_radius_percent,
-		max_radius_percent,
+		min_radius_pixels,
+		max_radius_pixels,
 		no_of_mirrors,
 		ray_map_width,
 		mirror_map,
 	    possible_verticals);
 
+	if (max_intersection_samples > (int)possible_verticals.size()/2) {
+		max_intersection_samples = (int)possible_verticals.size()/2;
+	}
+
     float xi=0, yi=0;
 
-	for (int i = (int)vertical_features.size()-2; i >= 0; i -= 2) {
+    // compute ray intersections
+ 	for (int i = (int)vertical_features.size()-2; i >= 0; i -= 2) {
 		int x0 = vertical_features[i];
 		int y0 = vertical_features[i+1];
 		int n = (y0*ray_map_width + x0)*6;
 		int xx0 = ray_map[n];
 		int yy0 = ray_map[n+1];
+		int zz0 = ray_map[n+2];
 		int xx1 = ray_map[n+3];
 		int yy1 = ray_map[n+4];
+		int zz1 = ray_map[n+5];
 		int dx = xx1 - xx0;
 		int dy = yy1 - yy0;
+		int dz = zz1 - zz0;
 		xx1 = xx0 + (dx*1000);
 		yy1 = yy0 + (dy*1000);
+		int r = (int)sqrt(dx*dx + dy*dy);
+		if (r > 0) {
+			// randomly sample rays, which helps to keep the amount of computation constant
+			for (int sample = max_intersection_samples-1; sample >= 0; sample--) {
+			    int j = (rand() % (max_intersection_samples-1))*2;
+				int x1 = possible_verticals[j];
+				int y1 = possible_verticals[j+1];
+				n = (y1*ray_map_width + x1)*6;
+				int xx2 = ray_map[n];
+				int yy2 = ray_map[n+1];
+				int xx3 = ray_map[n+3];
+				int yy3 = ray_map[n+4];
+				int dx2 = xx3 - xx2;
+				int dy2 = yy3 - yy2;
+				xx3 = xx2 + (dx2*1000);
+				yy3 = yy2 + (dy2*1000);
 
-		for (int j = (int)possible_verticals.size()-2; i >= 0; i -= 2) {
-			int x1 = possible_verticals[j];
-			int y1 = possible_verticals[j+1];
-			n = (y1*ray_map_width + x1)*6;
-			int xx2 = ray_map[n];
-			int yy2 = ray_map[n+1];
-			int xx3 = ray_map[n+3];
-			int yy3 = ray_map[n+4];
-			dx = xx3 - xx2;
-			dy = yy3 - yy2;
-			xx3 = xx2 + (dx*1000);
-			yy3 = yy2 + (dy*1000);
-
-		    if (omni::intersection(
-		        xx0,yy0,xx1,yy1,
-		        xx2,yy2,xx3,yy3,
-		        xi, yi)) {
-		    	int range = (int)(xi*xi + yi*yi);
-		    	if (range < max_range_mm_sqr) {
-		    		points.push_back((int)xi);
-		    		points.push_back((int)yi);
-		    		points.push_back(i);
-		    	}
-		    }
-
+				// at what point do the rays cross?
+				if (omni::intersection(
+					xx0,yy0,xx1,yy1,
+					xx2,yy2,xx3,yy3,
+					xi, yi)) {
+					// length of the ray
+					int range = (int)(xi*xi + yi*yi);
+					if (range < max_range_mm_sqr) {
+						range = (int)sqrt(range);
+						// height of the ray intersection point
+						zz1 = zz0 + (dz*range/r);
+						// is the height within limits?
+						if ((zz1 > 0) && (zz1 < max_height_mm)) {
+							int zz2 = ray_map[n+2];
+							int zz3 = ray_map[n+5];
+							int dz2 = zz3 - zz2;
+							int r2 = (int)sqrt(dx2*dx2 + dy2*dy2);
+							// height of the second ray at the intersection point
+							zz3 = zz2 + (dz2*range/r2);
+							if ((zz3 > 0) && (zz3 < max_height_mm)) {
+								// do they intersect at a similat height?
+							    if (abs(zz3 - zz1) < max_vertical_separation_per_metre * range / 1000) {
+							    	// add a point to the cloud
+							        point_cloud.push_back((int)xi);
+							        point_cloud.push_back((int)yi);
+							        point_cloud.push_back(zz1);
+							    }
+							}
+						}
+					}
+				}
+			}
 		}
+	}
+}
+
+/*!
+ * \brief show overhead view of ray intersections
+ * \param img colour image data
+ * \param width width of the image
+ * \param height height of the image
+ * \param points list containing ray intersection points
+ * \param max_range_mm maximum range
+ */
+void detectverticals::show(
+	unsigned char* img,
+	int width,
+	int height,
+	vector<int> &points,
+	int max_range_mm)
+{
+	// clear the image
+	memset((void*)img, '\0', width*height*3);
+
+	// draw the points
+	for (int i = (int)points.size()-3; i >= 0; i -= 3) {
+		int x = (points[i] + max_range_mm) * height / (max_range_mm*2);
+		int y = (points[i + 1] + max_range_mm) * height / (max_range_mm*2);
+
+        drawing::drawCross(img,width,height,x,y,4,0,255,0,0);
 	}
 }

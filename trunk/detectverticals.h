@@ -44,18 +44,26 @@ protected:
 	static void get_possible_verticals(
 		vector<int> &features,
 		int* mirror_centre_pixels,
-		int min_radius_percent,
-		int max_radius_percent,
+		int min_radius_pixels,
+		int max_radius_pixels,
 		int no_of_mirrors,
 		int ray_map_width,
 		unsigned char* mirror_map,
 	    vector<int> &possible_verticals);
 
 public:
-	static void detect(
+	static void show(
+		unsigned char* img,
+		int width,
+		int height,
+		vector<int> &points,
+		int max_range_mm);
+
+	static void get_point_cloud(
 		vector<int> &features,
 		vector<int> &floor_features,
 		int* mirror_centre_pixels,
+		int outer_radius_percent,
 		int min_radius_percent,
 		int max_radius_percent,
 		int no_of_mirrors,
@@ -64,6 +72,9 @@ public:
 		int* ray_map,
 		unsigned char* mirror_map,
 		int max_range_mm,
+		int max_height_mm,
+		int max_vertical_separation_per_metre,
+		int max_intersection_samples,
 		vector<int> &vertical_features,
 	    vector<int> &points);
 };
