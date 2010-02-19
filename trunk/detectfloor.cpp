@@ -336,6 +336,8 @@ void detectfloor::detect(
     for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
     	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
     	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
+		//floor_features.push_back(reprojected_features[f1]);
+		//floor_features.push_back(reprojected_features[f1+1]);
     	int n2 = fy1 * w + fx1;
     	feature_map[n2] = 1;
     }

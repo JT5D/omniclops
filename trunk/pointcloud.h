@@ -1,0 +1,62 @@
+/*
+    used to create a point cloud for observed features
+    Copyright (C) 2010 Bob Mottram
+    fuzzgun@gmail.com
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef POINTCLOUD_H_
+#define POINTCLOUD_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <vector>
+#include <fstream>
+#include <algorithm>
+#include "drawing.h"
+#include "omni.h"
+#include "detectfloor.h"
+using namespace std;
+
+class pointcloud {
+public:
+	static void get_feature_heights(
+		unsigned char* img,
+		vector<int> &features,
+		float camera_height_mm,
+		float camera_to_mirror_backing_dist_mm,
+		float focal_length,
+		float* mirror_position_pixels,
+		float outer_radius_percent,
+		int no_of_mirrors,
+		int ray_map_width,
+		int ray_map_height,
+		int max_height_mm,
+		int height_step_mm,
+		int max_range_mm,
+		int camera_width_percent,
+		int camera_height_percent,
+		int ground_plane_tollerance_mm,
+		int* ray_map,
+		unsigned char* mirror_map,
+		unsigned char* feature_map,
+		bool show_features,
+		vector<int> &feature_heights);
+
+};
+
+#endif /* POINTCLOUD_H_ */
