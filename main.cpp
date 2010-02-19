@@ -1340,9 +1340,9 @@ int main(int argc, char* argv[]) {
 		int max_range_mm = 5000;
 		int camera_width_percent = 45;
 		int camera_height_percent = 30;
-		int ground_plane_tollerance_mm = 128; //64;
-		vector<int> feature_heights;
-		pointcloud::get_feature_heights(
+		int view_type = 5;
+		vector<int> point_cloud;
+		pointcloud::update(
 			l_,
 		    features,
 		    camera_height,
@@ -1350,6 +1350,7 @@ int main(int argc, char* argv[]) {
 		    focal_length,
 		    mirror_position_pixels,
 		    outer_radius,
+		    mirror_diameter,
 		    no_of_mirrors,
 		    ww,hh,
 		    (int)camera_height,
@@ -1357,12 +1358,11 @@ int main(int argc, char* argv[]) {
 		    max_range_mm,
 		    camera_width_percent,
 		    camera_height_percent,
-		    ground_plane_tollerance_mm,
 		    lcam->ray_map,
 		    lcam->mirror_map,
 		    lcam->feature_map,
-		    true,
-		    feature_heights);
+		    view_type,
+		    point_cloud);
 	}
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {

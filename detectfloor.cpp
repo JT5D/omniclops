@@ -271,6 +271,8 @@ void detectfloor::detect(
         max_range_mm,
         reprojected_features);
 
+    // create a map of feature positions on the image plane
+    // this makes the subsequent matching search more efficient
     int w = ray_map_width/image_plane_tollerance_pixels;
     int h = ray_map_height/image_plane_tollerance_pixels;
     memset((void*)feature_map, '\0', w*h);
@@ -281,7 +283,8 @@ void detectfloor::detect(
     	feature_map[n2] = 1;
     }
 
-    // find matching features in peripheral mirrors
+    // find matching features in peripheral mirrors by comparing the actual edge features
+    // against the reprojected ones
     for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
     	int fx0 = features[f0];
     	int fy0 = features[f0 + 1];
@@ -299,7 +302,7 @@ void detectfloor::detect(
     	}
     }
 
-	// project floor features from peripheral mirrors to the floor plane
+	// project floor features from peripheral mirrors back to the floor plane
     omni::project_features(
     	floor_features,
     	-1,
@@ -314,7 +317,7 @@ void detectfloor::detect(
     	max_range_mm,
         projected_features);
 
-    //reproject floor plane features back into the centre mirror image plane
+    // reproject floor plane features into the centre mirror image plane
     omni::reproject_features(
     	projected_features,
     	no_of_mirrors-1,
@@ -332,12 +335,12 @@ void detectfloor::detect(
 
     floor_features.clear();
 
+    // populate a feature map with reprojected points
+    // this makes the subsequent matching search more efficient
     memset((void*)feature_map, '\0', w*h);
     for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
     	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
     	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
-		//floor_features.push_back(reprojected_features[f1]);
-		//floor_features.push_back(reprojected_features[f1+1]);
     	int n2 = fy1 * w + fx1;
     	feature_map[n2] = 1;
     }
