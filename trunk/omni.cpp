@@ -2758,8 +2758,8 @@ void omni::reproject_features(
 						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
 						if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
 
-							int xx = (ray_x_mm - bounding_box_tx) * w / bounding_box_width;
-							int yy = (ray_y_mm - bounding_box_ty) * h / bounding_box_height;
+							int xx = ((ray_x_mm - bounding_box_tx) * w) / bounding_box_width;
+							int yy = ((ray_y_mm - bounding_box_ty) * h) / bounding_box_height;
 							int n = yy*w + xx;
 							if (ground_features[n] != 0) {
 								reprojected_features.push_back(x);
