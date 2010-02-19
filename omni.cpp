@@ -2643,7 +2643,7 @@ void omni::project_features(
 		if ((mirror > -1) &&
 			((mirror == mirror_index) || (mirror_index == -1))) {
 			if ((ray_map[n*6 + 2] != 0) &&
-				(ray_map[n*6 + 5] < ray_map[n*6 + 2]-20)) {
+				(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
 
 				int start_x_mm = ray_map[n*6];
 				int start_y_mm = ray_map[n*6 + 1];
@@ -2724,43 +2724,47 @@ void omni::reproject_features(
 
 	int bounding_box_width = bounding_box_bx - bounding_box_tx;
 	int bounding_box_height = bounding_box_by - bounding_box_ty;
-	int w = (bounding_box_width / ground_plane_tollerance_mm)+1;
-	int h = (bounding_box_height / ground_plane_tollerance_mm)+1;
-	short ground_features[w*h];
-	memset((void*)ground_features,'\0',w*h*sizeof(short));
-	for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
-		int x = (plane_features[f] - bounding_box_tx) * w / (bounding_box_bx - bounding_box_tx);
-		int y = (plane_features[f+1] - bounding_box_ty) * h / (bounding_box_by - bounding_box_ty);
-		int n = y*w + x;
-		ground_features[n] = (short)(f+1);
-	}
 
-	int n = 0;
-	int i = 0;
-	for (int y = 0; y < ray_map_height; y++) {
-		for (int x = 0; x < ray_map_width; x++, i += 6, n++) {
+	if ((bounding_box_width > 0) && (bounding_box_height > 0)) {
+		int w = bounding_box_width / ground_plane_tollerance_mm;
+		int h = bounding_box_height / ground_plane_tollerance_mm;
 
-			if ((ray_map[i + 2] != 0) &&
-				(ray_map[i + 5] < ray_map[i + 2]-20) &&
-				((mirror_index == -1) || (mirror_map[n]-1 == mirror_index))) {
+		//printf("wh %d %d\n",w,h);
+		unsigned char ground_features[(w+1)*(h+1)];
+		memset((void*)ground_features,'\0',(w+1)*(h+1));
+		for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
+			int x = (plane_features[f] - bounding_box_tx) * w / bounding_box_width;
+			int y = (plane_features[f+1] - bounding_box_ty) * h / bounding_box_height;
+			int n = y*w + x;
+			ground_features[n] = 1;
+		}
 
-				int start_x_mm = ray_map[i];
-				int start_y_mm = ray_map[i + 1];
-				int end_x_mm = ray_map[i + 3];
-				int end_y_mm = ray_map[i + 4];
+		int n = 0;
+		int i = 0;
+		for (int y = 0; y < ray_map_height; y++) {
+			for (int x = 0; x < ray_map_width; x++, i += 6, n++) {
 
-				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-				if ((ray_x_mm > bounding_box_tx) && (ray_x_mm < bounding_box_bx)) {
-					int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-					if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
+				if ((ray_map[i + 2] != 0) &&
+					(ray_map[i + 5] < ray_map[i + 2]) &&
+					((mirror_index == -1) || (mirror_map[n]-1 == mirror_index))) {
 
-						int xx = (ray_x_mm - bounding_box_tx) * w / bounding_box_width;
-						int yy = (ray_y_mm - bounding_box_ty) * h / bounding_box_height;
-						int n = yy*w + xx;
-						int f = (int)ground_features[n]-1;
-						if (f > -1) {
-							reprojected_features.push_back(x);
-							reprojected_features.push_back(y);
+					int start_x_mm = ray_map[i];
+					int start_y_mm = ray_map[i + 1];
+					int end_x_mm = ray_map[i + 3];
+					int end_y_mm = ray_map[i + 4];
+
+					int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
+					if ((ray_x_mm > bounding_box_tx) && (ray_x_mm < bounding_box_bx)) {
+						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
+						if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
+
+							int xx = (ray_x_mm - bounding_box_tx) * w / bounding_box_width;
+							int yy = (ray_y_mm - bounding_box_ty) * h / bounding_box_height;
+							int n = yy*w + xx;
+							if (ground_features[n] != 0) {
+								reprojected_features.push_back(x);
+								reprojected_features.push_back(y);
+							}
 						}
 					}
 				}
@@ -3222,7 +3226,7 @@ void omni::create_ray_map(
 		mirror_map = new unsigned char[img_width*img_height];
 		memset((void*)mirror_map,'\0',img_width*img_height);
 		mirror_lookup = new float[img_width*img_height*2];
-		feature_map = new unsigned char[(img_width/2)*(img_height/2)];
+		feature_map = new unsigned char[img_width*img_height];
 	}
 
 	float half_pi = 3.1415927f/2;

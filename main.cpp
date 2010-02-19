@@ -39,7 +39,7 @@
 #include "drawing.h"
 #include "omni.h"
 #include "detectfloor.h"
-#include "detectverticals.h"
+#include "pointcloud.h"
 #include "fast.h"
 #include "libcam.h"
 
@@ -1335,10 +1335,40 @@ int main(int argc, char* argv[]) {
 
 	}
 
-	if (((show_ground_features) || (show_point_cloud)) && (no_of_mirrors > 1)) {
+	if ((show_point_cloud) && (no_of_mirrors > 1)) {
+		int height_step_mm = 200;
+		int max_range_mm = 5000;
+		int camera_width_percent = 45;
+		int camera_height_percent = 30;
+		int ground_plane_tollerance_mm = 128; //64;
+		vector<int> feature_heights;
+		pointcloud::get_feature_heights(
+			l_,
+		    features,
+		    camera_height,
+		    dist_to_mirror_centre,
+		    focal_length,
+		    mirror_position_pixels,
+		    outer_radius,
+		    no_of_mirrors,
+		    ww,hh,
+		    (int)camera_height,
+		    height_step_mm,
+		    max_range_mm,
+		    camera_width_percent,
+		    camera_height_percent,
+		    ground_plane_tollerance_mm,
+		    lcam->ray_map,
+		    lcam->mirror_map,
+		    lcam->feature_map,
+		    true,
+		    feature_heights);
+	}
+
+	if ((show_ground_features) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
 		int floor_height_mm = 0;
-		int ground_plane_tollerance_mm = 200 + (floor_height_mm / 20);
+		int ground_plane_tollerance_mm = 64; // + (floor_height_mm / 20);
 		int image_plane_tollerance_pixels = 2;
 		int camera_width_pixels = (int)((outer_radius * ww / 200) * 45/100);
 		int camera_height_pixels = (int)((outer_radius * ww / 200) * 30/100);
@@ -1348,7 +1378,7 @@ int main(int argc, char* argv[]) {
 		int camera_ty = (mirror_position_pixels[(no_of_mirrors-1)*2+1]*hh/100) - (camera_height_pixels/2) + y_offset;
 		int camera_bx = camera_tx + camera_width_pixels;
 		int camera_by = camera_ty + camera_height_pixels;
-		int max_range_mm = 100000;
+		int max_range_mm = 5000;
 		detectfloor::detect(
 			features,
 			no_of_mirrors,
@@ -1370,78 +1400,35 @@ int main(int argc, char* argv[]) {
 			camera_by,
 			floor_features);
 
-		if (!show_point_cloud) {
-		    for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
-			    drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
-		    }
-			/*
-			drawing::drawLine(
-				l_, ww, hh,
-				camera_tx,camera_ty,
-				camera_bx,camera_ty,
-				255,0,0,
-				0,false);
-			drawing::drawLine(
-				l_, ww, hh,
-				camera_bx,camera_ty,
-				camera_bx,camera_by,
-				255,0,0,
-				0,false);
-			drawing::drawLine(
-				l_, ww, hh,
-				camera_bx,camera_by,
-				camera_tx,camera_by,
-				255,0,0,
-				0,false);
-			drawing::drawLine(
-				l_, ww, hh,
-				camera_tx,camera_by,
-				camera_tx,camera_ty,
-				255,0,0,
-				0,false);
-	        */
+		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
+			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
 		}
-		else {
-
-			int min_radius_percent = 60;
-			int max_radius_percent = 95;
-			int max_vertical_separation_per_metre = 100000;
-			int max_intersection_samples = 8000;
-			vector<int> vertical_features;
-		    vector<int> point_cloud;
-		    int min_range_mm = 500;
-		    int max_height_mm = 3000;
-
-		    max_range_mm = 3000;
-
-		    detectverticals::get_point_cloud(
-				features,
-				floor_features,
-				mirror_position_pixels,
-				outer_radius,
-				min_radius_percent,
-				max_radius_percent,
-				no_of_mirrors,
-				ww,hh,
-				lcam->ray_map,
-				lcam->mirror_map,
-				min_range_mm,
-				max_range_mm,
-				max_height_mm,
-				max_vertical_separation_per_metre,
-				max_intersection_samples,
-				vertical_features,
-			    point_cloud);
-
-		    //printf("points: %d\n", (int)point_cloud.size()/3);
-
-		    detectverticals::show_point_cloud(
-			    l_,ww,hh,
-			    point_cloud,
-			    max_range_mm,
-			    max_height_mm,
-			    3);
-		}
+		/*
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_tx,camera_ty,
+			camera_bx,camera_ty,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_bx,camera_ty,
+			camera_bx,camera_by,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_bx,camera_by,
+			camera_tx,camera_by,
+			255,0,0,
+			0,false);
+		drawing::drawLine(
+			l_, ww, hh,
+			camera_tx,camera_by,
+			camera_tx,camera_ty,
+			255,0,0,
+			0,false);
+		*/
 	}
 
 	if (optical_flow) {

@@ -7,39 +7,39 @@ CPP_SRCS += \
 ../anyoption.cpp \
 ../bitmap.cpp \
 ../detectfloor.cpp \
-../detectverticals.cpp \
 ../drawing.cpp \
 ../fast.cpp \
 ../libcam.cpp \
 ../main.cpp \
 ../motionmodel.cpp \
 ../omni.cpp \
+../pointcloud.cpp \
 ../polynomial.cpp 
 
 OBJS += \
 ./anyoption.o \
 ./bitmap.o \
 ./detectfloor.o \
-./detectverticals.o \
 ./drawing.o \
 ./fast.o \
 ./libcam.o \
 ./main.o \
 ./motionmodel.o \
 ./omni.o \
+./pointcloud.o \
 ./polynomial.o 
 
 CPP_DEPS += \
 ./anyoption.d \
 ./bitmap.d \
 ./detectfloor.d \
-./detectverticals.d \
 ./drawing.d \
 ./fast.d \
 ./libcam.d \
 ./main.d \
 ./motionmodel.d \
 ./omni.d \
+./pointcloud.d \
 ./polynomial.d 
 
 
