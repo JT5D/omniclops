@@ -2642,13 +2642,14 @@ void omni::project_features(
 		int mirror = mirror_map[n] - 1;
 		if ((mirror > -1) &&
 			((mirror == mirror_index) || (mirror_index == -1))) {
-			if ((ray_map[n*6 + 2] != 0) &&
-				(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
+			int n2 = n*6;
+			if ((ray_map[n2 + 2] != 0) &&
+				(ray_map[n2 + 5] < ray_map[n2 + 2])) {
 
-				int start_x_mm = ray_map[n*6];
-				int start_y_mm = ray_map[n*6 + 1];
-				int end_x_mm = ray_map[n*6 + 3];
-				int end_y_mm = ray_map[n*6 + 4];
+				int start_x_mm = ray_map[n2];
+				int start_y_mm = ray_map[n2 + 1];
+				int end_x_mm = ray_map[n2 + 3];
+				int end_y_mm = ray_map[n2 + 4];
 
 				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
 				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
@@ -2657,6 +2658,7 @@ void omni::project_features(
 					(ray_y_mm > -max_range_mm) && (ray_y_mm < max_range_mm)) {
 				    projected_features.push_back(ray_x_mm);
 				    projected_features.push_back(ray_y_mm);
+				    projected_features.push_back(n);
 				}
 
 			}
@@ -2669,6 +2671,7 @@ void omni::project_features(
  * \param plane_features features on the plane
  * \param mirror_index index number of the mirror
  * \param plane_height_mm height of the plane above the ground
+ * \param plane_tollerance_mm tolerance of the intercept point above and below the plane
  * \param focal_length_mm focal length of the camera
  * \param camera_to_backing_dist_mm distance between the camera and the mirror backing plane
  * \param camera_height_mm height of the camera above the ground
@@ -2684,6 +2687,7 @@ void omni::reproject_features(
 	vector<int> &plane_features,
 	int mirror_index,
 	int plane_height_mm,
+	int plane_tollerance_mm,
 	float focal_length_mm,
 	int camera_to_backing_dist_mm,
 	int camera_height_mm,
@@ -2697,6 +2701,8 @@ void omni::reproject_features(
 {
 	reprojected_features.clear();
 
+	int ground_plane_tollerance_mm_sqr = ground_plane_tollerance_mm*ground_plane_tollerance_mm/4;
+
 	int z_mm = (camera_to_backing_dist_mm + focal_length_mm) - (plane_height_mm + focal_length_mm - camera_height_mm);
 	float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
 
@@ -2704,7 +2710,7 @@ void omni::reproject_features(
 	int bounding_box_ty = 99999;
 	int bounding_box_bx = -99999;
 	int bounding_box_by = -99999;
-	for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
+	for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
 		int x = plane_features[f];
 		int y = plane_features[f + 1];
 		if (x < bounding_box_tx) bounding_box_tx = x;
@@ -2730,13 +2736,16 @@ void omni::reproject_features(
 		int h = bounding_box_height / ground_plane_tollerance_mm;
 
 		//printf("wh %d %d\n",w,h);
-		unsigned char ground_features[(w+1)*(h+1)];
-		memset((void*)ground_features,'\0',(w+1)*(h+1));
-		for (int f = (int)plane_features.size()-2; f >= 0; f -= 2) {
+		unsigned short ground_features[(w+1)*(h+1)*10];
+		memset((void*)ground_features,'\0',(w+1)*(h+1)*10*sizeof(unsigned short));
+		for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
 			int x = (plane_features[f] - bounding_box_tx) * w / bounding_box_width;
 			int y = (plane_features[f+1] - bounding_box_ty) * h / bounding_box_height;
-			int n = y*w + x;
-			ground_features[n] = 1;
+			int n = (y*w + x)*10;
+			if (ground_features[n] < 9) {
+				ground_features[n+ground_features[n]+1] = (unsigned short)(f+1);
+				ground_features[n]++;
+			}
 		}
 
 		int n = 0;
@@ -2760,10 +2769,64 @@ void omni::reproject_features(
 
 							int xx = ((ray_x_mm - bounding_box_tx) * w) / bounding_box_width;
 							int yy = ((ray_y_mm - bounding_box_ty) * h) / bounding_box_height;
-							int n = yy*w + xx;
-							if (ground_features[n] != 0) {
-								reprojected_features.push_back(x);
-								reprojected_features.push_back(y);
+							int n2 = yy*w + xx;
+							if (ground_features[n2*10] > 0) {
+
+								int start_z_mm = ray_map[i + 2] + camera_height_mm;
+								int end_z_mm = ray_map[i + 5] + camera_height_mm;
+
+								int max_gf = ground_features[n2*10];
+								for (int gf = max_gf-1; gf >= 0; gf--) {
+
+									// find vertical intercept point between the two rays
+									int f = (int)ground_features[n2*10+gf+1]-1;
+									int n3 = plane_features[f+2]*6;
+									int plane_start_x_mm = ray_map[n3];
+									int plane_start_y_mm = ray_map[n3+1];
+									int plane_start_z_mm = ray_map[n3+2] + camera_height_mm;
+									int plane_end_x_mm = ray_map[n3+3];
+									int plane_end_y_mm = ray_map[n3+4];
+									int plane_end_z_mm = ray_map[n3+5] + camera_height_mm;
+
+									float ix=0, iy=0, iz=0;
+									//float dx=0, dy=0, dz=0;
+
+									//min_distance_between_rays(
+									rays_intercept(
+										start_x_mm,start_y_mm,start_z_mm,
+										end_x_mm,end_y_mm,end_z_mm,
+										plane_start_x_mm,plane_start_y_mm,plane_start_z_mm,
+										plane_end_x_mm,plane_end_y_mm,plane_end_z_mm,
+										//dx,dy,dz,
+										ix,iy,iz);
+
+									int deviation_from_plane_mm = (int)(iz - plane_height_mm);
+
+									//if ((iz > 0) && (plane_height_mm > 0)) {
+									//	printf("iz %f/%d %d\n", iz,plane_height_mm, plane_tollerance_mm);
+									//}
+
+									if ((deviation_from_plane_mm >= -plane_tollerance_mm) &&
+										(deviation_from_plane_mm <= plane_tollerance_mm)) {
+										//int dist = (int)sqrt(dx*dx + dy*dy + dz*dz);
+										//printf("dist = %d/%d\n",dist,ground_plane_tollerance_mm);
+										//int dx2 = (int)ix - ray_x_mm;
+										//if ((dx2 >= -ground_plane_tollerance_mm) && (dx2 <= ground_plane_tollerance_mm)) {
+											//int dy2 = (int)iy - ray_y_mm;
+											//if ((dy2 >= -ground_plane_tollerance_mm) && (dy2 <= ground_plane_tollerance_mm)) {
+												//printf("%d %d / %d\n",dx2,dy2,ground_plane_tollerance_mm);
+											//int n4= yy*w + xx;
+											//if (ground_features[n4] > 0) {
+												reprojected_features.push_back(x);
+												reprojected_features.push_back(y);
+												gf = -1;
+												//printf("iz %f/%d\n", iz,plane_height_mm);
+											//}
+											//}
+										//}
+									}
+
+								}
 							}
 						}
 					}
@@ -4230,6 +4293,170 @@ bool omni::load_configuration(
 }
 
 /*!
+ * \brief determines the closest point between two 3D rays.  Based on an algorithm written by John Burkardt
+ */
+void omni::rays_intercept(
+	float ray1_x_start,
+	float ray1_y_start,
+	float ray1_z_start,
+	float ray1_x_end,
+	float ray1_y_end,
+	float ray1_z_end,
+	float ray2_x_start,
+	float ray2_y_start,
+	float ray2_z_start,
+	float ray2_x_end,
+	float ray2_y_end,
+	float ray2_z_end,
+	float& ix, float& iy, float& iz)
+{
+	float a;
+	float b;
+	float c;
+	float d;
+	float det;
+	float e;
+	int i;
+	float sn;
+	float tn;
+	float pn[3];
+	float qn[3];
+	float u[3];
+	float v[3];
+	float w0[3];
+	float p1[3];
+	float p2[3];
+	float q1[3];
+	float q2[3];
+
+	p1[0] = ray1_x_start;
+	p1[1] = ray1_y_start;
+	p1[2] = ray1_z_start;
+	p2[0] = ray1_x_end;
+	p2[1] = ray1_y_end;
+	p2[2] = ray1_z_end;
+	q1[0] = ray2_x_start;
+	q1[1] = ray2_y_start;
+	q1[2] = ray2_z_start;
+	q2[0] = ray2_x_end;
+	q2[1] = ray2_y_end;
+	q2[2] = ray2_z_end;
+
+	//
+	//  The lines are identical.
+	//  THIS CASE NOT SET UP YET
+	//
+	// if ( lines_exp_equal_3d ( p1, p2, q1, q2 ) ) then
+	// end if
+	//
+	//  The lines are not identical, but parallel
+	//  THIS CASE NOT SET UP YET.
+	//
+	// if ( lines_exp_parallel_3d ( p1, p2, q1, q2 ) ) then
+	// end if
+	//
+	//  C: The lines are not identical, not parallel.
+	//
+
+	//
+	//  Let U = (P2-P1) and V = (Q2-Q1) be the direction vectors on
+	//  the two lines.
+	//
+	for (i = 0; i < 3; i++) {
+		u[i] = p2[i] - p1[i];
+	}
+	for (i = 0; i < 3; i++) {
+		v[i] = q2[i] - q1[i];
+	}
+	//
+	//  Let SN be the unknown coordinate of the nearest point PN on line 1,
+	//  so that PN = P(SN) = P1 + SN * (P2-P1).
+	//
+	//  Let TN be the unknown coordinate of the nearest point QN on line 2,
+	//  so that QN = Q(TN) = Q1 + TN * (Q2-Q1).
+	//
+	//  Let W0 = (P1-Q1).
+	//
+	for (i = 0; i < 3; i++) {
+		w0[i] = p1[i] - q1[i];
+	}
+	//
+	//  The vector direction WC = P(SN) - Q(TC) is unique (among directions)
+	//  perpendicular to both U and V, so
+	//
+	//    U dot WC = 0
+	//    V dot WC = 0
+	//
+	//  or, equivalently:
+	//
+	//    U dot ( P1 + SN * (P2 - P1) - Q1 - TN * (Q2 - Q1) ) = 0
+	//    V dot ( P1 + SN * (P2 - P1) - Q1 - TN * (Q2 - Q1) ) = 0
+	//
+	//  or, equivalently:
+	//
+	//    (u dot u ) * sn - (u dot v ) tc = -u * w0
+	//    (v dot u ) * sn - (v dot v ) tc = -v * w0
+	//
+	//  or, equivalently:
+	//
+	//   ( a  -b ) * ( sn ) = ( -d )
+	//   ( b  -c )   ( tc )   ( -e )
+	//
+
+	a = 0.0f;
+	for (i = 0; i < 3; i++) {
+		a = a + u[i] * u[i];
+	}
+
+	b = 0.0f;
+	for (i = 0; i < 3; i++) {
+		b = b + u[i] * v[i];
+	}
+
+	c = 0.0f;
+	for (i = 0; i < 3; i++) {
+		c = c + v[i] * v[i];
+	}
+
+	d = 0.0f;
+	for (i = 0; i < 3; i++) {
+		d = d + u[i] * w0[i];
+	}
+
+	e = 0.0f;
+	for (i = 0; i < 3; i++) {
+		e = e + v[i] * w0[i];
+	}
+	//
+	//  Check the determinant.
+	//
+	det = -a * c + b * b;
+
+	if (det == 0.0) {
+		sn = 0.0;
+		if (fabs(b) < fabs(c)) {
+			tn = e / c;
+		} else {
+			tn = d / b;
+		}
+	} else {
+		sn = (c * d - b * e) / det;
+		tn = (b * d - a * e) / det;
+	}
+
+	for (i = 0; i < 3; i++) {
+		pn[i] = p1[i] + sn * (p2[i] - p1[i]);
+	}
+	for (i = 0; i < 3; i++) {
+		qn[i] = q1[i] + tn * (q2[i] - q1[i]);
+	}
+
+	ix = (pn[0] + qn[0])*0.5f;
+	iy = (pn[1] + qn[1])*0.5f;
+	iz = (pn[2] + qn[2])*0.5f;
+}
+
+/*!
  * \brief returns the minimum squared distance between two 3D rays
  */
 float omni::min_distance_between_rays(
@@ -4327,9 +4554,9 @@ float omni::min_distance_between_rays(
     dx = wx + (sc * ux) - (tc * vx);
     dy = wy + (sc * uy) - (tc * vy);
     dz = wz + (sc * uz) - (tc * vz);
-    x = wx + (sc * x);
-    y = wy + (sc * y);
-    z = wz + (sc * z);
+    x = wx + (sc * ux); // + dx*0.5f;
+    y = wy + (sc * uy);// + dy*0.5f;
+    z = wz + (sc * uz);// + dz*0.5f;
     return (dx*dx + dy*dy + dz*dz);
 }
 

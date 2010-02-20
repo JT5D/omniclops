@@ -264,7 +264,7 @@ public:
 		float &camera_height,
 		float &baseline,
 		float &range);
-    float min_distance_between_rays(
+    static float min_distance_between_rays(
     	float ray1_x_start,
     	float ray1_y_start,
     	float ray1_z_start,
@@ -283,6 +283,20 @@ public:
     	float &x,
     	float &y,
     	float &z);
+    static void rays_intercept(
+    	float ray1_x_start,
+    	float ray1_y_start,
+    	float ray1_z_start,
+    	float ray1_x_end,
+    	float ray1_y_end,
+    	float ray1_z_end,
+    	float ray2_x_start,
+    	float ray2_y_start,
+    	float ray2_z_start,
+    	float ray2_x_end,
+    	float ray2_y_end,
+    	float ray2_z_end,
+    	float& ix, float& iy, float& iz);
     static void voxel_paint(
     	int* ray_map,
     	int dist_to_mirror_backing_mm,
@@ -556,6 +570,7 @@ public:
     	vector<int> &plane_features,
     	int mirror_index,
     	int plane_height_mm,
+    	int plane_tollerance_mm,
     	float focal_length_mm,
     	int camera_to_backing_dist_mm,
     	int camera_height_mm,
