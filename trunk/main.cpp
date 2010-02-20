@@ -1340,7 +1340,7 @@ int main(int argc, char* argv[]) {
 		int max_range_mm = 5000;
 		int camera_width_percent = 45;
 		int camera_height_percent = 30;
-		int view_type = 5;
+		int view_type = 1;
 		vector<int> point_cloud;
 		pointcloud::update(
 			l_,
@@ -1368,6 +1368,7 @@ int main(int argc, char* argv[]) {
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
 		int floor_height_mm = 0;
+		int plane_tollerance_mm = 50;
 		int ground_plane_tollerance_mm = 64; // + (floor_height_mm / 20);
 		int image_plane_tollerance_pixels = 2;
 		int camera_width_pixels = (int)((outer_radius * ww / 200) * 45/100);
@@ -1384,6 +1385,7 @@ int main(int argc, char* argv[]) {
 			no_of_mirrors,
 			ww,hh,
 			floor_height_mm,
+			plane_tollerance_mm,
 			focal_length,
 			(int)dist_to_mirror_centre,
 			(int)camera_height,

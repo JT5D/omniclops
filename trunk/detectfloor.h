@@ -54,6 +54,7 @@ public:
 		int ray_map_width,
 		int ray_map_height,
 		int floor_height_mm,
+		int plane_tollerance_mm,
 		float focal_length_mm,
 		int camera_to_backing_dist_mm,
 		int camera_height_mm,

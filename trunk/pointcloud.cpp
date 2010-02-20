@@ -113,7 +113,7 @@ void pointcloud::get_feature_heights(
 	//printf("pixel_diameter_mirror_plane: %f\n", pixel_diameter_mirror_plane);
 
 	// pixel diameter on the focal plane
-	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*6 / (camera_to_mirror_backing_dist_mm+focal_length);
+	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*8 / (camera_to_mirror_backing_dist_mm+focal_length);
 
 	// remove features around the area of the camera - we don't need to project these
 	for (int i = (int)features.size()-2; i >= 0; i -= 2) {
@@ -123,6 +123,9 @@ void pointcloud::get_feature_heights(
 			features.erase(features.begin() + i);
 		}
 	}
+
+	// tollerance for features above or below the plane
+	int plane_tollerance_mm = height_step_mm/2;
 
 	vector<int> plane_features;
 	for (int plane_height_mm = 0; plane_height_mm <= max_height_mm; plane_height_mm += height_step_mm) {
@@ -139,6 +142,7 @@ void pointcloud::get_feature_heights(
 			no_of_mirrors,
 			ray_map_width,ray_map_height,
 			plane_height_mm,
+			plane_tollerance_mm,
 			focal_length,
 			(int)camera_to_mirror_backing_dist_mm,
 			(int)camera_height_mm,
