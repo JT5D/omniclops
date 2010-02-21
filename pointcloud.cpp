@@ -22,6 +22,7 @@
  * \param max_range_mm maximum range in mm
  * \param point_cloud returned projected features (x,y,z)
  */
+/*
 void pointcloud::features_to_point_cloud(
 	vector<int> &features,
 	int mirror_index,
@@ -72,7 +73,7 @@ void pointcloud::features_to_point_cloud(
 		}
 	}
 }
-
+*/
 
 void pointcloud::get_feature_heights(
 	unsigned char* img,
@@ -93,11 +94,13 @@ void pointcloud::get_feature_heights(
     int camera_height_percent,
     int* ray_map,
     unsigned char* mirror_map,
-    unsigned char* feature_map,
+    unsigned short* feature_map,
     bool show_features,
-    vector<int> &feature_heights)
+    vector<int> &feature_heights,
+    vector<int> &point_cloud)
 {
 	feature_heights.clear();
+	point_cloud.clear();
 	int image_plane_tollerance_pixels = 1;
 	int camera_width_pixels = (int)((outer_radius_percent * ray_map_width / 200) * camera_width_percent/100); //45
 	int camera_height_pixels = (int)((outer_radius_percent * ray_map_width / 200) * camera_height_percent/100); //30
@@ -110,7 +113,6 @@ void pointcloud::get_feature_heights(
 
 	// pixel size on the mirror backing plane
 	float pixel_diameter_mirror_plane = mirror_diameter_mm / (outer_radius_percent * ray_map_width / 200.0f);
-	//printf("pixel_diameter_mirror_plane: %f\n", pixel_diameter_mirror_plane);
 
 	// pixel diameter on the focal plane
 	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*8 / (camera_to_mirror_backing_dist_mm+focal_length);
@@ -128,12 +130,12 @@ void pointcloud::get_feature_heights(
 	int plane_tollerance_mm = height_step_mm/2;
 
 	vector<int> plane_features;
+	vector<int> plane_features_positions;
 	for (int plane_height_mm = 0; plane_height_mm <= max_height_mm; plane_height_mm += height_step_mm) {
 
 		// approximate size of one pixel on this plane
 		int ground_plane_tollerance_mm = (int)(pixel_diameter_mm * ((camera_height_mm - plane_height_mm) + (2*camera_to_mirror_backing_dist_mm)));
 		if (ground_plane_tollerance_mm < 8) ground_plane_tollerance_mm = 8;
-		//printf("ground_plane_tollerance_mm %d\n", ground_plane_tollerance_mm);
 
 		// detect features at this height
 		plane_features.clear();
@@ -157,29 +159,26 @@ void pointcloud::get_feature_heights(
 			camera_ty,
 			camera_bx,
 			camera_by,
+			plane_features_positions,
 			plane_features);
+
+		// add points to the cloud
+		for (int i = (int)plane_features_positions.size()-3; i >= 0; i -= 3) {
+			point_cloud.push_back(plane_features_positions[i]);
+			point_cloud.push_back(plane_features_positions[i+1]);
+			point_cloud.push_back(plane_features_positions[i+2]);
+		}
 
 		// add features for this plane
 		for (int i = (int)plane_features.size()-2; i >= 0; i -= 2) {
 			int x = plane_features[i];
 			int y = plane_features[i + 1];
 
-			//bool found = false;
-			//for (int j = (int)feature_heights.size()-3; j >= 0; j -= 3) {
-				//if ((feature_heights[j] == x) && (feature_heights[j+1] == y)) {
-					//feature_heights[j+2] += (plane_height_mm - feature_heights[j+2])/64;
-					//found = true;
-					//break;
-				//}
-			//}
-			//if (!found) {
-			    feature_heights.push_back(x);
-			    feature_heights.push_back(y);
-			    feature_heights.push_back(plane_height_mm);
-			//}
+		    feature_heights.push_back(x);
+	        feature_heights.push_back(y);
+			feature_heights.push_back(plane_features_positions[(i/2)*3+2]);
 
-			// remove this feature from subsequent searching
-
+			// remove this feature from further inquiries
 			for (int j = (int)features.size()-2; j >= 0; j -= 2) {
 				if ((features[j] == x) && (features[j + 1] == y)) {
 					features.erase(features.begin() + j);
@@ -228,46 +227,28 @@ void pointcloud::show(
 			case 0: {
                 x = (x + max_range_mm) * height / (max_range_mm*2);
                 y = (y + max_range_mm) * (height-1) / (max_range_mm*2);
-                int n = (y*width + x)*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
+                drawing::drawCross(img, width, height, x, y, 2, 0, 255, 0, 0);
 				break;
 			}
 			case 1: {
                 x = (x + max_range_mm) * height / (max_range_mm*2);
                 z = height - 1 - (z * height / max_height_mm);
-                int n = (y*width + x)*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
+                drawing::drawCross(img, width, height, x, z, 2, 0, 255, 0, 0);
 				break;
 			}
 			case 2: {
                 y = (y + max_range_mm) * height / (max_range_mm*2);
                 z = height - 1 - (z * height / max_height_mm);
-                int n = (y*width + x)*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
+                drawing::drawCross(img, width, height, y, z, 2, 0, 255, 0, 0);
 				break;
 			}
 			case 3: {
                 int x2 = ((x + max_range_mm) * height / (max_range_mm*2)) / 2;
                 int y2 = ((y + max_range_mm) * (height-1) / (max_range_mm*2)) / 2;
                 int z2 = (height - 1 - (z * height / max_height_mm)) / 2;
-                int n = ((y2+(height/4))*width + x2)*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
-                n = (z2*width + (x2 + (width/2)))*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
-                n = ((z2 + (height/2))*width + (y2 + (width/2)))*3;
-                img[n] = 0;
-                img[n+1] = 255;
-                img[n+2] = 0;
+                drawing::drawCross(img, width, height, x2, y2 + (height/4), 2, 0, 255, 0, 0);
+                drawing::drawCross(img, width, height, x2 + (width/2), z2, 2, 255, 255, 0, 0);
+                drawing::drawCross(img, width, height, y2 + (width/2), z2 + (height/2), 2, 0, 255, 255, 0);
 				break;
 			}
 			}
@@ -295,7 +276,7 @@ void pointcloud::update(
     int camera_height_percent,
     int* ray_map,
     unsigned char* mirror_map,
-    unsigned char* feature_map,
+    unsigned short* feature_map,
     int view_type,
     vector<int> &point_cloud)
 {
@@ -324,8 +305,9 @@ void pointcloud::update(
 	    mirror_map,
 	    feature_map,
 	    show_features,
-	    feature_heights);
-
+	    feature_heights,
+	    point_cloud);
+/*
 	features_to_point_cloud(
 		feature_heights,
 		no_of_mirrors-1,
@@ -338,7 +320,7 @@ void pointcloud::update(
 		mirror_map,
 		max_range_mm,
 	    point_cloud);
-
+*/
 	if (view_type > 1) {
 		max_range_mm = 2000;
 		show(

@@ -79,7 +79,7 @@ public:
     /* maps raw image pixels to 3D rays */
     int* ray_map;
     unsigned char* mirror_map; // mirror numbers
-    unsigned char* feature_map; // used during projection/reprojection
+    unsigned short* feature_map; // used during projection/reprojection
     float* mirror_lookup; // radii and angles
 
     /* radial lines */
@@ -264,25 +264,6 @@ public:
 		float &camera_height,
 		float &baseline,
 		float &range);
-    static float min_distance_between_rays(
-    	float ray1_x_start,
-    	float ray1_y_start,
-    	float ray1_z_start,
-    	float ray1_x_end,
-    	float ray1_y_end,
-    	float ray1_z_end,
-    	float ray2_x_start,
-    	float ray2_y_start,
-    	float ray2_z_start,
-    	float ray2_x_end,
-    	float ray2_y_end,
-    	float ray2_z_end,
-    	float &dx,
-    	float &dy,
-    	float &dz,
-    	float &x,
-    	float &y,
-    	float &z);
     static void rays_intercept(
     	float ray1_x_start,
     	float ray1_y_start,
@@ -580,6 +561,7 @@ public:
         unsigned char* mirror_map,
         int ground_plane_tollerance_mm,
         int max_range_mm,
+        vector<int> &plane_features_accurate,
         vector<int> &reprojected_features);
 
     void compass(int max_variance_degrees);

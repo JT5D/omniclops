@@ -194,6 +194,7 @@ void detectfloor::get_closest_features(
  * \param camera_ty bounding box for the camera
  * \param camera_bx bounding box for the camera
  * \param camera_by bounding box for the camera
+ * \param floor_features_positions 3D positions of detected floor points
  * \param floor_features returned features close to the floor
  */
 void detectfloor::detect(
@@ -209,7 +210,7 @@ void detectfloor::detect(
 	unsigned char* img,
 	int* ray_map,
 	unsigned char* mirror_map,
-	unsigned char* feature_map,
+	unsigned short* feature_map,
     int ground_plane_tollerance_mm,
     int image_plane_tollerance_pixels,
     int max_range_mm,
@@ -217,8 +218,10 @@ void detectfloor::detect(
     int camera_ty,
     int camera_bx,
     int camera_by,
+    vector<int> &floor_features_positions,
     vector<int> &floor_features)
 {
+	floor_features_positions.clear();
 	floor_features.clear();
 
 	for (int f = (int)features.size()-2; f >= 0; f -= 2) {
@@ -257,6 +260,7 @@ void detectfloor::detect(
 
     //reproject floor plane features back into the image plane
     vector<int> reprojected_features;
+    vector<int> plane_features_accurate;
     omni::reproject_features(
     	projected_features,
     	-1,
@@ -271,13 +275,14 @@ void detectfloor::detect(
         mirror_map,
         ground_plane_tollerance_mm,
         max_range_mm,
+        plane_features_accurate,
         reprojected_features);
 
     // create a map of feature positions on the image plane
     // this makes the subsequent matching search more efficient
     int w = ray_map_width/image_plane_tollerance_pixels;
     int h = ray_map_height/image_plane_tollerance_pixels;
-    memset((void*)feature_map, '\0', w*h);
+    memset((void*)feature_map, '\0', w*h*sizeof(unsigned short));
     for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
     	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
     	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
@@ -334,18 +339,19 @@ void detectfloor::detect(
         mirror_map,
         ground_plane_tollerance_mm,
         max_range_mm,
+        plane_features_accurate,
         reprojected_features);
 
     floor_features.clear();
 
     // populate a feature map with reprojected points
     // this makes the subsequent matching search more efficient
-    memset((void*)feature_map, '\0', w*h);
+    memset((void*)feature_map, '\0', w*h*sizeof(unsigned short));
     for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
     	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
     	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
     	int n2 = fy1 * w + fx1;
-    	feature_map[n2] = 1;
+    	feature_map[n2] = (unsigned short)(((f1/2)*3)+1);
     }
 
     // find matching features in centre mirror
@@ -362,9 +368,14 @@ void detectfloor::detect(
 				int fy1 = fy0 / image_plane_tollerance_pixels;
 				int n2 = fy1 * w + fx1;
 				if ((n2 > -1) && (n2 < w*h)) {
-					if (feature_map[n2] != 0) {
+					int f = (int)feature_map[n2]-1;
+					if (f > -1) {
 						floor_features.push_back(fx0);
 						floor_features.push_back(fy0);
+
+						floor_features_positions.push_back(plane_features_accurate[f]);
+						floor_features_positions.push_back(plane_features_accurate[f+1]);
+						floor_features_positions.push_back(plane_features_accurate[f+2]);
 					}
 				}
 			}

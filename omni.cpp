@@ -2681,6 +2681,7 @@ void omni::project_features(
  * \param mirror_map lookup table containing mirror indexes
  * \param ground_plane_tollerance_mm tollerance for matching rays on the plane
  * \param max_range_mm maximum range in millimetres
+ * \param plane_features_accurate more accurate positions for the plane features
  * \param reprojected_features returned reprojected features in image coordinates
  */
 void omni::reproject_features(
@@ -2697,9 +2698,11 @@ void omni::reproject_features(
     unsigned char* mirror_map,
     int ground_plane_tollerance_mm,
     int max_range_mm,
+    vector<int> &plane_features_accurate,
     vector<int> &reprojected_features)
 {
 	reprojected_features.clear();
+	plane_features_accurate.clear();
 
 	int ground_plane_tollerance_mm_sqr = ground_plane_tollerance_mm*ground_plane_tollerance_mm/4;
 
@@ -2788,42 +2791,30 @@ void omni::reproject_features(
 									int plane_end_y_mm = ray_map[n3+4];
 									int plane_end_z_mm = ray_map[n3+5] + camera_height_mm;
 
+									// locate the interception point for the rays
 									float ix=0, iy=0, iz=0;
-									//float dx=0, dy=0, dz=0;
-
-									//min_distance_between_rays(
 									rays_intercept(
 										start_x_mm,start_y_mm,start_z_mm,
 										end_x_mm,end_y_mm,end_z_mm,
 										plane_start_x_mm,plane_start_y_mm,plane_start_z_mm,
 										plane_end_x_mm,plane_end_y_mm,plane_end_z_mm,
-										//dx,dy,dz,
 										ix,iy,iz);
 
+									// difference between the interception point height and the plane
 									int deviation_from_plane_mm = (int)(iz - plane_height_mm);
-
-									//if ((iz > 0) && (plane_height_mm > 0)) {
-									//	printf("iz %f/%d %d\n", iz,plane_height_mm, plane_tollerance_mm);
-									//}
 
 									if ((deviation_from_plane_mm >= -plane_tollerance_mm) &&
 										(deviation_from_plane_mm <= plane_tollerance_mm)) {
-										//int dist = (int)sqrt(dx*dx + dy*dy + dz*dz);
-										//printf("dist = %d/%d\n",dist,ground_plane_tollerance_mm);
-										//int dx2 = (int)ix - ray_x_mm;
-										//if ((dx2 >= -ground_plane_tollerance_mm) && (dx2 <= ground_plane_tollerance_mm)) {
-											//int dy2 = (int)iy - ray_y_mm;
-											//if ((dy2 >= -ground_plane_tollerance_mm) && (dy2 <= ground_plane_tollerance_mm)) {
-												//printf("%d %d / %d\n",dx2,dy2,ground_plane_tollerance_mm);
-											//int n4= yy*w + xx;
-											//if (ground_features[n4] > 0) {
-												reprojected_features.push_back(x);
-												reprojected_features.push_back(y);
-												gf = -1;
-												//printf("iz %f/%d\n", iz,plane_height_mm);
-											//}
-											//}
-										//}
+
+										// image coordinate
+										reprojected_features.push_back(x);
+										reprojected_features.push_back(y);
+
+										// cartesian coordinate
+										plane_features_accurate.push_back((int)ix);
+										plane_features_accurate.push_back((int)iy);
+										plane_features_accurate.push_back((int)iz);
+										gf = -1;
 									}
 
 								}
@@ -3289,7 +3280,7 @@ void omni::create_ray_map(
 		mirror_map = new unsigned char[img_width*img_height];
 		memset((void*)mirror_map,'\0',img_width*img_height);
 		mirror_lookup = new float[img_width*img_height*2];
-		feature_map = new unsigned char[img_width*img_height];
+		feature_map = new unsigned short[img_width*img_height];
 	}
 
 	float half_pi = 3.1415927f/2;
@@ -4454,110 +4445,6 @@ void omni::rays_intercept(
 	ix = (pn[0] + qn[0])*0.5f;
 	iy = (pn[1] + qn[1])*0.5f;
 	iz = (pn[2] + qn[2])*0.5f;
-}
-
-/*!
- * \brief returns the minimum squared distance between two 3D rays
- */
-float omni::min_distance_between_rays(
-	float ray1_x_start,
-	float ray1_y_start,
-	float ray1_z_start,
-	float ray1_x_end,
-	float ray1_y_end,
-	float ray1_z_end,
-	float ray2_x_start,
-	float ray2_y_start,
-	float ray2_z_start,
-	float ray2_x_end,
-	float ray2_y_end,
-	float ray2_z_end,
-	float &dx,
-	float &dy,
-	float &dz,
-	float &x,
-	float &y,
-	float &z)
-{
-	float ux = ray1_x_end - ray1_x_start;
-	float uy = ray1_y_end - ray1_y_start;
-	float uz = ray1_z_end - ray1_z_start;
-
-	float vx = ray2_x_end - ray2_x_start;
-	float vy = ray2_y_end - ray2_y_start;
-	float vz = ray2_z_end - ray2_z_start;
-
-	float wx = ray1_x_start - ray2_x_start;
-	float wy = ray1_y_start - ray2_y_start;
-	float wz = ray1_z_start - ray2_z_start;
-
-    float a = ux*ux + uy*uy + uz*uz;
-    float b = ux*vx + uy*vy + uz*vz;
-    float c = vx*vx + vy*vy + vz*vz;
-    float d = ux*wx + uy*wy + uz*wz;
-    float e = vx*wx + vy*wy + vz*wz;
-    float D = a*c - b*b;
-    float sc, sN, sD = D;
-    float tc, tN, tD = D;
-
-    // compute the line parameters of the two closest points
-    if (D < 0.00000001f) { // the lines are almost parallel
-        sN = 0.0f; // force using point P0 on segment S1
-        sD = 1.0f; // to prevent possible division by 0.0 later
-        tN = e;
-        tD = c;
-    }
-    else {                // get the closest points on the infinite lines
-        sN = (b*e - c*d);
-        tN = (a*e - b*d);
-        if (sN < 0.0f) {       // sc < 0 => the s=0 edge is visible
-            sN = 0.0f;
-            tN = e;
-            tD = c;
-        }
-        else if (sN > sD) {  // sc > 1 => the s=1 edge is visible
-            sN = sD;
-            tN = e + b;
-            tD = c;
-        }
-    }
-
-    if (tN < 0.0f) {           // tc < 0 => the t=0 edge is visible
-        tN = 0.0f;
-        // recompute sc for this edge
-        if (-d < 0.0f)
-            sN = 0.0f;
-        else if (-d > a)
-            sN = sD;
-        else {
-            sN = -d;
-            sD = a;
-        }
-    }
-    else if (tN > tD) {      // tc > 1 => the t=1 edge is visible
-        tN = tD;
-        // recompute sc for this edge
-        if ((-d + b) < 0.0f)
-            sN = 0;
-        else if ((-d + b) > a)
-            sN = sD;
-        else {
-            sN = (-d + b);
-            sD = a;
-        }
-    }
-    // finally do the division to get sc and tc
-    sc = (fabs(sN) < 0.00000001f ? 0.0 : sN / sD);
-    tc = (fabs(tN) < 0.00000001f ? 0.0 : tN / tD);
-
-    // get the difference of the two closest points
-    dx = wx + (sc * ux) - (tc * vx);
-    dy = wy + (sc * uy) - (tc * vy);
-    dz = wz + (sc * uz) - (tc * vz);
-    x = wx + (sc * ux); // + dx*0.5f;
-    y = wy + (sc * uy);// + dy*0.5f;
-    z = wz + (sc * uz);// + dz*0.5f;
-    return (dx*dx + dy*dy + dz*dz);
 }
 
 void omni::create_ground_grid(

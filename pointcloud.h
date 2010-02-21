@@ -34,6 +34,7 @@ using namespace std;
 
 class pointcloud {
 public:
+	/*
 	static void features_to_point_cloud(
 		vector<int> &features,
 		int mirror_index,
@@ -46,6 +47,7 @@ public:
 		unsigned char* mirror_map,
 		int max_range_mm,
 	    vector<int> &point_cloud);
+	*/
 
 	static void get_feature_heights(
 		unsigned char* img,
@@ -66,9 +68,10 @@ public:
 		int camera_height_percent,
 		int* ray_map,
 		unsigned char* mirror_map,
-		unsigned char* feature_map,
+		unsigned short* feature_map,
 		bool show_features,
-		vector<int> &feature_heights);
+		vector<int> &feature_heights,
+		vector<int> &point_cloud);
 
 	static void show(
 		unsigned char *img,
@@ -98,7 +101,7 @@ public:
 	    int camera_height_percent,
 	    int* ray_map,
 	    unsigned char* mirror_map,
-	    unsigned char* feature_map,
+	    unsigned short* feature_map,
 	    int view_type,
 	    vector<int> &point_cloud);
 
