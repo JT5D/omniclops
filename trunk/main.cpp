@@ -1337,7 +1337,7 @@ int main(int argc, char* argv[]) {
 
 	if ((show_point_cloud) && (no_of_mirrors > 1)) {
 		int height_step_mm = 200;
-		int max_range_mm = 5000;
+		int max_range_mm = 10000;
 		int camera_width_percent = 45;
 		int camera_height_percent = 30;
 		int view_type = 1;
@@ -1367,6 +1367,7 @@ int main(int argc, char* argv[]) {
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
+		vector<int> floor_features_positions;
 		int floor_height_mm = 0;
 		int plane_tollerance_mm = 50;
 		int ground_plane_tollerance_mm = 64; // + (floor_height_mm / 20);
@@ -1400,6 +1401,7 @@ int main(int argc, char* argv[]) {
 			camera_ty,
 			camera_bx,
 			camera_by,
+			floor_features_positions,
 			floor_features);
 
 		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
