@@ -1,9 +1,21 @@
 /*
- * pointcloud.cpp
- *
- *  Created on: 18-Feb-2010
- *      Author: motters
- */
+    used to create a point cloud for observed features
+    Copyright (C) 2010 Bob Mottram
+    fuzzgun@gmail.com
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include "pointcloud.h"
 
@@ -22,7 +34,6 @@
  * \param max_range_mm maximum range in mm
  * \param point_cloud returned projected features (x,y,z)
  */
-/*
 void pointcloud::features_to_point_cloud(
 	vector<int> &features,
 	int mirror_index,
@@ -51,8 +62,7 @@ void pointcloud::features_to_point_cloud(
 				(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
 
 				int plane_height_mm = features[f+2];
-				int z_mm = (int)(camera_to_backing_dist_mm + focal_length_mm - (plane_height_mm + focal_length_mm - camera_height_mm));
-				float z_fraction = z_mm / ((float)camera_to_backing_dist_mm + focal_length_mm);
+				float z_fraction = omni::get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
 
 				int start_x_mm = ray_map[n*6];
 				int start_y_mm = ray_map[n*6 + 1];
@@ -73,7 +83,6 @@ void pointcloud::features_to_point_cloud(
 		}
 	}
 }
-*/
 
 void pointcloud::get_feature_heights(
 	unsigned char* img,
@@ -95,6 +104,7 @@ void pointcloud::get_feature_heights(
     int* ray_map,
     unsigned char* mirror_map,
     unsigned short* feature_map,
+    unsigned short* ground_features_lookup,
     bool show_features,
     vector<int> &feature_heights,
     vector<int> &point_cloud)
@@ -115,7 +125,8 @@ void pointcloud::get_feature_heights(
 	float pixel_diameter_mirror_plane = mirror_diameter_mm / (outer_radius_percent * ray_map_width / 200.0f);
 
 	// pixel diameter on the focal plane
-	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*8 / (camera_to_mirror_backing_dist_mm+focal_length);
+	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*4 / (camera_to_mirror_backing_dist_mm+focal_length);
+	//printf("pixel_diameter_mm %f\n", pixel_diameter_mm);
 
 	// remove features around the area of the camera - we don't need to project these
 	for (int i = (int)features.size()-2; i >= 0; i -= 2) {
@@ -152,6 +163,7 @@ void pointcloud::get_feature_heights(
 			ray_map,
 			mirror_map,
 			feature_map,
+			ground_features_lookup,
 			ground_plane_tollerance_mm,
 			image_plane_tollerance_pixels,
 			max_range_mm,
@@ -277,6 +289,7 @@ void pointcloud::update(
     int* ray_map,
     unsigned char* mirror_map,
     unsigned short* feature_map,
+    unsigned short* ground_features_lookup,
     int view_type,
     vector<int> &point_cloud)
 {
@@ -304,10 +317,11 @@ void pointcloud::update(
 	    ray_map,
 	    mirror_map,
 	    feature_map,
+	    ground_features_lookup,
 	    show_features,
 	    feature_heights,
 	    point_cloud);
-/*
+
 	features_to_point_cloud(
 		feature_heights,
 		no_of_mirrors-1,
@@ -320,9 +334,9 @@ void pointcloud::update(
 		mirror_map,
 		max_range_mm,
 	    point_cloud);
-*/
+
 	if (view_type > 1) {
-		max_range_mm = 2000;
+		max_range_mm = 3000;
 		show(
 			img,
 			ray_map_width,

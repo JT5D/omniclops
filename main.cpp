@@ -1361,6 +1361,7 @@ int main(int argc, char* argv[]) {
 		    lcam->ray_map,
 		    lcam->mirror_map,
 		    lcam->feature_map,
+		    lcam->ground_features_lookup,
 		    view_type,
 		    point_cloud);
 	}
@@ -1394,6 +1395,7 @@ int main(int argc, char* argv[]) {
 			lcam->ray_map,
 			lcam->mirror_map,
 			lcam->feature_map,
+			lcam->ground_features_lookup,
 			ground_plane_tollerance_mm,
 			image_plane_tollerance_pixels,
 			max_range_mm,

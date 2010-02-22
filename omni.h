@@ -80,6 +80,7 @@ public:
     int* ray_map;
     unsigned char* mirror_map; // mirror numbers
     unsigned short* feature_map; // used during projection/reprojection
+    unsigned short *ground_features_lookup; // lookup table used for feature projection
     float* mirror_lookup; // radii and angles
 
     /* radial lines */
@@ -101,6 +102,12 @@ public:
     vector<int> point_cloud;
 
     int epipole;
+
+    static float get_z_fraction(
+    	float camera_height_mm,
+    	float camera_to_backing_dist_mm,
+    	float focal_length_mm,
+    	float plane_height_mm);
 
     static bool intersection(
         float x0,
@@ -550,6 +557,7 @@ public:
     static void reproject_features(
     	vector<int> &plane_features,
     	int mirror_index,
+    	int no_of_mirrors,
     	int plane_height_mm,
     	int plane_tollerance_mm,
     	float focal_length_mm,
@@ -561,6 +569,8 @@ public:
         unsigned char* mirror_map,
         int ground_plane_tollerance_mm,
         int max_range_mm,
+        unsigned short *ground_features_lookup,
+        vector<int> &matching_pixels,
         vector<int> &plane_features_accurate,
         vector<int> &reprojected_features);
 

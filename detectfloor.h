@@ -62,6 +62,7 @@ public:
 		int* ray_map,
 		unsigned char* mirror_map,
 		unsigned short* feature_map,
+		unsigned short *ground_features_lookup,
 	    int ground_plane_tollerance_mm,
 	    int image_plane_tollerance_pixels,
 	    int max_range_mm,
