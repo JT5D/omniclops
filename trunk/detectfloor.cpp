@@ -211,6 +211,7 @@ void detectfloor::detect(
 	int* ray_map,
 	unsigned char* mirror_map,
 	unsigned short* feature_map,
+	unsigned short *ground_features_lookup,
     int ground_plane_tollerance_mm,
     int image_plane_tollerance_pixels,
     int max_range_mm,
@@ -259,11 +260,13 @@ void detectfloor::detect(
         projected_features);
 
     //reproject floor plane features back into the image plane
+	vector<int> matching_pixels;
     vector<int> reprojected_features;
     vector<int> plane_features_accurate;
     omni::reproject_features(
     	projected_features,
     	-1,
+    	no_of_mirrors,
     	floor_height_mm,
     	plane_tollerance_mm,
     	focal_length_mm,
@@ -275,112 +278,19 @@ void detectfloor::detect(
         mirror_map,
         ground_plane_tollerance_mm,
         max_range_mm,
+        ground_features_lookup,
+        matching_pixels,
         plane_features_accurate,
         reprojected_features);
 
-    // create a map of feature positions on the image plane
-    // this makes the subsequent matching search more efficient
-    int w = ray_map_width/image_plane_tollerance_pixels;
-    int h = ray_map_height/image_plane_tollerance_pixels;
-    memset((void*)feature_map, '\0', w*h*sizeof(unsigned short));
-    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
-    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
-    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
-    	int n2 = fy1 * w + fx1;
-    	feature_map[n2] = 1;
-    }
-
-    // find matching features in peripheral mirrors by comparing the actual edge features
-    // against the reprojected ones
-    for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
-    	int fx0 = features[f0];
-    	int fy0 = features[f0 + 1];
-    	int n = fy0 * ray_map_width + fx0;
-    	if ((mirror_map[n] > 0) && (mirror_map[n] != no_of_mirrors)) {
-    		int fx1 = fx0 / image_plane_tollerance_pixels;
-    		int fy1 = fy0 / image_plane_tollerance_pixels;
-    		int n2 = fy1 * w + fx1;
-    		if ((n2 > -1) && (n2 < w*h)) {
-    		    if (feature_map[n2] != 0) {
-    			    floor_features.push_back(fx0);
-    			    floor_features.push_back(fy0);
-    		    }
-    		}
-    	}
-    }
-
-	// project floor features from peripheral mirrors back to the floor plane
-    omni::project_features(
-    	floor_features,
-    	-1,
-    	floor_height_mm,
-    	focal_length_mm,
-    	camera_to_backing_dist_mm,
-    	camera_height_mm,
-    	ray_map_width,
-    	ray_map_height,
-    	ray_map,
-    	mirror_map,
-    	max_range_mm,
-        projected_features);
-
-    // reproject floor plane features into the centre mirror image plane
-    omni::reproject_features(
-    	projected_features,
-    	no_of_mirrors-1,
-    	floor_height_mm,
-    	plane_tollerance_mm,
-    	focal_length_mm,
-    	camera_to_backing_dist_mm,
-    	camera_height_mm,
-    	ray_map,
-    	ray_map_width,
-    	ray_map_height,
-        mirror_map,
-        ground_plane_tollerance_mm,
-        max_range_mm,
-        plane_features_accurate,
-        reprojected_features);
-
-    floor_features.clear();
-
-    // populate a feature map with reprojected points
-    // this makes the subsequent matching search more efficient
-    memset((void*)feature_map, '\0', w*h*sizeof(unsigned short));
-    for (int f1 = (int)reprojected_features.size()-2; f1 >= 0; f1 -= 2) {
-    	int fx1 = reprojected_features[f1]/image_plane_tollerance_pixels;
-    	int fy1 = reprojected_features[f1 + 1]/image_plane_tollerance_pixels;
-    	int n2 = fy1 * w + fx1;
-    	feature_map[n2] = (unsigned short)(((f1/2)*3)+1);
-    }
-
-    // find matching features in centre mirror
-    for (int f0 = (int)features.size()-2; f0 >= 0; f0 -= 2) {
-    	int fx0 = features[f0];
-    	int fy0 = features[f0 + 1];
-
-    	if (!((fx0 > camera_tx) && (fx0 < camera_bx) &&
-    		(fy0 > camera_ty) && (fy0 < camera_by))) {
-
-			int n = fy0 * ray_map_width + fx0;
-			if (mirror_map[n] == no_of_mirrors) {
-				int fx1 = fx0 / image_plane_tollerance_pixels;
-				int fy1 = fy0 / image_plane_tollerance_pixels;
-				int n2 = fy1 * w + fx1;
-				if ((n2 > -1) && (n2 < w*h)) {
-					int f = (int)feature_map[n2]-1;
-					if (f > -1) {
-						floor_features.push_back(fx0);
-						floor_features.push_back(fy0);
-
-						floor_features_positions.push_back(plane_features_accurate[f]);
-						floor_features_positions.push_back(plane_features_accurate[f+1]);
-						floor_features_positions.push_back(plane_features_accurate[f+2]);
-					}
-				}
-			}
-
-    	}
+    for (int i = (int)matching_pixels.size()-1; i >= 0; i--) {
+    	int py = matching_pixels[i] / ray_map_width;
+    	int px = matching_pixels[i] - (py*ray_map_width);
+    	floor_features.push_back(px);
+    	floor_features.push_back(py);
+    	floor_features_positions.push_back(plane_features_accurate[i*3]);
+    	floor_features_positions.push_back(plane_features_accurate[i*3 + 1]);
+    	floor_features_positions.push_back(plane_features_accurate[i*3 + 2]);
     }
 
 }
