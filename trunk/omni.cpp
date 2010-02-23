@@ -2750,26 +2750,28 @@ void omni::reproject_features(
 	int bounding_box_height = bounding_box_by - bounding_box_ty;
 
 	if ((bounding_box_width > 0) && (bounding_box_height > 0)) {
-		int w = bounding_box_width / ground_plane_tollerance_mm;
-		int h = bounding_box_height / ground_plane_tollerance_mm;
+		int grid_width = bounding_box_width / ground_plane_tollerance_mm;
+		int grid_height = bounding_box_height / ground_plane_tollerance_mm;
 
 		// limit the size of the array to prevent running out of memory
-		if (w > 512) {
-			w = 512;
-			ground_plane_tollerance_mm = bounding_box_width / w;
+		if (grid_width > 512) {
+			grid_width = 512;
+			ground_plane_tollerance_mm = bounding_box_width / grid_width;
+			grid_height = bounding_box_height / ground_plane_tollerance_mm;
 		}
-		if (h > 512) {
-			h = 512;
-			ground_plane_tollerance_mm = bounding_box_width / h;
+		if (grid_height > 512) {
+			grid_height = 512;
+			ground_plane_tollerance_mm = bounding_box_height / grid_height;
+			grid_width = bounding_box_width / ground_plane_tollerance_mm;
 		}
 
 		//printf("wh %d %d\n",w,h);
 		//unsigned short ground_features_lookup[(w+1)*(h+1)*10];
-		memset((void*)ground_features_lookup,'\0',(w+1)*(h+1)*10*sizeof(unsigned short));
+		memset((void*)ground_features_lookup,'\0',(grid_width+1)*(grid_height+1)*10*sizeof(unsigned short));
 		for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
-			int x = (plane_features[f] - bounding_box_tx) * w / bounding_box_width;
-			int y = (plane_features[f + 1] - bounding_box_ty) * h / bounding_box_height;
-			int n = (y*w + x)*10;
+			int grid_x = (plane_features[f] - bounding_box_tx) * grid_width / bounding_box_width;
+			int grid_y = (plane_features[f + 1] - bounding_box_ty) * grid_height / bounding_box_height;
+			int n = (grid_y*grid_width + grid_x)*10;
 			if (ground_features_lookup[n] < 9) {
 				ground_features_lookup[n + ground_features_lookup[n] + 1] = (unsigned short)(f + 1);
 				ground_features_lookup[n]++;
@@ -2796,9 +2798,9 @@ void omni::reproject_features(
 						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
 						if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
 
-							int xx = ((ray_x_mm - bounding_box_tx) * w) / bounding_box_width;
-							int yy = ((ray_y_mm - bounding_box_ty) * h) / bounding_box_height;
-							int ground_features_index = (yy*w + xx) * 10;
+							int grid_x = ((ray_x_mm - bounding_box_tx) * grid_width) / bounding_box_width;
+							int grid_y = ((ray_y_mm - bounding_box_ty) * grid_height) / bounding_box_height;
+							int ground_features_index = (grid_y*grid_width + grid_x) * 10;
 							if (ground_features_lookup[ground_features_index] > 0) {
 
 								int start_z_mm = ray_map[i + 2] + camera_height_mm;

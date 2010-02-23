@@ -34,6 +34,7 @@
  * \param max_range_mm maximum range in mm
  * \param point_cloud returned projected features (x,y,z)
  */
+/*
 void pointcloud::features_to_point_cloud(
 	vector<int> &features,
 	int mirror_index,
@@ -83,6 +84,7 @@ void pointcloud::features_to_point_cloud(
 		}
 	}
 }
+*/
 
 void pointcloud::get_feature_heights(
 	unsigned char* img,
@@ -125,8 +127,7 @@ void pointcloud::get_feature_heights(
 	float pixel_diameter_mirror_plane = mirror_diameter_mm / (outer_radius_percent * ray_map_width / 200.0f);
 
 	// pixel diameter on the focal plane
-	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*4 / (camera_to_mirror_backing_dist_mm+focal_length);
-	//printf("pixel_diameter_mm %f\n", pixel_diameter_mm);
+	float pixel_diameter_mm = pixel_diameter_mirror_plane*focal_length*16 / (camera_to_mirror_backing_dist_mm+focal_length);
 
 	// remove features around the area of the camera - we don't need to project these
 	for (int i = (int)features.size()-2; i >= 0; i -= 2) {
@@ -198,7 +199,6 @@ void pointcloud::get_feature_heights(
 					break;
 				}
 			}
-
 		}
 
 	}
@@ -322,6 +322,7 @@ void pointcloud::update(
 	    feature_heights,
 	    point_cloud);
 
+	/*
 	features_to_point_cloud(
 		feature_heights,
 		no_of_mirrors-1,
@@ -334,7 +335,7 @@ void pointcloud::update(
 		mirror_map,
 		max_range_mm,
 	    point_cloud);
-
+*/
 	if (view_type > 1) {
 		max_range_mm = 3000;
 		show(
