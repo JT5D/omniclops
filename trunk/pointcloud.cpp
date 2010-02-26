@@ -86,6 +86,53 @@ void pointcloud::features_to_point_cloud(
 }
 */
 
+/*!
+ * \brief convert a point cloud into a 2D perimeter which can be used for obstacle avoidance
+ * \param point_cloud point cloud (x,y,z)
+ * \param perimeter returned 2D perimeter (x,y)
+ */
+void pointcloud::cloud_to_perimeter(
+	vector<int> &point_cloud,
+	vector<int> &perimeter)
+{
+	int max_height_mm= 1500;
+	int max_range_mm = 30000;
+	perimeter.clear();
+	const int degrees_step = 8;
+	int buckets = 360 / degrees_step;
+	int radial_buckets[360];
+	memset((void*)radial_buckets,'\0',2*(buckets+1)*sizeof(int));
+	for (int i = (int)point_cloud.size() - 3; i >= 0; i -= 3) {
+		int x = point_cloud[i];
+		int y = point_cloud[i + 1];
+		int z = point_cloud[i + 2];
+		if ((x > -max_range_mm) && (x < max_range_mm) &&
+			(y > -max_range_mm) && (y < max_range_mm) &&
+			(z > -1) && (z < max_height_mm)) {
+		    int bucket = (int)(((atan2(x,-y) / 3.1415927) + 1.0) * buckets);
+		    for (int b = bucket - 3; b <= bucket + 3; b++) {
+		    	int b2 = b;
+		    	if (b2 < 0) b2 += buckets;
+		    	if (b2 >= buckets) b2 -= buckets;
+		        radial_buckets[b2*2]++;
+		        int range = (int)sqrt(x*x + y*y);
+	            radial_buckets[b2*2 + 1] += range;
+		    }
+		}
+	}
+
+	for (int b = 0; b < buckets; b++) {
+		if (radial_buckets[b*2] > 2) {
+			int range = radial_buckets[b*2+1] / radial_buckets[b*2];
+			double angle = (b * 2 * 3.1415927 / buckets) - 3.1415927;
+			int x = (int)(range * sin(angle));
+			int y = (int)(range * cos(angle));
+			perimeter.push_back(x);
+			perimeter.push_back(y);
+		}
+	}
+}
+
 void pointcloud::get_feature_heights(
 	unsigned char* img,
     vector<int> &features,
@@ -141,8 +188,11 @@ void pointcloud::get_feature_heights(
 	// tollerance for features above or below the plane
 	int plane_tollerance_mm = height_step_mm/2;
 
+	int max_hits = 0;
 	vector<int> plane_features;
 	vector<int> plane_features_positions;
+	vector<int> best_plane_features;
+	vector<int> best_plane_features_positions;
 	for (int plane_height_mm = 0; plane_height_mm <= max_height_mm; plane_height_mm += height_step_mm) {
 
 		// approximate size of one pixel on this plane
@@ -151,6 +201,7 @@ void pointcloud::get_feature_heights(
 
 		// detect features at this height
 		plane_features.clear();
+		plane_features_positions.clear();
 		detectfloor::detect(
 			features,
 			no_of_mirrors,
@@ -175,32 +226,48 @@ void pointcloud::get_feature_heights(
 			plane_features_positions,
 			plane_features);
 
-		// add points to the cloud
-		for (int i = (int)plane_features_positions.size()-3; i >= 0; i -= 3) {
-			point_cloud.push_back(plane_features_positions[i]);
-			point_cloud.push_back(plane_features_positions[i+1]);
-			point_cloud.push_back(plane_features_positions[i+2]);
+		// store the result with the largest number of intercepts on this plane
+		if ((int)plane_features.size() > max_hits) {
+		    max_hits = (int)plane_features.size();
+
+		    best_plane_features.clear();
+		    best_plane_features_positions.clear();
+		    int no_of_features = (int)plane_features.size()/2;
+		    for (int i = 0; i < no_of_features*2; i++) {
+		    	best_plane_features.push_back(plane_features[i]);
+		    }
+		    for (int i = 0; i < no_of_features*3; i++) {
+		    	best_plane_features_positions.push_back(plane_features_positions[i]);
+		    }
 		}
+	}
 
-		// add features for this plane
-		for (int i = (int)plane_features.size()-2; i >= 0; i -= 2) {
-			int x = plane_features[i];
-			int y = plane_features[i + 1];
+	// add points to the cloud
+	for (int i = (int)best_plane_features_positions.size()-3; i >= 0; i -= 3) {
+		point_cloud.push_back(best_plane_features_positions[i]);
+		point_cloud.push_back(best_plane_features_positions[i+1]);
+		point_cloud.push_back(best_plane_features_positions[i+2]);
+	}
 
-		    feature_heights.push_back(x);
-	        feature_heights.push_back(y);
-			feature_heights.push_back(plane_features_positions[(i/2)*3+2]);
+	// update the point cloud using the best features
+	for (int i = (int)best_plane_features.size()-2; i >= 0; i -= 2) {
+		int x = best_plane_features[i];
+		int y = best_plane_features[i + 1];
 
-			// remove this feature from further inquiries
-			for (int j = (int)features.size()-2; j >= 0; j -= 2) {
-				if ((features[j] == x) && (features[j + 1] == y)) {
-					features.erase(features.begin() + j);
-					features.erase(features.begin() + j);
-					break;
-				}
+	    feature_heights.push_back(x);
+        feature_heights.push_back(y);
+		feature_heights.push_back(best_plane_features_positions[(i/2)*3+2]);
+
+		// remove this feature from further inquiries
+		/*
+		for (int j = (int)features.size()-2; j >= 0; j -= 2) {
+			if ((features[j] == x) && (features[j + 1] == y)) {
+				features.erase(features.begin() + j);
+				features.erase(features.begin() + j);
+				break;
 			}
 		}
-
+		*/
 	}
 
 	if (show_features) {
@@ -212,6 +279,49 @@ void pointcloud::get_feature_heights(
 			int b = (max_height_mm - plane_height_mm) * 255  / max_height_mm;
 			drawing::drawCross(img, ray_map_width, ray_map_height, x, y, 2, r, 0, b, 0);
 	    }
+	}
+}
+
+void pointcloud::show_perimeter(
+	unsigned char *img,
+	int width,
+	int height,
+	int max_range_mm,
+	vector<int> &perimeter,
+	int r, int g, int b,
+	int view_type)
+{
+	int x2=0,y2=0;
+	int prev_x = 0;
+	int prev_y = 0;
+	bool first = true;
+	for (int i = (int)perimeter.size()-2; i >= 0; i -= 2) {
+		int x = perimeter[i];
+		int y = perimeter[i+1];
+
+		if ((x > -max_range_mm) && (x < max_range_mm) &&
+			(y > -max_range_mm) && (y < max_range_mm)) {
+
+			x2 = -1;
+			switch(view_type) {
+			case 0: {
+                x2 = (x + max_range_mm) * height / (max_range_mm*2);
+                y2 = (y + max_range_mm) * (height-1) / (max_range_mm*2);
+				break;
+			}
+			case 3: {
+                x2 = ((x + max_range_mm) * height / (max_range_mm*2)) / 2;
+                y2 = ((y + max_range_mm) * (height-1) / (max_range_mm*2)) / 2;
+				break;
+			}
+			}
+			if ((x2 > -1) && (!first)) {
+			    drawing::drawLine(img, width, height, prev_x, prev_y, x2, y2, r,g,b, 0, false);
+			}
+			prev_x = x2;
+			prev_y = y2;
+			if (x2 > -1) first = false;
+		}
 	}
 }
 
@@ -266,6 +376,7 @@ void pointcloud::show(
 			}
 		}
 	}
+
 }
 
 
@@ -291,37 +402,54 @@ void pointcloud::update(
     unsigned short* feature_map,
     unsigned short* ground_features_lookup,
     int view_type,
-    vector<int> &point_cloud)
+    vector<int> &point_cloud,
+    vector<int> &perimeter)
 {
 	bool show_features = false;
 	if (view_type == 1) show_features = true;
 
-	vector<int> feature_heights;
-	get_feature_heights(
-		img,
-	    features,
-	    camera_height_mm,
-	    camera_to_mirror_backing_dist_mm,
-	    focal_length_mm,
-	    mirror_position_pixels,
-	    outer_radius_percent,
-	    mirror_diameter_mm,
-	    no_of_mirrors,
-	    ray_map_width,
-	    ray_map_height,
-	    max_height_mm,
-	    height_step_mm,
-	    max_range_mm,
-	    camera_width_percent,
-	    camera_height_percent,
-	    ray_map,
-	    mirror_map,
-	    feature_map,
-	    ground_features_lookup,
-	    show_features,
-	    feature_heights,
-	    point_cloud);
+	// divide features into groups
+	//vector<vector<int> > groups;
+	//int grouping_radius = OMNI_HORIZONTAL_SAMPLING*3;
+	//int minimum_group_size = 100;
+	//grouping::update(features, grouping_radius, minimum_group_size, groups);
+	//printf("%d groups\n", (int)groups.size());
 
+	point_cloud.clear();
+	//for (int grp = 0; grp < (int)groups.size(); grp++) {
+
+		vector<int> feature_heights;
+		vector<int> temp_point_cloud;
+		get_feature_heights(
+			img,
+			features, //groups[grp],
+			camera_height_mm,
+			camera_to_mirror_backing_dist_mm,
+			focal_length_mm,
+			mirror_position_pixels,
+			outer_radius_percent,
+			mirror_diameter_mm,
+			no_of_mirrors,
+			ray_map_width,
+			ray_map_height,
+			max_height_mm,
+			height_step_mm,
+			max_range_mm,
+			camera_width_percent,
+			camera_height_percent,
+			ray_map,
+			mirror_map,
+			feature_map,
+			ground_features_lookup,
+			show_features,
+			feature_heights,
+			temp_point_cloud);
+
+		for (int i = 0; i < (int)temp_point_cloud.size(); i++) {
+			point_cloud.push_back(temp_point_cloud[i]);
+		}
+
+	//}
 	/*
 	features_to_point_cloud(
 		feature_heights,
@@ -336,6 +464,9 @@ void pointcloud::update(
 		max_range_mm,
 	    point_cloud);
 */
+
+	//cloud_to_perimeter(point_cloud, perimeter);
+
 	if (view_type > 1) {
 		max_range_mm = 3000;
 		show(
@@ -343,8 +474,49 @@ void pointcloud::update(
 			ray_map_width,
 			ray_map_height,
 			max_range_mm,
-			max_height_mm,
+			camera_height_mm,
 			point_cloud,
 			view_type-2);
+		/*
+	    show_perimeter(
+			img,
+			ray_map_width,
+			ray_map_height,
+			max_range_mm,
+			perimeter,
+			255,0,0,
+			view_type-2);
+			*/
+	}
+}
+
+
+/* saves point cloud coordinates to file for use by other programs */
+void pointcloud::save(
+	std::string filename,
+	vector<int> &point_cloud)
+{
+	FILE *file = fopen(filename.c_str(), "wb");
+	if (file != NULL) {
+
+		struct Point3D {
+			short x;
+			short y;
+			short z;
+		};
+
+		int no_of_pts = (int)point_cloud.size()/3;
+		Point3D *pts = new Point3D[no_of_pts];
+		for (int p = 0; p < no_of_pts; p++) {
+			pts[p].x = (short)point_cloud[p*3];
+			pts[p].y = (short)point_cloud[p*3 + 1];
+			pts[p].z = (short)point_cloud[p*3 + 2];
+		}
+
+		fprintf(file,"%d", no_of_pts);
+		fwrite(pts, sizeof(pts), no_of_pts, file);
+		delete[] pts;
+
+		fclose(file);
 	}
 }

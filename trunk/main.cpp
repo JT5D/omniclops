@@ -1338,10 +1338,11 @@ int main(int argc, char* argv[]) {
 	if ((show_point_cloud) && (no_of_mirrors > 1)) {
 		int height_step_mm = 200;
 		int max_range_mm = 5000;
-		int camera_width_percent = 45;
-		int camera_height_percent = 30;
-		int view_type = 5;
+		int camera_width_percent = 50; //45;
+		int camera_height_percent = 40; //30;
+		int view_type = 2;
 		vector<int> point_cloud;
+		vector<int> perimeter_2D;
 		pointcloud::update(
 			l_,
 		    features,
@@ -1353,7 +1354,7 @@ int main(int argc, char* argv[]) {
 		    mirror_diameter,
 		    no_of_mirrors,
 		    ww,hh,
-		    (int)camera_height,
+		    (int)camera_height*70/100,
 		    height_step_mm,
 		    max_range_mm,
 		    camera_width_percent,
@@ -1363,7 +1364,8 @@ int main(int argc, char* argv[]) {
 		    lcam->feature_map,
 		    lcam->ground_features_lookup,
 		    view_type,
-		    point_cloud);
+		    point_cloud,
+		    perimeter_2D);
 	}
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {

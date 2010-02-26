@@ -30,6 +30,7 @@
 #include "drawing.h"
 #include "omni.h"
 #include "detectfloor.h"
+//#include "grouping.h"
 using namespace std;
 
 class pointcloud {
@@ -48,6 +49,11 @@ public:
 		int max_range_mm,
 	    vector<int> &point_cloud);
 */
+
+	static void cloud_to_perimeter(
+		vector<int> &point_cloud,
+		vector<int> &perimeter);
+
 	static void get_feature_heights(
 		unsigned char* img,
 		vector<int> &features,
@@ -82,6 +88,15 @@ public:
 		vector<int> &point_cloud,
 		int view_type);
 
+	static void show_perimeter(
+		unsigned char *img,
+		int width,
+		int height,
+		int max_range_mm,
+		vector<int> &perimeter,
+		int r, int g, int b,
+		int view_type);
+
 	static void update(
 		unsigned char* img,
 	    vector<int> &features,
@@ -104,7 +119,12 @@ public:
 	    unsigned short* feature_map,
 	    unsigned short* ground_features_lookup,
 	    int view_type,
-	    vector<int> &point_cloud);
+	    vector<int> &point_cloud,
+	    vector<int> &perimeter);
+
+	static void save(
+		std::string filename,
+		vector<int> &point_cloud);
 
 };
 

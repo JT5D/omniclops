@@ -2679,6 +2679,7 @@ void omni::project_features(
 
 /*!
  * \brief reproject features from a plane (typically the ground) into image coordinates
+ * \param img colour image data
  * \param plane_features features on the plane
  * \param mirror_index index number of the mirror
  * \param no_of_mirrors number of mirrors
@@ -2699,6 +2700,7 @@ void omni::project_features(
  * \param reprojected_features returned reprojected features in image coordinates
  */
 void omni::reproject_features(
+	unsigned char* img,
 	vector<int> &plane_features,
 	int mirror_index,
 	int no_of_mirrors,
@@ -2832,6 +2834,7 @@ void omni::reproject_features(
 									// difference between the interception point height and the plane
 									int deviation_from_plane_mm = (int)(iz - plane_height_mm);
 
+
 									if ((deviation_from_plane_mm >= -plane_tollerance_mm) &&
 										(deviation_from_plane_mm <= plane_tollerance_mm)) {
 
@@ -2846,9 +2849,8 @@ void omni::reproject_features(
 										plane_features_accurate.push_back((int)ix);
 										plane_features_accurate.push_back((int)iy);
 										plane_features_accurate.push_back((int)iz);
-										gf = -1;
+										//gf = -1;
 									}
-
 								}
 							}
 						}

@@ -264,6 +264,7 @@ void detectfloor::detect(
     vector<int> reprojected_features;
     vector<int> plane_features_accurate;
     omni::reproject_features(
+    	img,
     	projected_features,
     	-1,
     	no_of_mirrors,
@@ -288,9 +289,12 @@ void detectfloor::detect(
     	int px = matching_pixels[i] - (py*ray_map_width);
     	floor_features.push_back(px);
     	floor_features.push_back(py);
-    	floor_features_positions.push_back(plane_features_accurate[i*3]);
-    	floor_features_positions.push_back(plane_features_accurate[i*3 + 1]);
-    	floor_features_positions.push_back(plane_features_accurate[i*3 + 2]);
+    	int x = plane_features_accurate[i*3];
+    	int y = plane_features_accurate[i*3 + 1];
+    	int z = plane_features_accurate[i*3 + 2];
+    	floor_features_positions.push_back(x);
+    	floor_features_positions.push_back(y);
+    	floor_features_positions.push_back(z);
     }
 
 }
