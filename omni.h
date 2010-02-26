@@ -554,7 +554,9 @@ public:
     	unsigned char* mirror_map,
     	int max_range_mm,
         vector<int> &projected_features);
+
     static void reproject_features(
+   		unsigned char* img,
     	vector<int> &plane_features,
     	int mirror_index,
     	int no_of_mirrors,
