@@ -403,6 +403,7 @@ void pointcloud::update(
     unsigned short* ground_features_lookup,
     int view_type,
     vector<int> &point_cloud,
+    vector<int> &feature_heights,
     vector<int> &perimeter)
 {
 	bool show_features = false;
@@ -418,7 +419,6 @@ void pointcloud::update(
 	point_cloud.clear();
 	//for (int grp = 0; grp < (int)groups.size(); grp++) {
 
-		vector<int> feature_heights;
 		vector<int> temp_point_cloud;
 		get_feature_heights(
 			img,
