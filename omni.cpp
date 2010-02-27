@@ -4565,3 +4565,4 @@ void omni::create_obstacle(
 		}
 	}
 }
+

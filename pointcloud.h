@@ -120,6 +120,7 @@ public:
 	    unsigned short* ground_features_lookup,
 	    int view_type,
 	    vector<int> &point_cloud,
+	    vector<int> &feature_heights,
 	    vector<int> &perimeter);
 
 	static void save(

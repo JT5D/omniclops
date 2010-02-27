@@ -47,6 +47,7 @@
 <option id="gnu.cpp.link.option.flags.264691064" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="/usr/local/lib/libcxcore.so /usr/local/lib/libcvaux.so /usr/local/lib/libcv.so /usr/local/lib/libhighgui.so&#10;" valueType="string"/>
 <option id="gnu.cpp.link.option.libs.623307255" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 <listOptionValue builtIn="false" value="cv"/>
+<listOptionValue builtIn="false" value="cxcore"/>
 <listOptionValue builtIn="false" value="gstapp-0.10"/>
 <listOptionValue builtIn="false" value="highgui"/>
 </option>
@@ -62,7 +63,7 @@
 </toolChain>
 </folderInfo>
 <sourceEntries>
-<entry excluding="detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+<entry excluding="sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 </sourceEntries>
 </configuration>
 </storageModule>
@@ -527,7 +528,7 @@
 </toolChain>
 </folderInfo>
 <sourceEntries>
-<entry excluding="detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+<entry excluding="sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 </sourceEntries>
 </configuration>
 </storageModule>

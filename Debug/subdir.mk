@@ -11,6 +11,7 @@ CPP_SRCS += \
 ../fast.cpp \
 ../libcam.cpp \
 ../main.cpp \
+../map2D.cpp \
 ../motionmodel.cpp \
 ../omni.cpp \
 ../pointcloud.cpp \
@@ -24,6 +25,7 @@ OBJS += \
 ./fast.o \
 ./libcam.o \
 ./main.o \
+./map2D.o \
 ./motionmodel.o \
 ./omni.o \
 ./pointcloud.o \
@@ -37,6 +39,7 @@ CPP_DEPS += \
 ./fast.d \
 ./libcam.d \
 ./main.d \
+./map2D.d \
 ./motionmodel.d \
 ./omni.d \
 ./pointcloud.d \

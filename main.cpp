@@ -63,8 +63,8 @@ struct Match2D {
 };
 
 void compute_optical_flow(
-	IplImage* frame1,
-	IplImage* frame2,
+	IplImage* frame1,  // previous frame
+	IplImage* frame2,  // current frame
 	IplImage* output,
 	int number_of_features,
 	int max_magnitude,
@@ -76,18 +76,17 @@ void compute_optical_flow(
 	IplImage *&pyramid2,
 	std::string flow_filename,
 	int& no_of_matches,
-	Match2D* matches)
+	Match2D* matches,
+	bool show_arrows)
 {
 	no_of_matches = 0;
 
-	if (frame1_1C == NULL) {
-		frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
-		frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
-		eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-		temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-		pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
-		pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
-	}
+	if (frame1_1C == NULL) frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+	if (frame2_1C == NULL) frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+	if (eig_image == NULL) eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+	if (temp_image == NULL) temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+	if (pyramid1 == NULL) pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+	if (pyramid2 == NULL) pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
 
 	FILE *file = NULL;
 	if (flow_filename != "") {
@@ -100,7 +99,7 @@ void compute_optical_flow(
     CvPoint2D32f frame1_features[number_of_features];
 
     cvGoodFeaturesToTrack(frame1_1C, eig_image, temp_image, frame1_features, &
-number_of_features, .01, .01, NULL);
+number_of_features, .01, .001, NULL, 16, 1, 0.001);
 
     CvPoint2D32f frame2_features[number_of_features];
 
@@ -108,7 +107,7 @@ number_of_features, .01, .01, NULL);
     float optical_flow_feature_error[number_of_features];
     CvSize optical_flow_window = cvSize(3,3);
     CvTermCriteria optical_flow_termination_criteria
-        = cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .3 );
+        = cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .0003 );
 
     cvCalcOpticalFlowPyrLK(frame1_1C, frame2_1C, pyramid1, pyramid2, frame1_features,
 frame2_features, number_of_features, optical_flow_window, 5,
@@ -116,8 +115,7 @@ optical_flow_found_feature, optical_flow_feature_error,
 optical_flow_termination_criteria, 0);
 
     /* let's paint and make blended drinks */
-    for(int i = 0; i < number_of_features; i++)
-    {
+    for(int i = 0; i < number_of_features; i++) {
          if (optical_flow_found_feature[i] == 0) continue;
          int line_thickness = 1;
          CvScalar line_color = CV_RGB(255,0,0);
@@ -136,17 +134,19 @@ optical_flow_termination_criteria, 0);
         	 matches[no_of_matches].y1 = (unsigned short)q.y;
         	 no_of_matches++;
 
-        	 if (hypotenuse > 3) { /* don't bother to show features which havn't moved */
-				 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
-				 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
-				 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
-				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-				 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
-				 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
-				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-				 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
-				 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
-				 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+        	 if (hypotenuse > 0) { /* don't bother to show features which havn't moved */
+        		 if (show_arrows) {
+					 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
+					 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
+					 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
+					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+					 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
+					 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
+					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+					 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
+					 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
+					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+        		 }
         	 }
          }
     }
@@ -158,6 +158,52 @@ optical_flow_termination_criteria, 0);
 		fclose(file);
 	}
 }
+
+void compute_harris_corners(
+	IplImage* frame1,
+    IplImage *&frame1_1C,
+	IplImage *&eig_image,
+	IplImage *&temp_image,
+	IplImage *&pyramid1,
+	int minimum_separation,
+	std::string harris_filename,
+	vector<int> &features)
+{
+	features.clear();
+
+	if (frame1_1C == NULL) frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+	if (eig_image == NULL) eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+	if (temp_image == NULL) temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+	if (pyramid1 == NULL) pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+
+	FILE *file = NULL;
+	if (harris_filename != "") {
+		file = fopen(harris_filename.c_str(), "wb");
+	}
+
+    int number_of_features = 2000;
+	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
+    CvPoint2D32f frame1_features[number_of_features];
+
+    cvGoodFeaturesToTrack(frame1_1C, eig_image, temp_image, frame1_features, &
+number_of_features, .01, minimum_separation, NULL, 16, 1, 0.001);
+
+    for(int i = 0; i < number_of_features; i++) {
+        features.push_back((int)(frame1_features[i].x));
+        features.push_back((int)(frame1_features[i].y));
+    }
+
+	if (harris_filename != "") {
+		fprintf(file, "%d",number_of_features);
+		for(int i = 0; i < number_of_features; i++) {
+			fprintf(file,"%d", features[i*2]);
+			fprintf(file,"%d", features[i*2 + 1]);
+		}
+
+		fclose(file);
+	}
+}
+
 
 /*!
  * \brief run all unit tests
@@ -182,7 +228,12 @@ int main(int argc, char* argv[]) {
   bool show_point_cloud = false;
   bool show_ground = false;
   bool show_lines = false;
+  bool show_harris_corners = false;
   bool unwarp_features = false;
+  bool show_overlay_angles = false;
+  bool show_overlay = false;
+  bool show_occupancy_grid = false;
+  bool show_close_features = false;
   float outer_radius = 37; //115;
   //int FOV_degrees = 50;
 
@@ -214,6 +265,8 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --grid                 Show occupancy grid");
   opt->addUsage( "     --features             Show edge features");
   opt->addUsage( "     --nearfeatures         Show nearby edge features");
+  opt->addUsage( "     --harris <filename>    Show Harris corners and save them to the given filename");
+  opt->addUsage( "     --harrisfeatures       Show Harris corners");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
   opt->addUsage( "     --pointcloud           Show point cloud");
@@ -284,6 +337,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "height", 'h' );
   opt->setOption(  "skip", 's' );
   opt->setOption(  "fov" );
+  opt->setOption(  "harris" );
   opt->setOption(  "mirrorx0" );
   opt->setOption(  "mirrory0" );
   opt->setOption(  "mirrorx1" );
@@ -318,6 +372,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "grid" );
   opt->setFlag(  "tests" );
   opt->setFlag(  "nearfeatures" );
+  opt->setFlag(  "harrisfeatures" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -408,10 +463,22 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
-  bool show_overlay_angles = false;
-  bool show_overlay = false;
-  bool show_occupancy_grid = false;
-  bool show_close_features = false;
+  std::string harris_filename = "";
+  if( opt->getValue( "harris" ) != NULL  || opt->getFlag( "harrisfeatures" )) {
+	  if (opt->getValue( "harris" ) != NULL) harris_filename = opt->getValue("harris");
+  	  show_harris_corners = true;
+	  show_occupancy_grid = false;
+	  show_overlay_angles = false;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_point_cloud = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+	  show_close_features = false;
+  }
 
   if( opt->getFlag( "nearfeatures" ) ) {
 	  show_occupancy_grid = false;
@@ -425,6 +492,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = true;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "grid" ) ) {
@@ -439,6 +507,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "overlay" ) ) {
@@ -453,6 +522,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "overlayangles" ) ) {
@@ -467,6 +537,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "ground" ) ) {
@@ -481,6 +552,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   bool optical_flow = false;
@@ -500,6 +572,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
@@ -514,6 +587,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = true;
 	  show_FAST = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "lines" ) ) {
@@ -528,6 +602,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
@@ -542,6 +617,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   if( opt->getFlag( "pointcloud" ) ) {
@@ -556,6 +632,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_harris_corners = false;
   }
 
   float baseline = 100;
@@ -858,6 +935,7 @@ int main(int argc, char* argv[]) {
   if (unwarp_image) image_title = "Unwarped";
   if (show_FAST) image_title = "FAST corners";
   if (show_features) image_title = "Image features";
+  if (show_harris_corners) image_title = "Harris corners";
 
 //cout<<c.setSharpness(3)<<"   "<<c.minSharpness()<<"  "<<c.maxSharpness()<<" "<<c.defaultSharpness()<<endl;
 
@@ -973,6 +1051,9 @@ int main(int argc, char* argv[]) {
 	  }
       prev_ = (unsigned char *)prev->imageData;
   }
+
+  // Harris corners
+  vector<int> harris_features;
 
   while(1){
 
@@ -1335,14 +1416,76 @@ int main(int argc, char* argv[]) {
 
 	}
 
+	if (show_harris_corners) {
+		// detect corners
+	    int minimum_separation = 8;
+		compute_harris_corners(
+			l,
+		    frame1_1C,
+			eig_image,
+			temp_image,
+			pyramid1,
+			minimum_separation,
+			harris_filename,
+			harris_features);
+
+		//remove features outside of the outer perimeter
+		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
+		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
+		int outer_radius_pixels_sqr = outer_radius_pixels*outer_radius_pixels;
+		for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
+			int dx = harris_features[i] - centre_x;
+			int dy = harris_features[i+1] - centre_y;
+			int r = dx*dx + dy*dy;
+			if (r > outer_radius_pixels_sqr) {
+				harris_features.erase(harris_features.begin()+i);
+				harris_features.erase(harris_features.begin()+i);
+			}
+		}
+
+        int r=0,g=0,b=255;
+        for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
+        	drawing::drawCross(l_, ww, hh, harris_features[i], harris_features[i+1], 4, r, g, b, 0);
+        }
+	}
+
 	if ((show_point_cloud) && (no_of_mirrors > 1)) {
+
+		// detect corners
+		compute_harris_corners(
+			l,
+		    frame1_1C,
+			eig_image,
+			temp_image,
+			pyramid1,
+			8,
+			harris_filename,
+			harris_features);
+
+		//remove features outside of the outer perimeter
+		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
+		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
+		int outer_radius_pixels_sqr = outer_radius_pixels*outer_radius_pixels;
+		for (int i = (int)harris_features.size()-2; i >= 0; i-=2) {
+			int dx = harris_features[i] - centre_x;
+			int dy = harris_features[i+1] - centre_y;
+			int r = dx*dx + dy*dy;
+			if (r > outer_radius_pixels_sqr) {
+				harris_features.erase(harris_features.begin()+i);
+				harris_features.erase(harris_features.begin()+i);
+			}
+		}
+
 		int height_step_mm = 200;
 		int max_range_mm = 5000;
 		int camera_width_percent = 50; //45;
 		int camera_height_percent = 40; //30;
-		int view_type = 2;
+		int view_type = 1;
 		vector<int> point_cloud;
 		vector<int> perimeter_2D;
+		vector<int> feature_heights;
 		pointcloud::update(
 			l_,
 		    features,
@@ -1365,7 +1508,12 @@ int main(int argc, char* argv[]) {
 		    lcam->ground_features_lookup,
 		    view_type,
 		    point_cloud,
+		    feature_heights,
 		    perimeter_2D);
+
+        for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
+        	drawing::drawCross(l_, ww, hh, harris_features[i], harris_features[i+1], 4, 0, 0, 255, 1);
+        }
 	}
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
@@ -1446,7 +1594,7 @@ int main(int argc, char* argv[]) {
     	compute_optical_flow(
     		prev, l, flow, MAX_FLOW_MATCHES, 20,
             frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2,
-            flow_filename,no_of_flow_matches,flow_matches);
+            flow_filename,no_of_flow_matches,flow_matches,true);
         memcpy((void*)prev_,l_,ww*hh*3);
         memcpy((void*)l_,flow_,ww*hh*3);
     }
@@ -1524,17 +1672,14 @@ int main(int argc, char* argv[]) {
   if (img_occlusions == NULL) {
 	  delete[] img_occlusions;
   }
-  if (frame1_1C != NULL) {
-	  cvReleaseImage(&frame1_1C);
-	  cvReleaseImage(&frame2_1C);
-	  cvReleaseImage(&eig_image);
-	  cvReleaseImage(&temp_image);
-	  cvReleaseImage(&pyramid1);
-	  cvReleaseImage(&pyramid2);
-  }
+  if (frame1_1C != NULL) cvReleaseImage(&frame1_1C);
+  if (frame2_1C != NULL) cvReleaseImage(&frame2_1C);
+  if (eig_image != NULL) cvReleaseImage(&eig_image);
+  if (temp_image != NULL) cvReleaseImage(&temp_image);
+  if (pyramid1 != NULL) cvReleaseImage(&pyramid1);
+  if (pyramid2 != NULL) cvReleaseImage(&pyramid2);
 
   delete lcam;
-  //delete motion;
   delete corners;
 
   return 0;
