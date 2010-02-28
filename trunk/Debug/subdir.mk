@@ -9,13 +9,17 @@ CPP_SRCS += \
 ../detectfloor.cpp \
 ../drawing.cpp \
 ../fast.cpp \
+../graphslam.cpp \
+../harris.cpp \
 ../libcam.cpp \
 ../main.cpp \
 ../map2D.cpp \
 ../motionmodel.cpp \
 ../omni.cpp \
 ../pointcloud.cpp \
-../polynomial.cpp 
+../polynomial.cpp \
+../posegraph.cpp \
+../trackfeatures.cpp 
 
 OBJS += \
 ./anyoption.o \
@@ -23,13 +27,17 @@ OBJS += \
 ./detectfloor.o \
 ./drawing.o \
 ./fast.o \
+./graphslam.o \
+./harris.o \
 ./libcam.o \
 ./main.o \
 ./map2D.o \
 ./motionmodel.o \
 ./omni.o \
 ./pointcloud.o \
-./polynomial.o 
+./polynomial.o \
+./posegraph.o \
+./trackfeatures.o 
 
 CPP_DEPS += \
 ./anyoption.d \
@@ -37,13 +45,17 @@ CPP_DEPS += \
 ./detectfloor.d \
 ./drawing.d \
 ./fast.d \
+./graphslam.d \
+./harris.d \
 ./libcam.d \
 ./main.d \
 ./map2D.d \
 ./motionmodel.d \
 ./omni.d \
 ./pointcloud.d \
-./polynomial.d 
+./polynomial.d \
+./posegraph.d \
+./trackfeatures.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
