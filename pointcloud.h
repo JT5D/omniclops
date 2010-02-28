@@ -30,7 +30,7 @@
 #include "drawing.h"
 #include "omni.h"
 #include "detectfloor.h"
-//#include "grouping.h"
+
 using namespace std;
 
 class pointcloud {

@@ -42,6 +42,7 @@
 #include "pointcloud.h"
 #include "fast.h"
 #include "libcam.h"
+#include "harris.h"
 
 #include "cppunitlite/TestHarness.h"
 #include "cppunitlite/TestResultStdErr.h"
@@ -158,52 +159,6 @@ optical_flow_termination_criteria, 0);
 		fclose(file);
 	}
 }
-
-void compute_harris_corners(
-	IplImage* frame1,
-    IplImage *&frame1_1C,
-	IplImage *&eig_image,
-	IplImage *&temp_image,
-	IplImage *&pyramid1,
-	int minimum_separation,
-	std::string harris_filename,
-	vector<int> &features)
-{
-	features.clear();
-
-	if (frame1_1C == NULL) frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
-	if (eig_image == NULL) eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-	if (temp_image == NULL) temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-	if (pyramid1 == NULL) pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
-
-	FILE *file = NULL;
-	if (harris_filename != "") {
-		file = fopen(harris_filename.c_str(), "wb");
-	}
-
-    int number_of_features = 2000;
-	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
-    CvPoint2D32f frame1_features[number_of_features];
-
-    cvGoodFeaturesToTrack(frame1_1C, eig_image, temp_image, frame1_features, &
-number_of_features, .01, minimum_separation, NULL, 16, 1, 0.001);
-
-    for(int i = 0; i < number_of_features; i++) {
-        features.push_back((int)(frame1_features[i].x));
-        features.push_back((int)(frame1_features[i].y));
-    }
-
-	if (harris_filename != "") {
-		fprintf(file, "%d",number_of_features);
-		for(int i = 0; i < number_of_features; i++) {
-			fprintf(file,"%d", features[i*2]);
-			fprintf(file,"%d", features[i*2 + 1]);
-		}
-
-		fclose(file);
-	}
-}
-
 
 /*!
  * \brief run all unit tests
@@ -1419,30 +1374,22 @@ int main(int argc, char* argv[]) {
 	if (show_harris_corners) {
 		// detect corners
 	    int minimum_separation = 8;
-		compute_harris_corners(
+
+		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
+		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
+
+	    harris::get_features(
 			l,
 		    frame1_1C,
 			eig_image,
 			temp_image,
 			pyramid1,
 			minimum_separation,
+			centre_x, centre_y,
+			outer_radius_pixels,
 			harris_filename,
 			harris_features);
-
-		//remove features outside of the outer perimeter
-		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
-		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
-		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
-		int outer_radius_pixels_sqr = outer_radius_pixels*outer_radius_pixels;
-		for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
-			int dx = harris_features[i] - centre_x;
-			int dy = harris_features[i+1] - centre_y;
-			int r = dx*dx + dy*dy;
-			if (r > outer_radius_pixels_sqr) {
-				harris_features.erase(harris_features.begin()+i);
-				harris_features.erase(harris_features.begin()+i);
-			}
-		}
 
         int r=0,g=0,b=255;
         for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
@@ -1452,31 +1399,22 @@ int main(int argc, char* argv[]) {
 
 	if ((show_point_cloud) && (no_of_mirrors > 1)) {
 
+		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
+		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
+
 		// detect corners
-		compute_harris_corners(
+		harris::get_features(
 			l,
 		    frame1_1C,
 			eig_image,
 			temp_image,
 			pyramid1,
 			8,
+			centre_x, centre_y,
+			outer_radius_pixels,
 			harris_filename,
 			harris_features);
-
-		//remove features outside of the outer perimeter
-		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
-		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
-		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
-		int outer_radius_pixels_sqr = outer_radius_pixels*outer_radius_pixels;
-		for (int i = (int)harris_features.size()-2; i >= 0; i-=2) {
-			int dx = harris_features[i] - centre_x;
-			int dy = harris_features[i+1] - centre_y;
-			int r = dx*dx + dy*dy;
-			if (r > outer_radius_pixels_sqr) {
-				harris_features.erase(harris_features.begin()+i);
-				harris_features.erase(harris_features.begin()+i);
-			}
-		}
 
 		int height_step_mm = 200;
 		int max_range_mm = 5000;
