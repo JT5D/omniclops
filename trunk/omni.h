@@ -82,6 +82,7 @@ public:
     unsigned short* feature_map; // used during projection/reprojection
     unsigned short *ground_features_lookup; // lookup table used for feature projection
     float* mirror_lookup; // radii and angles
+    float* feature_matches; // used during point cloud calculations
 
     /* radial lines */
     int no_of_radial_lines;
@@ -107,7 +108,8 @@ public:
     	float camera_height_mm,
     	float camera_to_backing_dist_mm,
     	float focal_length_mm,
-    	float plane_height_mm);
+    	float plane_height_mm,
+    	float ray_map_height_mm);
 
     static bool intersection(
         float x0,
@@ -327,6 +329,7 @@ public:
     	int camera_height_mm,
     	int img_width,
     	int img_height,
+    	int ray_map_height_mm,
     	int tx_mm,
     	int ty_mm,
     	int bx_mm,
@@ -343,6 +346,7 @@ public:
     	int camera_height_mm,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
     	int tx_mm,
     	int ty_mm,
     	int bx_mm,
@@ -453,6 +457,7 @@ public:
     	int camera_height_mm,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
     	int tx_mm,
     	int ty_mm,
     	int bx_mm,
@@ -498,6 +503,7 @@ public:
     	int camera_height_mm,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
     	int* ray_map,
     	unsigned char* mirror_map,
     	int mirror_index,
@@ -523,6 +529,7 @@ public:
     	unsigned char* ray_map_img,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
     	int start_plane_height_mm,
     	int end_plane_height_mm,
     	int no_of_planes,
@@ -550,6 +557,7 @@ public:
     	int camera_height_mm,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
     	int* ray_map,
     	unsigned char* mirror_map,
     	int max_range_mm,
@@ -568,6 +576,7 @@ public:
     	int* ray_map,
     	int ray_map_width,
     	int ray_map_height,
+    	int ray_map_height_mm,
         unsigned char* mirror_map,
         int ground_plane_tollerance_mm,
         int max_range_mm,

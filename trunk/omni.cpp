@@ -37,6 +37,7 @@ omni::omni(int width, int height) {
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
+	feature_matches = NULL;
 
 	// array storing the number of features detected on each row
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -70,6 +71,9 @@ omni::~omni() {
 	delete[] row_sum;
 	delete[] row_peaks;
 	delete[] temp_row_peaks;
+	if (feature_matches != NULL) {
+		delete[] feature_matches;
+	}
 	if (feature_map != NULL) {
 		delete[] feature_map;
 	}
@@ -1806,10 +1810,11 @@ float omni::get_z_fraction(
 	float camera_height_mm,
 	float camera_to_backing_dist_mm,
 	float focal_length_mm,
-	float plane_height_mm)
+	float plane_height_mm,
+	float ray_map_height_mm)
 {
 	float dist = camera_to_backing_dist_mm + focal_length_mm;
-	float z_fraction = (dist + (camera_height_mm - plane_height_mm)) / dist;
+	float z_fraction = (dist + (camera_height_mm - plane_height_mm)) / (dist + ray_map_height_mm);
     return (z_fraction);
 }
 
@@ -1821,6 +1826,7 @@ void omni::reproject(
 	int camera_height_mm,
 	int img_width,
 	int img_height,
+	int ray_map_height_mm,
 	int tx_mm,
 	int ty_mm,
 	int bx_mm,
@@ -1837,7 +1843,7 @@ void omni::reproject(
 
 	memset((void*)reprojected_img,'\0',ray_map_width*ray_map_height*3);
 
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
+	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
 
 	int w = bx_mm - tx_mm;
 	int h = by_mm - ty_mm;
@@ -1896,6 +1902,7 @@ void omni::reconstruct_volume(
 	int camera_height_mm,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int tx_mm,
 	int ty_mm,
 	int bx_mm,
@@ -1963,6 +1970,7 @@ void omni::reconstruct_volume(
     		camera_height_mm,
     		ray_map_width,
     		ray_map_height,
+    		ray_map_height_mm,
     		tx_mm, ty_mm,
     		bx_mm, by_mm,
     		ray_map,
@@ -2130,6 +2138,7 @@ void omni::project(
 	int camera_height_mm,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int tx_mm,
 	int ty_mm,
 	int bx_mm,
@@ -2155,7 +2164,7 @@ void omni::project(
 	memset((void*)projected_img,'\0',projected_img_width*projected_img_height*3);
 	memset((void*)colour_difference,'\0',projected_img_width*projected_img_height*2*sizeof(int));
 
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
+	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
 
 	int n = 0;
 	for (int y = 0; y < ray_map_height; y++) {
@@ -2246,6 +2255,7 @@ void omni::voxels_from_features(
 	unsigned char* ray_map_img,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int start_plane_height_mm,
 	int end_plane_height_mm,
 	int no_of_planes,
@@ -2290,6 +2300,7 @@ void omni::voxels_from_features(
 			camera_height_mm,
 			ray_map_width,
 			ray_map_height,
+			ray_map_height_mm,
 			ray_map,
 			mirror_map,
 			-1,
@@ -2333,6 +2344,7 @@ void omni::match_features_on_plane(
 	int camera_height_mm,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int* ray_map,
 	unsigned char* mirror_map,
 	int mirror_index,
@@ -2386,7 +2398,7 @@ void omni::match_features_on_plane(
 		voxels.clear();
 		projected_points.clear();
 
-		float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
+		float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
 
 		// approximate radius of the ray on the projection plane
 		int ray_length_mm = ((camera_to_backing_dist_mm + focal_length_mm)*2) + abs(camera_height_mm - plane_height_mm);
@@ -2635,6 +2647,7 @@ void omni::project_features(
 	int camera_height_mm,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int* ray_map,
 	unsigned char* mirror_map,
 	int max_range_mm,
@@ -2642,7 +2655,7 @@ void omni::project_features(
 {
 	projected_features.clear();
 
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
+	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
 
 	for (int f = 0; f < (int)features.size(); f += 2) {
 		int fx = features[f];
@@ -2704,7 +2717,7 @@ int omni::matching_score(
 		}
 	}
 	for (int b = 255; b >= 0; b--) {
-		if ((hist0[b] > 0) || (hist1[b] > 0)) {
+		if ((hist0[b] > 0) && (hist1[b] > 0)) {
 			score += 255 - (hist0[b] - hist1[b]);
 		}
 	}
@@ -2747,6 +2760,7 @@ void omni::reproject_features(
 	int* ray_map,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
     unsigned char* mirror_map,
     int ground_plane_tollerance_mm,
     int max_range_mm,
@@ -2765,7 +2779,7 @@ void omni::reproject_features(
 	plane_features_accurate.clear();
 
 	// multiplier for this plane height
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
+	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
 
 	// locate the bounding box within which the features are contained
 	int bounding_box_tx = 99999;
@@ -2801,13 +2815,13 @@ void omni::reproject_features(
 		int grid_height = bounding_box_height / ground_plane_tollerance_mm;
 
 		// limit the size of the array to prevent running out of memory
-		if (grid_width > 512) {
-			grid_width = 512;
+		if (grid_width > 1024) {
+			grid_width = 1024;
 			ground_plane_tollerance_mm = bounding_box_width / grid_width;
 			grid_height = bounding_box_height / ground_plane_tollerance_mm;
 		}
-		if (grid_height > 512) {
-			grid_height = 512;
+		if (grid_height > 1024) {
+			grid_height = 1024;
 			ground_plane_tollerance_mm = bounding_box_height / grid_height;
 			grid_width = bounding_box_width / ground_plane_tollerance_mm;
 		}
@@ -2910,7 +2924,7 @@ void omni::reproject_features(
 										int x2 = pixel_index - (y2*ray_map_width);
 										match_score.push_back(matching_score(
 											img, ray_map_width,
-											x, y, x2, y2, 3,
+											x, y, x2, y2, 4,
 											hist0, hist1));
 
 										gf = -1;
@@ -3379,7 +3393,8 @@ void omni::create_ray_map(
 		memset((void*)mirror_map,'\0',img_width*img_height);
 		mirror_lookup = new float[img_width*img_height*2];
 		feature_map = new unsigned short[img_width*img_height];
-		ground_features_lookup = new unsigned short[513*513*10];
+		ground_features_lookup = new unsigned short[1025*1025*10];
+		feature_matches = new float[img_width*img_height*4];
 	}
 
 	float half_pi = 3.1415927f/2;

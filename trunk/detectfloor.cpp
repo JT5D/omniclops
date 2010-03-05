@@ -203,6 +203,7 @@ void detectfloor::detect(
 	int no_of_mirrors,
 	int ray_map_width,
 	int ray_map_height,
+	int ray_map_height_mm,
 	int floor_height_mm,
 	int plane_tollerance_mm,
 	float focal_length_mm,
@@ -258,12 +259,13 @@ void detectfloor::detect(
     	camera_height_mm,
     	ray_map_width,
     	ray_map_height,
+    	ray_map_height_mm,
     	ray_map,
     	mirror_map,
     	max_range_mm,
         projected_features);
 
-    //reproject floor plane features back into the image plane
+    // reproject floor plane features back into the image plane
 	vector<int> matching_pixels;
     vector<int> reprojected_features;
     vector<int> plane_features_accurate;
@@ -280,6 +282,7 @@ void detectfloor::detect(
     	ray_map,
     	ray_map_width,
     	ray_map_height,
+    	ray_map_height_mm,
         mirror_map,
         ground_plane_tollerance_mm,
         max_range_mm,
@@ -290,6 +293,7 @@ void detectfloor::detect(
         match_score);
 
     int max = (int)matching_pixels.size();
+    //printf("max %d\n", max);
     for (int i = 0; i < max; i++) {
     	int py = matching_pixels[i] / ray_map_width;
     	int px = matching_pixels[i] - (py*ray_map_width);
