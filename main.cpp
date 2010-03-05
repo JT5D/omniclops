@@ -43,6 +43,7 @@
 #include "fast.h"
 #include "libcam.h"
 #include "harris.h"
+#include "graphslam.h"
 
 #include "cppunitlite/TestHarness.h"
 #include "cppunitlite/TestResultStdErr.h"
@@ -1009,6 +1010,7 @@ int main(int argc, char* argv[]) {
 
   // Harris corners
   vector<int> harris_features;
+  graphslam *slam = new graphslam();
 
   while(1){
 
@@ -1377,7 +1379,7 @@ int main(int argc, char* argv[]) {
 
 		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
 		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
-		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*90/100;
 
 	    harris::get_features(
 			l,
@@ -1399,28 +1401,11 @@ int main(int argc, char* argv[]) {
 
 	if ((show_point_cloud) && (no_of_mirrors > 1)) {
 
-		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
-		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
-		int outer_radius_pixels = (int)(ww * outer_radius / 200)*80/100;
-
-		// detect corners
-		harris::get_features(
-			l,
-		    frame1_1C,
-			eig_image,
-			temp_image,
-			pyramid1,
-			8,
-			centre_x, centre_y,
-			outer_radius_pixels,
-			harris_filename,
-			harris_features);
-
 		int height_step_mm = 200;
 		int max_range_mm = 5000;
 		int camera_width_percent = 50; //45;
 		int camera_height_percent = 40; //30;
-		int view_type = 1;
+		int view_type = 5;
 		vector<int> point_cloud;
 		vector<int> perimeter_2D;
 		vector<int> feature_heights;
@@ -1435,7 +1420,7 @@ int main(int argc, char* argv[]) {
 		    mirror_diameter,
 		    no_of_mirrors,
 		    ww,hh,
-		    (int)camera_height*70/100,
+		    (int)camera_height,
 		    height_step_mm,
 		    max_range_mm,
 		    camera_width_percent,
@@ -1448,15 +1433,12 @@ int main(int argc, char* argv[]) {
 		    point_cloud,
 		    feature_heights,
 		    perimeter_2D);
-
-        for (int i = (int)harris_features.size()-2; i >= 0; i -= 2) {
-        	drawing::drawCross(l_, ww, hh, harris_features[i], harris_features[i+1], 4, 0, 0, 255, 1);
-        }
 	}
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
 		vector<int> floor_features;
 		vector<int> floor_features_positions;
+		vector<int> match_score;
 		int floor_height_mm = 0;
 		int plane_tollerance_mm = 50;
 		int ground_plane_tollerance_mm = 64; // + (floor_height_mm / 20);
@@ -1492,7 +1474,8 @@ int main(int argc, char* argv[]) {
 			camera_bx,
 			camera_by,
 			floor_features_positions,
-			floor_features);
+			floor_features,
+			match_score);
 
 		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
 			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
@@ -1619,6 +1602,7 @@ int main(int argc, char* argv[]) {
 
   delete lcam;
   delete corners;
+  delete slam;
 
   return 0;
 }

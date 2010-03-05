@@ -574,7 +574,17 @@ public:
         unsigned short *ground_features_lookup,
         vector<int> &matching_pixels,
         vector<int> &plane_features_accurate,
-        vector<int> &reprojected_features);
+        vector<int> &reprojected_features,
+        vector<int> &match_score);
+
+    static int matching_score(
+    	unsigned char* img,
+    	int img_width,
+    	int x0, int y0,
+    	int x1, int y1,
+    	int radius,
+    	unsigned char *hist0,
+    	unsigned char *hist1);
 
     void compass(int max_variance_degrees);
 

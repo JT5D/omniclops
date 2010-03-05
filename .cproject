@@ -63,7 +63,7 @@
 </toolChain>
 </folderInfo>
 <sourceEntries>
-<entry excluding="sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+<entry excluding="poselink.cpp|poselink.h|sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 </sourceEntries>
 </configuration>
 </storageModule>
@@ -528,7 +528,7 @@
 </toolChain>
 </folderInfo>
 <sourceEntries>
-<entry excluding="sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+<entry excluding="poselink.cpp|poselink.h|sift/match.c|sift/dspfeat.c|detectverticals.h|detectverticals.cpp|linefit.h|linefit.cpp|unwarp.cpp|unwarp.h" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 </sourceEntries>
 </configuration>
 </storageModule>

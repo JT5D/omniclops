@@ -44,8 +44,11 @@ public:
 		std::string harris_filename,
 		vector<int> &features);
 
-	harris();
-	virtual ~harris();
+	static void proximal_to_edges(
+		vector<int> &features,
+		vector<int> &edge_heights,
+		int search_radius,
+		vector<int> &proximal);
 };
 
 #endif /* HARRIS_H_ */

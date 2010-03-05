@@ -11,6 +11,7 @@ CPP_SRCS += \
 ../fast.cpp \
 ../graphslam.cpp \
 ../harris.cpp \
+../landmark.cpp \
 ../libcam.cpp \
 ../main.cpp \
 ../map2D.cpp \
@@ -29,6 +30,7 @@ OBJS += \
 ./fast.o \
 ./graphslam.o \
 ./harris.o \
+./landmark.o \
 ./libcam.o \
 ./main.o \
 ./map2D.o \
@@ -47,6 +49,7 @@ CPP_DEPS += \
 ./fast.d \
 ./graphslam.d \
 ./harris.d \
+./landmark.d \
 ./libcam.d \
 ./main.d \
 ./map2D.d \

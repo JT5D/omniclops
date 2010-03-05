@@ -2677,6 +2677,41 @@ void omni::project_features(
 	}
 }
 
+int omni::matching_score(
+	unsigned char* img,
+	int img_width,
+	int x0, int y0,
+	int x1, int y1,
+	int radius,
+	unsigned char *hist0,
+	unsigned char *hist1)
+{
+	int score = 0;
+	memset((void*)hist0, '\0', 256);
+	memset((void*)hist1, '\0', 256);
+	for (int y = -radius; y <= radius; y++) {
+		int n0 = ((y+y0)*img_width + x0 - radius)*3;
+		int n1 = ((y+y1)*img_width + x1 - radius)*3;
+		for (int x = -radius; x <= radius; x++, n0 += 3, n1 += 3) {
+            hist0[img[n0]]++;
+            hist1[img[n1]]++;
+
+            hist0[img[n0 + 1]]++;
+            hist1[img[n1 + 1]]++;
+
+            hist0[img[n0 + 2]]++;
+            hist1[img[n1 + 2]]++;
+		}
+	}
+	for (int b = 255; b >= 0; b--) {
+		if ((hist0[b] > 0) || (hist1[b] > 0)) {
+			score += 255 - (hist0[b] - hist1[b]);
+		}
+	}
+	return(score);
+}
+
+
 /*!
  * \brief reproject features from a plane (typically the ground) into image coordinates
  * \param img colour image data
@@ -2718,14 +2753,21 @@ void omni::reproject_features(
     unsigned short *ground_features_lookup,
     vector<int> &matching_pixels,
     vector<int> &plane_features_accurate,
-    vector<int> &reprojected_features)
+    vector<int> &reprojected_features,
+    vector<int> &match_score)
 {
+	unsigned char hist0[256];
+	unsigned char hist1[256];
+
+	match_score.clear();
 	matching_pixels.clear();
 	reprojected_features.clear();
 	plane_features_accurate.clear();
 
+	// multiplier for this plane height
 	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm);
 
+	// locate the bounding box within which the features are contained
 	int bounding_box_tx = 99999;
 	int bounding_box_ty = 99999;
 	int bounding_box_bx = -99999;
@@ -2743,15 +2785,18 @@ void omni::reproject_features(
 	bounding_box_bx += ground_plane_tollerance_mm;
 	bounding_box_by += ground_plane_tollerance_mm;
 
+	// limit the bounding box to a maximum range
 	if (bounding_box_tx < -max_range_mm) bounding_box_tx = -max_range_mm;
 	if (bounding_box_ty < -max_range_mm) bounding_box_ty = -max_range_mm;
 	if (bounding_box_bx > max_range_mm) bounding_box_bx = max_range_mm;
 	if (bounding_box_by > max_range_mm) bounding_box_by = max_range_mm;
 
+	// dimensions of the bounding box
 	int bounding_box_width = bounding_box_bx - bounding_box_tx;
 	int bounding_box_height = bounding_box_by - bounding_box_ty;
 
 	if ((bounding_box_width > 0) && (bounding_box_height > 0)) {
+		// divide the bounding box into a grid
 		int grid_width = bounding_box_width / ground_plane_tollerance_mm;
 		int grid_height = bounding_box_height / ground_plane_tollerance_mm;
 
@@ -2767,19 +2812,28 @@ void omni::reproject_features(
 			grid_width = bounding_box_width / ground_plane_tollerance_mm;
 		}
 
-		//printf("wh %d %d\n",w,h);
-		//unsigned short ground_features_lookup[(w+1)*(h+1)*10];
+		// clear the grid
 		memset((void*)ground_features_lookup,'\0',(grid_width+1)*(grid_height+1)*10*sizeof(unsigned short));
+
+		// insert plane features into the grid
 		for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
+
+			// get the location of the feature within the grid
 			int grid_x = (plane_features[f] - bounding_box_tx) * grid_width / bounding_box_width;
 			int grid_y = (plane_features[f + 1] - bounding_box_ty) * grid_height / bounding_box_height;
+
 			int n = (grid_y*grid_width + grid_x)*10;
 			if (ground_features_lookup[n] < 9) {
+
+				// store the feature index at this grid location
 				ground_features_lookup[n + ground_features_lookup[n] + 1] = (unsigned short)(f + 1);
+
+				// increment the number of features at this grid location
 				ground_features_lookup[n]++;
 			}
 		}
 
+		// match rays against the grid
 		int n = 0;
 		int i = 0;
 		for (int y = 0; y < ray_map_height; y++) {
@@ -2800,8 +2854,10 @@ void omni::reproject_features(
 						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
 						if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
 
+							// grid coordinate of this ray
 							int grid_x = ((ray_x_mm - bounding_box_tx) * grid_width) / bounding_box_width;
 							int grid_y = ((ray_y_mm - bounding_box_ty) * grid_height) / bounding_box_height;
+
 							int ground_features_index = (grid_y*grid_width + grid_x) * 10;
 							if (ground_features_lookup[ground_features_index] > 0) {
 
@@ -2849,7 +2905,15 @@ void omni::reproject_features(
 										plane_features_accurate.push_back((int)ix);
 										plane_features_accurate.push_back((int)iy);
 										plane_features_accurate.push_back((int)iz);
-										//gf = -1;
+
+										int y2 = pixel_index / ray_map_width;
+										int x2 = pixel_index - (y2*ray_map_width);
+										match_score.push_back(matching_score(
+											img, ray_map_width,
+											x, y, x2, y2, 3,
+											hist0, hist1));
+
+										gf = -1;
 									}
 								}
 							}
