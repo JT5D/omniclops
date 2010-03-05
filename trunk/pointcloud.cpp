@@ -34,7 +34,6 @@
  * \param max_range_mm maximum range in mm
  * \param point_cloud returned projected features (x,y,z)
  */
-/*
 void pointcloud::features_to_point_cloud(
 	vector<int> &features,
 	int mirror_index,
@@ -84,7 +83,6 @@ void pointcloud::features_to_point_cloud(
 		}
 	}
 }
-*/
 
 /*!
  * \brief convert a point cloud into a 2D perimeter which can be used for obstacle avoidance
@@ -191,6 +189,7 @@ void pointcloud::get_feature_heights(
 	int max_hits = 0;
 	vector<int> plane_features;
 	vector<int> plane_features_positions;
+	vector<int> plane_match_score;
 	vector<int> best_plane_features;
 	vector<int> best_plane_features_positions;
 	for (int plane_height_mm = 0; plane_height_mm <= max_height_mm; plane_height_mm += height_step_mm) {
@@ -224,10 +223,14 @@ void pointcloud::get_feature_heights(
 			camera_bx,
 			camera_by,
 			plane_features_positions,
-			plane_features);
+			plane_features,
+			plane_match_score);
+
+		// TODO: store features with the maximum score
 
 		// store the result with the largest number of intercepts on this plane
 		if ((int)plane_features.size() > max_hits) {
+			printf("height %d  features %d/%d  tollerance %d\n", plane_height_mm, (int)plane_features.size()/2, (int)features.size()/2, ground_plane_tollerance_mm);
 		    max_hits = (int)plane_features.size();
 
 		    best_plane_features.clear();

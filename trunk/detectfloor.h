@@ -71,7 +71,8 @@ public:
 	    int camera_bx,
 	    int camera_by,
 	    vector<int> &floor_features_positions,
-	    vector<int> &floor_features);
+	    vector<int> &floor_features,
+	    vector<int> &match_score);
 
 	static void get_closest_features(
     	vector<int> &features,

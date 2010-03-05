@@ -196,6 +196,7 @@ void detectfloor::get_closest_features(
  * \param camera_by bounding box for the camera
  * \param floor_features_positions 3D positions of detected floor points
  * \param floor_features returned features close to the floor
+ * \param match_score matching score for each floor feature
  */
 void detectfloor::detect(
 	vector<int> &features,
@@ -220,18 +221,21 @@ void detectfloor::detect(
     int camera_bx,
     int camera_by,
     vector<int> &floor_features_positions,
-    vector<int> &floor_features)
+    vector<int> &floor_features,
+    vector<int> &match_score)
 {
 	floor_features_positions.clear();
 	floor_features.clear();
 
+	// remove features from the centre of the image, where the camera is located
 	for (int f = (int)features.size()-2; f >= 0; f -= 2) {
 	    int fx = features[f];
 	    int fy = features[f+1];
 	    int n = fy*ray_map_width + fx;
 
+	    // within the bounding box?
 	    if (!((fx > camera_tx) && (fx < camera_bx) && (fy > camera_ty) && (fy < camera_by))) {
-			if (mirror_map[n] == no_of_mirrors) {
+			if (mirror_map[n] == no_of_mirrors) { // only applies to the centre mirror
 				if ((mirror_map[n-10] != no_of_mirrors) ||
 					(mirror_map[n+10] != no_of_mirrors) ||
 					(mirror_map[n-(ray_map_width*10)] != no_of_mirrors) ||
@@ -282,9 +286,11 @@ void detectfloor::detect(
         ground_features_lookup,
         matching_pixels,
         plane_features_accurate,
-        reprojected_features);
+        reprojected_features,
+        match_score);
 
-    for (int i = (int)matching_pixels.size()-1; i >= 0; i--) {
+    int max = (int)matching_pixels.size();
+    for (int i = 0; i < max; i++) {
     	int py = matching_pixels[i] / ray_map_width;
     	int px = matching_pixels[i] - (py*ray_map_width);
     	floor_features.push_back(px);

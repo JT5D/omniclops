@@ -87,6 +87,78 @@ void posegraph::update(
     update_graph();
 }
 
+int posegraph::IndexOf(
+    vector<landmark*> &lm,
+    unsigned long ID)
+{
+    int max = (int)lm.size()-1;
+    if (max > -1) {
+		int min = 0;
+		int curr = min + ((max - min)/2);
+		landmark *n = lm[curr];
+		while (n->ID != ID) {
+			if (n->ID > ID) {
+				min = curr;
+			}
+			else {
+				max = curr;
+			}
+			curr = min + ((max - min)/2);
+			n = lm[curr];
+			if (max == min) {
+				break;
+			}
+		}
+		if (n->ID == ID)
+			return(curr);
+		else
+			return(-1);
+    }
+    else return(-1);
+}
+
+
 void posegraph::update_graph()
 {
+	// add the new pose
+	landmark* previous_pose = NULL;
+	if ((int)poses.size() > 0) previous_pose = poses[(int)poses.size()-1];
+	landmark* pose = new landmark((unsigned long)poses.size(), (int)pose_x, (int)pose_y, 0, previous_pose);
+	poses.push_back(pose);
+
+	float relative_rotation_radians2 = pose_orientation_radians + 3.1415927f;
+	float relative_rotation_radians_cos = (float)cos(pose_orientation_radians);
+	float relative_rotation_radians_sin = (float)sin(pose_orientation_radians);
+	float relative_rotation_radians_cos2 = (float)cos(relative_rotation_radians2);
+	float relative_rotation_radians_sin2 = (float)sin(relative_rotation_radians2);
+
+	// add the observed landmarks
+	unsigned long prev_ID = 0;
+	int no_of_features = (int)features_IDs.size();
+	for (int f = 0; f < no_of_features; f++) {
+		unsigned long ID = features_IDs[f];
+		int x = features[f*2];
+		int y = features[f*2 + 1];
+		int z = 0;
+
+		// convert from egocentric coordinates into world coordinates
+		int x2 = pose_x + (int)((relative_rotation_radians_cos2 * x) - (relative_rotation_radians_sin2 * y));
+		int y2 = pose_y + (int)((relative_rotation_radians_sin * x) + (relative_rotation_radians_cos * y));
+
+		landmark* curr_landmark = NULL;
+		int index = IndexOf(landmarks, ID);
+		if (index == -1) {
+			if (ID < prev_ID) printf("WARNING: new landmark incorrect ID ordering\n");
+			curr_landmark = new landmark(ID, x2, y2, z, pose);
+			landmarks.push_back(curr_landmark);
+			prev_ID = ID;
+		}
+		else {
+			curr_landmark = landmarks[index];
+			curr_landmark->Add(x2, y2, z, pose);
+		}
+
+		// link landmark to the pose
+        //pose.landmarks.push_back(curr_landmark);
+	}
 }

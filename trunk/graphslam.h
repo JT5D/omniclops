@@ -1,5 +1,5 @@
 /*
-    pose graph
+    functions for compatibility with graph slam methods
     Copyright (C) 2010 Bob Mottram
     fuzzgun@gmail.com
 
@@ -17,8 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef POSEGRAPH_H_
-#define POSEGRAPH_H_
+#ifndef GRAPHSLAM_H_
+#define GRAPHSLAM_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +28,9 @@
 #include <fstream>
 #include <algorithm>
 #include "trackfeatures.h"
-#include "landmark.h"
 using namespace std;
 
-class posegraph {
+class graphslam {
 public:
 	vector<int> prev_features;
 	vector<unsigned long> prev_features_IDs;
@@ -41,24 +40,20 @@ public:
 	int translation_tollerance_x;
 	int translation_tollerance_y;
 	int no_of_samples;
-	int match_tollerance;
+	int match_tollerance_mm;
 
 	float pose_x;
 	float pose_y;
 	float pose_orientation_radians;
 	unsigned long max_feature_ID;
 
-	vector<landmark*> landmarks;
-	vector<landmark*> poses;
+	string filename;
 
-	static int IndexOf(
-	    vector<landmark*> &lm,
-	    unsigned long ID);
-	void update_graph();
+	void export_2D(string filename);
 	void update(vector<int> &feature_positions);
 
-	posegraph();
-	virtual ~posegraph();
+	graphslam();
+	virtual ~graphslam();
 };
 
-#endif /* POSEGRAPH_H_ */
+#endif /* GRAPHSLAM_H_ */

@@ -157,6 +157,8 @@ int trackfeatures::match(
 		match_tollerance,
 		best_rotation_radians);
 
+	//printf("rotation_score %d\n", rotation_score);
+
 	float relative_rotation_radians2 = best_rotation_radians + 3.1415927f;
 	float relative_rotation_radians_cos = (float)cos(best_rotation_radians);
 	float relative_rotation_radians_sin = (float)sin(best_rotation_radians);
@@ -219,7 +221,7 @@ int trackfeatures::match(
 			}
 		}
 
-	    return((max_matches + rotation_score) * 10000 / (int)prev_features.size());
+	    return(max_matches * 10000 / ((int)prev_features.size()/2));
 	}
 	else {
 		return(0);

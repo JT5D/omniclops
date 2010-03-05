@@ -19,16 +19,6 @@
 
 #include "harris.h"
 
-harris::harris() {
-	// TODO Auto-generated constructor stub
-
-}
-
-harris::~harris() {
-	// TODO Auto-generated destructor stub
-}
-
-
 void harris::get_features(
 	IplImage* frame1,
     IplImage *&frame1_1C,
@@ -88,5 +78,38 @@ number_of_features, .01, minimum_separation, NULL, 16, 1, 0.001);
 		}
 
 		fclose(file);
+	}
+}
+
+/*!
+ * \brief returns a set of features which are proximal to edge features
+ * \param features harris features (x,y)
+ * \param edge_heights list of edges with heights (x,y,height)
+ * \param search_radius search radius in pixels
+ * \param proximal returned proximal harris features (x,y,height)
+ */
+void harris::proximal_to_edges(
+	vector<int> &features,
+	vector<int> &edge_heights,
+	int search_radius,
+	vector<int> &proximal)
+{
+	proximal.clear();
+	for (int f = 0; f < (int)features.size(); f += 2) {
+		int x = features[f];
+		int y = features[f + 1];
+
+		for (int f2 = (int)edge_heights.size()-3; f2 >= 0; f2 -= 3) {
+			int dx = edge_heights[f2] - x;
+			if ((dx > -search_radius) && (dx < search_radius)) {
+				int dy = edge_heights[f2+1] - y;
+				if ((dy > -search_radius) && (dy < search_radius)) {
+                    proximal.push_back(x);
+                    proximal.push_back(y);
+                    proximal.push_back(edge_heights[f2+2]);
+                    break;
+				}
+			}
+		}
 	}
 }
