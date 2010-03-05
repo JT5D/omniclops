@@ -53,6 +53,7 @@ public:
 		int no_of_mirrors,
 		int ray_map_width,
 		int ray_map_height,
+		int ray_map_height_mm,
 		int floor_height_mm,
 		int plane_tollerance_mm,
 		float focal_length_mm,

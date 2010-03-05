@@ -301,13 +301,15 @@ TEST (RayMap5MirrorReproject, MyTest)
 	  mirror_position[8] = 0.00;
 	  mirror_position[9] = 0.00;
 
+	int ray_map_height_mm = 0;
+
     omni lcam(ww, hh);
 	lcam.create_ray_map(
 	  	mirror_diameter,
 	  	dist_to_mirror_backing,
 	  	focal_length,
 	  	outer_radius,
-	  	0,
+	  	ray_map_height_mm,
 	  	no_of_mirrors,
 	  	mirror_position,
 	  	mirror_position_pixels,
@@ -334,6 +336,7 @@ TEST (RayMap5MirrorReproject, MyTest)
 	  	dist_to_mirror_backing,
 		camera_height,
 	  	ww,hh,
+	  	ray_map_height_mm,
 	  	tx_mm, ty_mm,
 	  	bx_mm, by_mm,
 	  	lcam.ray_map,
@@ -382,6 +385,7 @@ TEST (RayMap5MirrorReproject, MyTest)
 	  	dist_to_mirror_backing,
 		camera_height,
 	  	ww,hh,
+	  	ray_map_height_mm,
 		tx_mm, ty_mm,
 		bx_mm, by_mm,
 		lcam.ray_map,

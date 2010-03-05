@@ -974,11 +974,11 @@ int main(int argc, char* argv[]) {
   }
 
 
-  float cam_height = camera_height;
+  int ray_map_height_mm = (int)camera_height;
   if ((show_occupancy_grid) ||
 	  (show_ground_features) ||
 	  (show_point_cloud)) {
-	  cam_height = 0;
+	  ray_map_height_mm = 0;
   }
 
   /* create lookup table which maps pixels to 3D rays */
@@ -987,7 +987,7 @@ int main(int argc, char* argv[]) {
   	dist_to_mirror_centre,
   	focal_length,
   	outer_radius,
-  	cam_height,
+  	ray_map_height_mm,
   	no_of_mirrors,
   	mirror_position,
   	mirror_position_pixels,
@@ -1273,6 +1273,7 @@ int main(int argc, char* argv[]) {
 			(int)dist_to_mirror_centre,
 			(int)camera_height,
 			ww, hh,
+			ray_map_height_mm,
 			tx_mm, ty_mm,
 			bx_mm, by_mm,
 			camera_base_width_mm,
@@ -1420,6 +1421,7 @@ int main(int argc, char* argv[]) {
 		    mirror_diameter,
 		    no_of_mirrors,
 		    ww,hh,
+		    ray_map_height_mm,
 		    (int)camera_height,
 		    height_step_mm,
 		    max_range_mm,
@@ -1429,6 +1431,7 @@ int main(int argc, char* argv[]) {
 		    lcam->mirror_map,
 		    lcam->feature_map,
 		    lcam->ground_features_lookup,
+		    lcam->feature_matches,
 		    view_type,
 		    point_cloud,
 		    feature_heights,
@@ -1456,6 +1459,7 @@ int main(int argc, char* argv[]) {
 			features,
 			no_of_mirrors,
 			ww,hh,
+			ray_map_height_mm,
 			floor_height_mm,
 			plane_tollerance_mm,
 			focal_length,
