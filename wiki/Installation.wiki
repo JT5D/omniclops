@@ -26,3 +26,51 @@ If you make changes to the code you can also easily create a new deb package by 
 {{{
     sh makepackage.sh
 }}}
+
+
+*Configuring for use with Eclipse*
+
+To use with the Eclipse C++ IDE:
+
+ *  Create a new C++ project
+
+ *  Import the source from the _Import/File System option_
+
+ *  Within the project properties select _C++ Build/Settings_
+
+ *  Under _GCC C++ Compiler/Directories/Include paths (-l)_ enter
+
+{{{
+/usr/local/include/opencv
+/usr/include/gstreamer-0.10
+}}}
+
+ *  Under _GCC C++ Compiler/Miscellaneous_ enter
+
+{{{
+-c -fmessage-length=0 -lcam -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs gstreamer-0.10` -L/usr/local/lib -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs glib-2.0` `pkg-config --cflags --libs gstreamer-plugins-base-0.10` -lgstapp-0.10
+}}}
+
+ *  Under _GCC C++ Linker/Libraries/Libraries (-l)_ enter
+
+{{{
+cv
+cxcore
+gstapp-0.10
+highgui
+}}}
+
+ *  Under _GCC C++ Linker/Libraries/Library search path (-L)_ enter
+
+{{{
+/usr/local/lib
+/usr/lib/gstreamer-0.10
+}}}
+
+ *  Under _GCC C++ Linker/Miscellaneous/Linker flags_ enter
+
+{{{
+/usr/local/lib/libcxcore.so /usr/local/lib/libcvaux.so /usr/local/lib/libcv.so /usr/local/lib/libhighgui.so
+}}}
+
+After applying those settings you should now be able to compile the project within Eclipse.
