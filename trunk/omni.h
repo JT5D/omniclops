@@ -24,14 +24,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <vector>
 #include <fstream>
-#include <algorithm>
 #include "drawing.h"
-using namespace std;
 
-
-#define OMNI_MAX_FEATURES           10000
+#define OMNI_MAX_FEATURES           4000
 #define OMNI_MAX_IMAGE_WIDTH        1024
 #define OMNI_MAX_IMAGE_HEIGHT       1024
 #define OMNI_VERTICAL_SAMPLING      4
@@ -43,12 +39,6 @@ using namespace std;
 #define pixindex(xx, yy)  ((yy * imgWidth + xx) * 3)
 
 class omni {
-protected:
-	void rgb_to_hsv(
-	    int r, int g, int b,
-	    unsigned char& h,
-	    unsigned char& s,
-	    unsigned char& v);
 public:
     unsigned int imgWidth, imgHeight;
 
@@ -78,11 +68,6 @@ public:
 
     /* maps raw image pixels to 3D rays */
     int* ray_map;
-    unsigned char* mirror_map; // mirror numbers
-    unsigned short* feature_map; // used during projection/reprojection
-    unsigned short *ground_features_lookup; // lookup table used for feature projection
-    float* mirror_lookup; // radii and angles
-    float* feature_matches; // used during point cloud calculations
 
     /* radial lines */
     int no_of_radial_lines;
@@ -94,22 +79,7 @@ public:
     int* unwarp_lookup;
     int* unwarp_lookup_reverse;
 
-    int grid_centre_x_mm, grid_centre_y_mm, grid_centre_z_mm;
-    int grid_cell_dimension_mm;
-    int grid_dimension_cells;
-    unsigned int* occupancy_grid_histograms;
-    unsigned char* occupancy_grid;
-    unsigned char* occupancy_grid_colour;
-    vector<int> point_cloud;
-
     int epipole;
-
-    static float get_z_fraction(
-    	float camera_height_mm,
-    	float camera_to_backing_dist_mm,
-    	float focal_length_mm,
-    	float plane_height_mm,
-    	float ray_map_height_mm);
 
     static bool intersection(
         float x0,
@@ -122,18 +92,6 @@ public:
         float y3,
         float& xi,
         float& yi);
-    float intersection_ray_sphere(
-        float ray_x0,
-        float ray_y0,
-        float ray_z0,
-        float ray_x1,
-        float ray_y1,
-        float ray_z1,
-        float sphere_x,
-        float sphere_y,
-        float sphere_z,
-        float sphere_radius);
-
     int update_sums(int cols, int y, unsigned char* rectified_frame_buf);
     void non_max(int cols, int inhibition_radius, unsigned int min_response);
     int get_features_horizontal(unsigned char* rectified_frame_buf, int inhibition_radius, unsigned int minimum_response, int calibration_offset_x, int calibration_offset_y, int outer_radius_percent, int inner_radius_percent);
@@ -171,13 +129,25 @@ public:
 
     void create_ray_map(
     	float mirror_diameter,
-    	float dist_to_mirror_backing,
+    	float dist_to_mirror,
     	float focal_length,
+    	float inner_radius_percent,
     	float outer_radius_percent,
+    	float camera_height,
+        int img_width,
+        int img_height,
+        bool clear_map,
+        bool update_unwarp,
+        bool unwarp_stacked);
+    void create_ray_map(
+    	float mirror_diameter,
+    	float dist_to_mirror,
+    	float dist_to_upper_mirror,
+    	float focal_length,
+    	float inner_radius_percent,
+    	float outer_radius_percent,
+    	float upper_mirror_outer_radius_percent,
     	float camera_height_mm,
-    	int no_of_mirrors,
-    	float* mirror_position,
-    	float* mirror_position_pixels,
         int img_width,
         int img_height);
     void show_ray_map_side(
@@ -186,21 +156,7 @@ public:
     	int img_height,
     	int max_height_mm,
     	int focal_length_mm,
-    	int camera_height_mm,
-    	bool show_all);
-    void show_ray_map_above(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int max_radius_mm);
-    void show_ray_pixels(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height);
-    void show_ray_directions(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height);
+    	int camera_height_mm);
     void show_ground_plane(
         unsigned char* img,
         int img_width,
@@ -238,383 +194,6 @@ public:
     	int bytes_per_pixel,
     	int no_of_feats_vertical,
     	int no_of_feats_horizontal);
-    void get_ray(
-    	int img_width,
-    	int pixel_x, int pixel_y,
-    	int& ray_origin_x_mm,
-    	int& ray_origin_y_mm,
-    	int& ray_origin_z_mm,
-    	int& ray_ground_x_mm,
-    	int& ray_ground_y_mm,
-    	int& ray_ground_z_mm);
-    static bool save_configuration(
-    	std::string filename,
-    	int no_of_mirrors,
-    	float* mirror_position_pixels,
-    	float* mirror_position,
-    	float focal_length,
-    	float mirror_diameter,
-    	float outer_radius_percent,
-    	float inner_radius_percent,
-    	float dist_to_mirror_centre,
-    	float camera_height,
-    	float baseline,
-    	float range);
-    static bool load_configuration(
-    	std::string filename,
-    	int& no_of_mirrors,
-    	float* mirror_position_pixels,
-    	float* mirror_position,
-    	float &focal_length,
-		float &mirror_diameter,
-		float &outer_radius_percent,
-		float &inner_radius_percent,
-		float &dist_to_mirror_centre,
-		float &camera_height,
-		float &baseline,
-		float &range);
-    static void rays_intercept(
-    	float ray1_x_start,
-    	float ray1_y_start,
-    	float ray1_z_start,
-    	float ray1_x_end,
-    	float ray1_y_end,
-    	float ray1_z_end,
-    	float ray2_x_start,
-    	float ray2_y_start,
-    	float ray2_z_start,
-    	float ray2_x_end,
-    	float ray2_y_end,
-    	float ray2_z_end,
-    	float& ix, float& iy, float& iz);
-    static void voxel_paint(
-    	int* ray_map,
-    	int dist_to_mirror_backing_mm,
-    	float mirror_diameter_mm,
-    	int no_of_mirrors,
-    	unsigned char* mirror_map,
-    	unsigned char* img,
-    	unsigned char* img_occlusions,
-        int img_width,
-        int img_height,
-    	int grid_cells_x,
-    	int grid_cells_y,
-    	int grid_cells_z,
-    	int grid_cell_dimension_mm,
-    	int grid_centre_x_mm,
-    	int grid_centre_y_mm,
-    	int grid_centre_z_mm,
-    	int min_correlation,
-    	vector<short> &occupied_voxels);
-    static void show_voxels(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	vector<short> &voxels,
-    	int voxel_radius_pixels,
-    	int view_type);
-    static void show_rays(
-    	unsigned char* mirror_map,
-    	int* ray_map,
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int radius_mm,
-    	int point_radius_pixels);
-    static void reproject(
-    	unsigned char* ground_img,
-    	int plane_height_mm,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int img_width,
-    	int img_height,
-    	int ray_map_height_mm,
-    	int tx_mm,
-    	int ty_mm,
-    	int bx_mm,
-    	int by_mm,
-    	int* ray_map,
-    	unsigned char* reprojected_img,
-    	int ray_map_width,
-    	int ray_map_height);
-    static void project(
-    	unsigned char* ray_map_img,
-    	int plane_height_mm,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int tx_mm,
-    	int ty_mm,
-    	int bx_mm,
-    	int by_mm,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	float* mirror_lookup,
-    	int mirror_index,
-    	int min_r_mm,
-    	int max_r_mm,
-    	unsigned char* projected_img,
-    	int projected_img_width,
-    	int projected_img_height,
-    	int* colour_difference);
-    static void create_obstacle(
-    	int* ground_height_mm,
-    	unsigned char* ground_img,
-    	int ground_width,
-    	int ground_height,
-    	int tx_mm, int ty_mm,
-    	int bx_mm, int by_mm,
-    	int obstacle_tx_mm, int obstacle_ty_mm,
-    	int obstacle_bx_mm, int obstacle_by_mm,
-    	int height_mm,
-    	int width_mm,
-    	int r, int g, int b);
-    static void create_ground_grid(
-    	int* ground_height_mm,
-    	unsigned char* ground_img,
-    	int ground_width,
-    	int ground_height,
-    	int tx_mm, int ty_mm,
-    	int bx_mm, int by_mm,
-    	int grid_tx_mm, int grid_ty_mm,
-    	int grid_bx_mm, int grid_by_mm,
-    	int grid_dimension_mm,
-    	int height_mm,
-    	int line_width_mm,
-    	int r, int g, int b);
-    static void show_mirror_lookup(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	float* lookup,
-    	bool show_radius,
-    	float outer_radius_percent);
-
-    static void create_ray_map_mirror_inner(
-    	int mirror,
-    	int centre_x_pixels,
-    	int centre_y_pixels,
-    	int centre_x_mm,
-    	int centre_y_mm,
-    	int radius_pixels,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	float* mirror_lookup,
-    	int ray_map_width,
-    	int ray_map_height,
-    	float tilt_radians,
-    	float rotate_radians,
-    	float mirror_diameter_mm,
-    	float dist_to_mirror_centre_mm,
-    	float camera_height_mm,
-    	float centre_x,
-    	float centre_y,
-    	float centre_z,
-    	float r,
-    	bool negative);
-    static void create_ray_map_mirror(
-    	int mirror,
-    	int centre_x_pixels,
-    	int centre_y_pixels,
-    	int centre_x_mm,
-    	int centre_y_mm,
-    	int radius_pixels,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	float* mirror_lookup,
-    	int ray_map_width,
-    	int ray_map_height,
-    	float tilt_radians,
-    	float rotate_radians,
-    	float mirror_diameter_mm,
-    	float dist_to_mirror_backing_mm,
-    	float camera_height_mm);
-    static void create_ray_map(
-    	float mirror_diameter_mm,
-    	float dist_to_mirror_backing_mm,
-    	float focal_length,
-    	float outer_radius_percent,
-    	float camera_height_mm,
-    	int no_of_mirrors,
-    	float* mirror_position,
-    	float* mirror_position_pixels,
-        int img_width,
-        int img_height,
-        int* ray_map,
-        unsigned char* mirror_map,
-        float* mirror_lookup);
-    static void reconstruct_volume(
-    	unsigned char* ray_map_img,
-    	int start_plane_height_mm,
-    	int end_plane_height_mm,
-    	int no_of_planes,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int tx_mm,
-    	int ty_mm,
-    	int bx_mm,
-    	int by_mm,
-    	int camera_base_width_mm,
-    	int camera_base_height_mm,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	float* mirror_lookup,
-    	unsigned char* projected_img,
-    	int projected_img_width,
-    	int projected_img_height,
-    	int* colour_difference,
-    	short* height_field,
-    	unsigned char* height_field_img,
-    	int patch_size_pixels,
-    	int min_patch_observations,
-    	int* plane_occupancy);
-    static void show_height_field(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int max_height_mm,
-    	short* height_field,
-    	unsigned char* height_field_colour,
-    	int height_field_width,
-    	int height_field_height,
-    	int view_type);
-    static void show_plane_occupancy(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	int no_of_planes,
-    	int* plane_occupancy);
-    static void match_features_on_plane(
-    	vector<int> &features,
-    	vector<vector<int> > &features_on_plane,
-    	int no_of_mirrors,
-    	unsigned char* ray_map_img,
-    	int plane_height_mm,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	int mirror_index,
-    	float pixel_diameter_mm,
-    	vector<int> &voxels,
-    	vector<int> &projected_points,
-    	vector<int> &matched_features,
-    	int minimum_matching_score_percent,
-    	int &ray_radius_mm,
-    	bool remove_matched_pixels);
-    static void show_voxels(
-    	unsigned char* ray_map_img,
-    	int tx_mm,
-    	int ty_mm,
-    	int bx_mm,
-    	int by_mm,
-    	vector<int> &voxels,
-    	int img_width,
-    	int img_height,
-    	unsigned char* result);
-    static void voxels_from_features(
-    	vector<int> &features,
-    	unsigned char* ray_map_img,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int start_plane_height_mm,
-    	int end_plane_height_mm,
-    	int no_of_planes,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int* ray_map,
-    	int no_of_mirrors,
-    	unsigned char* mirror_map,
-    	int outer_radius_percent,
-    	int mirror_diameter_mm,
-    	vector<short> &voxels);
-    static void show_feature_voxels(
-    	unsigned char* img,
-    	int img_width,
-    	int img_height,
-    	vector<short> &voxels,
-    	int view_type);
-    static void project_features(
-    	vector<int> &features,
-    	int mirror_index,
-    	int plane_height_mm,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	int max_range_mm,
-        vector<int> &projected_features);
-
-    static void reproject_features(
-   		unsigned char* img,
-    	vector<int> &plane_features,
-    	int mirror_index,
-    	int no_of_mirrors,
-    	int plane_height_mm,
-    	int plane_tollerance_mm,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int* ray_map,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-        unsigned char* mirror_map,
-        int ground_plane_tollerance_mm,
-        int max_range_mm,
-        unsigned short *ground_features_lookup,
-        vector<int> &matching_pixels,
-        vector<int> &plane_features_accurate,
-        vector<int> &reprojected_features,
-        vector<int> &match_score);
-
-    static int matching_score(
-    	unsigned char* img,
-    	int img_width,
-    	int x0, int y0,
-    	int x1, int y1,
-    	int radius,
-    	unsigned char *hist0,
-    	unsigned char *hist1);
-
-    static void show_feature_rays(
-    	vector<int> &features,
-    	int no_of_mirrors,
-    	float focal_length_mm,
-    	int camera_to_backing_dist_mm,
-    	int camera_height_mm,
-    	int ray_map_width,
-    	int ray_map_height,
-    	int ray_map_height_mm,
-    	int* ray_map,
-    	unsigned char* mirror_map,
-    	int max_range_mm,
-        unsigned char* img);
-
-    static void mirror_features(
-    	vector<int> &features,
-    	int no_of_mirrors,
-    	int ray_map_width,
-    	unsigned char* mirror_map,
-        vector<vector<int> > &grouped_features);
 
     void compass(int max_variance_degrees);
 
