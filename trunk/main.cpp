@@ -182,6 +182,7 @@ int main(int argc, char* argv[]) {
   bool show_features = false;
   bool show_ground_features = false;
   bool show_point_cloud = false;
+  bool show_feature_rays = false;
   bool show_ground = false;
   bool show_lines = false;
   bool show_harris_corners = false;
@@ -225,6 +226,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --harrisfeatures       Show Harris corners");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
+  opt->addUsage( "     --featurerays          Show rays");
   opt->addUsage( "     --pointcloud           Show point cloud");
   opt->addUsage( "     --ground               Show ground plane");
   opt->addUsage( "     --overlay              Show overlaid ray intersections with the image plane");
@@ -322,6 +324,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "lines" );
   opt->setFlag(  "groundfeatures" );
   opt->setFlag(  "pointcloud" );
+  opt->setFlag(  "featurerays" );
   opt->setFlag(  "ground" );
   opt->setFlag(  "overlay" );
   opt->setFlag(  "overlayangles" );
@@ -434,6 +437,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  unwarp_features = false;
 	  show_close_features = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "nearfeatures" ) ) {
@@ -449,6 +453,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = true;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "grid" ) ) {
@@ -464,6 +469,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "overlay" ) ) {
@@ -479,6 +485,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "overlayangles" ) ) {
@@ -494,6 +501,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "ground" ) ) {
@@ -509,6 +517,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   bool optical_flow = false;
@@ -529,6 +538,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
@@ -544,6 +554,7 @@ int main(int argc, char* argv[]) {
 	  show_FAST = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "lines" ) ) {
@@ -559,6 +570,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
@@ -574,6 +586,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
 	  show_close_features = false;
 	  show_harris_corners = false;
+	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "pointcloud" ) ) {
@@ -584,6 +597,23 @@ int main(int argc, char* argv[]) {
 	  show_ground = false;
 	  show_ground_features = false;
 	  show_point_cloud = true;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+	  show_close_features = false;
+	  show_harris_corners = false;
+	  show_feature_rays = false;
+  }
+
+  if( opt->getFlag( "featurerays" ) ) {
+	  show_occupancy_grid = false;
+	  show_overlay_angles = false;
+	  show_overlay = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_point_cloud = false;
+	  show_feature_rays = true;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
@@ -977,7 +1007,8 @@ int main(int argc, char* argv[]) {
   int ray_map_height_mm = (int)camera_height;
   if ((show_occupancy_grid) ||
 	  (show_ground_features) ||
-	  (show_point_cloud)) {
+	  (show_point_cloud) ||
+	  (show_feature_rays)) {
 	  ray_map_height_mm = 0;
   }
 
@@ -1037,6 +1068,7 @@ int main(int argc, char* argv[]) {
 		(save_rays != "") ||
 		(show_ground_features) ||
 		(show_point_cloud) ||
+		(show_feature_rays) ||
 		(show_lines)) {
 
 		int inner = (int)inner_radius;
@@ -1075,7 +1107,8 @@ int main(int argc, char* argv[]) {
 
 				if ((!show_close_features) &&
 					(!show_ground_features) &&
-					(!show_point_cloud)) {
+					(!show_point_cloud) &&
+					(!show_feature_rays)) {
 				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 				}
 
@@ -1100,7 +1133,8 @@ int main(int argc, char* argv[]) {
 
 				if ((!show_close_features) &&
 					(!show_ground_features) &&
-                    (!show_point_cloud)) {
+                    (!show_point_cloud) &&
+                    (!show_feature_rays)) {
 				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 				}
 
@@ -1436,6 +1470,24 @@ int main(int argc, char* argv[]) {
 		    point_cloud,
 		    feature_heights,
 		    perimeter_2D);
+	}
+
+	if (show_feature_rays) {
+
+		int max_range_mm = 3000;
+
+	    omni::show_feature_rays(
+	    	features,
+	    	no_of_mirrors,
+	    	focal_length,
+	    	(int)dist_to_mirror_centre,
+	    	(int)camera_height,
+	    	ww, hh,
+	    	ray_map_height_mm,
+	    	lcam->ray_map,
+	    	lcam->mirror_map,
+	    	max_range_mm,
+	        l_);
 	}
 
 	if ((show_ground_features) && (no_of_mirrors > 1)) {
