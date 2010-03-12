@@ -595,6 +595,27 @@ public:
     	unsigned char *hist0,
     	unsigned char *hist1);
 
+    static void show_feature_rays(
+    	vector<int> &features,
+    	int no_of_mirrors,
+    	float focal_length_mm,
+    	int camera_to_backing_dist_mm,
+    	int camera_height_mm,
+    	int ray_map_width,
+    	int ray_map_height,
+    	int ray_map_height_mm,
+    	int* ray_map,
+    	unsigned char* mirror_map,
+    	int max_range_mm,
+        unsigned char* img);
+
+    static void mirror_features(
+    	vector<int> &features,
+    	int no_of_mirrors,
+    	int ray_map_width,
+    	unsigned char* mirror_map,
+        vector<vector<int> > &grouped_features);
+
     void compass(int max_variance_degrees);
 
     omni(int width, int height);
