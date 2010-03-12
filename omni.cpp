@@ -24,31 +24,26 @@ omni::omni(int width, int height) {
 	imgWidth = width;
 	imgHeight = height;
 
-	// array storing x coordinates of detected features
+	/* array storing x coordinates of detected features */
 	feature_x = new short int[OMNI_MAX_FEATURES];
 	feature_y = new short int[OMNI_MAX_FEATURES];
 
 	ray_map = NULL;
-	mirror_lookup = NULL;
-	mirror_map = NULL;
-	feature_map = NULL;
-	ground_features_lookup = NULL;
 	calibration_map = NULL;
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
-	feature_matches = NULL;
 
-	// array storing the number of features detected on each row
+	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
 			/ OMNI_VERTICAL_SAMPLING];
 	features_per_col = new unsigned short int[OMNI_MAX_IMAGE_WIDTH
 			/ OMNI_HORIZONTAL_SAMPLING];
 
-	// buffer which stores sliding sum
+	/* buffer which stores sliding sum */
 	row_sum = new int[OMNI_MAX_IMAGE_WIDTH];
 
-	// buffer used to find peaks in edge space
+	/* buffer used to find peaks in edge space */
 	row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
 	temp_row_peaks = new unsigned int[OMNI_MAX_IMAGE_WIDTH];
 
@@ -59,27 +54,13 @@ omni::omni(int width, int height) {
 	radial_lines = NULL;
 	prev_no_of_radial_lines = 0;
 	prev_radial_lines = NULL;
-
 }
 
 omni::~omni() {
-
 	delete[] feature_x;
-	delete[] feature_y;
 	delete[] features_per_row;
-	delete[] features_per_col;
 	delete[] row_sum;
 	delete[] row_peaks;
-	delete[] temp_row_peaks;
-	if (feature_matches != NULL) {
-		delete[] feature_matches;
-	}
-	if (feature_map != NULL) {
-		delete[] feature_map;
-	}
-	if (ground_features_lookup != NULL) {
-		delete[] ground_features_lookup;
-	}
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -96,18 +77,11 @@ omni::~omni() {
 	if (calibration_map != NULL) {
 		delete[] calibration_map;
 	}
-	if (mirror_map != NULL) {
-		delete[] mirror_map;
-	}
 	if (ray_map != NULL) {
 		delete[] ray_map;
 	}
-	if (mirror_lookup != NULL) {
-		delete[] mirror_lookup;
-	}
 	if (img_buffer != NULL)
 		delete[] img_buffer;
-
 }
 
 /* Updates sliding sums and edge response values along a single row or column
@@ -659,7 +633,6 @@ void omni::save_edges(
 			}
 		}
 
-		fprintf(file,"%d", index);
 		fwrite(m, sizeof(MatchData), index, file);
 		delete[] m;
 
@@ -691,7 +664,6 @@ void omni::save_radial_lines(
 			m[i].y1 = radial_lines[i*5+4];
 		}
 
-		fprintf(file, "%d", no_of_radial_lines);
 		fwrite(m, sizeof(MatchData), no_of_radial_lines, file);
 		delete[] m;
 
@@ -699,26 +671,6 @@ void omni::save_radial_lines(
 	}
 }
 
-
-void omni::get_ray(
-	int img_width,
-	int pixel_x, int pixel_y,
-	int& ray_origin_x_mm,
-	int& ray_origin_y_mm,
-	int& ray_origin_z_mm,
-	int& ray_ground_x_mm,
-	int& ray_ground_y_mm,
-	int& ray_ground_z_mm)
-{
-	int n = (pixel_y*img_width+pixel_x)*6;
-	ray_origin_x_mm = ray_map[n];
-	ray_origin_y_mm = ray_map[n+1];
-	ray_origin_z_mm = ray_map[n+2];
-
-	ray_ground_x_mm = ray_map[n+3];
-	ray_ground_y_mm = ray_map[n+4];
-	ray_ground_z_mm = ray_map[n+5];
-}
 
 /* saves 3D rays to file for use by other programs */
 void omni::save_rays(
@@ -810,7 +762,6 @@ void omni::save_rays(
 			}
 		}
 
-		fprintf(file, "%d", index);
 		fwrite(m, sizeof(MatchData), index, file);
 		delete[] m;
 
@@ -1080,8 +1031,8 @@ void omni::get_calibration_image(
 	int img_height)
 {
 	int x,y;
-	int squares_across = 20;
-	int squares_down = 14;
+	int squares_across = 10;
+	int squares_down = 7;
 	int state0,state1,n=0;
 
 	for (y = 0; y < img_height; y++) {
@@ -1191,2593 +1142,265 @@ bool omni::intersection(
     return (insideLine);
 }
 
-float omni::intersection_ray_sphere(
-    float ray_x0,
-    float ray_y0,
-    float ray_z0,
-    float ray_x1,
-    float ray_y1,
-    float ray_z1,
-    float sphere_x,
-    float sphere_y,
-    float sphere_z,
-    float sphere_radius)
-{
-  float w_x = ray_x0 - sphere_x;
-  float w_y = ray_y0 - sphere_y;
-  float w_z = ray_z0 - sphere_z;
-
-  float r_v_x = ray_x1 - ray_x0;
-  float r_v_y = ray_y1 - ray_y0;
-  float r_v_z = ray_z1 - ray_z0;
-
-  float A = r_v_x*r_v_x + r_v_y*r_v_y + r_v_z*r_v_z;
-  float B = 2*(w_x*r_v_x + w_y*r_v_y + w_z*r_v_z);
-  float C = (w_x*w_x + w_y*w_y + w_z*w_z) - (sphere_radius*sphere_radius);
-
-  float D = B*B-4.0f*A*C;
-  if (D >= 0.0f)
-	  return((-B - sqrt(D)) / (2.0f*A));
-  else
-  	  return(0);
-}
-
-void omni::rgb_to_hsv(
-    int r, int g, int b,
-    unsigned char& h,
-    unsigned char& s,
-    unsigned char& v)
-{
-
-    float red = r / 255.0f, green = g / 255.0f, blue = b / 255.0f;
-
-    float maxRGB = max(blue,max(red, green));
-    float minRGB = min(blue,min(red, green));
-
-    float hConvert = 0;
-    float vConvert = maxRGB;
-    float sConvert = (vConvert - (minRGB))/vConvert;
-
-    if ((red == maxRGB) &&
-        (green == minRGB))
-        hConvert = 5 + ((red - blue)/(red - green));
-
-    else if ((red == maxRGB) && (blue == minRGB))
-        hConvert = 1 - ((red - green)/(red - blue));
-
-    else if ((green == maxRGB) && (blue == minRGB))
-        hConvert = 1 + ((green - red)/(green -blue));
-
-    else if ((green == maxRGB) && (red == minRGB))
-        hConvert = 3 - ((green - blue)/(green - red));
-
-    else if ((blue == maxRGB) && (red == minRGB))
-        hConvert = 3 + ((blue - green)/(blue - red));
-
-    else if ((blue == maxRGB) && (green == minRGB))
-        hConvert = 5 - ((blue - red)/(blue - green));
-
-    hConvert = hConvert * 60;
-
-    if (hConvert < 0) hConvert += 360;
-
-    h = round((hConvert*31)/360);
-    s = round(sConvert*255);
-    v = round(vConvert*255);
-}
-
-void omni::voxel_paint(
-	int* ray_map,
-	int dist_to_mirror_backing_mm,
-	float mirror_diameter_mm,
-	int no_of_mirrors,
-	unsigned char* mirror_map,
-	unsigned char* img,
-	unsigned char* img_occlusions,
-    int img_width,
-    int img_height,
-	int grid_cells_x,
-	int grid_cells_y,
-	int grid_cells_z,
-	int grid_cell_dimension_mm,
-	int grid_centre_x_mm,
-	int grid_centre_y_mm,
-	int grid_centre_z_mm,
-	int min_correlation,
-	vector<short> &occupied_voxels)
-{
-    /* lookup table used for counting the number of set bits */
-    const unsigned char BitsSetTable256[] =
-    {
-            0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
-    };
-
-	occupied_voxels.clear();
-
-	int pixels = img_width*img_height;
-
-	vector<unsigned int> voxel_histogram[grid_cells_x*grid_cells_y+1];
-	vector<unsigned char> voxel_colours[grid_cells_x*grid_cells_y];
-	vector<int> pixel_index[grid_cells_x*grid_cells_y];
-	vector<unsigned char> mirror_index[grid_cells_x*grid_cells_y];
-	int cam[no_of_mirrors];
-	int colour_mean[no_of_mirrors*3];
-
-	//int min_dist_cells = (int)(mirror_diameter_mm / grid_cell_dimension_mm);
-	int min_dist_cells = (int)(dist_to_mirror_backing_mm / grid_cell_dimension_mm);
-
-	int offset_x = (grid_cells_x/2) - (grid_centre_x_mm / grid_cell_dimension_mm);
-	int offset_y = (grid_cells_y/2) - (grid_centre_y_mm / grid_cell_dimension_mm);
-	//int offset_z = (grid_centre_z_mm / grid_cell_dimension_mm);
-
-	memset((void*)img_occlusions,'\0',pixels);
-
-	int layer_cell_index;
-	int layer_dist_mm = (int)(grid_cell_dimension_mm * (min_dist_cells + 0.5f));
-	//for (int layer = min_dist_cells; layer < grid_cells_z; layer++, layer_dist_mm += grid_cell_dimension_mm) {
-	for (int layer = min_dist_cells; layer < min_dist_cells+1; layer++, layer_dist_mm += grid_cell_dimension_mm) {
-
-		// paint colours for this layer
-		int n = (pixels - 1) * 6;
-		for (int i = pixels-1; i >= 0; i--, n -= 6) {
-			if ((mirror_map[i] > 0) &&
-				(img_occlusions[i] == 0)) {
-				int mirror_idx = mirror_map[i] - 1;
-
-				// calculate the start and end grid cell coordinates of the ray
-				int ray_start_x_mm = ray_map[n];
-				int ray_start_y_mm = ray_map[n+1];
-				int ray_start_z_mm = ray_map[n+2];
-				int ray_end_x_mm = ray_map[n+3];
-				int ray_end_y_mm = ray_map[n+4];
-				int ray_end_z_mm = ray_map[n+5];
-
-				int dz = ray_end_z_mm - ray_start_z_mm;
-				if (dz < 0) {
-					int dz2 = ray_start_z_mm - (dist_to_mirror_backing_mm - layer_dist_mm);
-
-					int x = ray_start_x_mm + ((ray_end_x_mm - ray_start_x_mm) * dz2 / dz);
-					int cell_x = offset_x + (int)(x / grid_cell_dimension_mm);
-					if ((cell_x >= 0) && (cell_x < grid_cells_x)) {
-						int y = ray_start_y_mm + ((ray_end_y_mm - ray_start_y_mm) * dz2 / dz);
-						int cell_y = offset_y + (int)(y / grid_cell_dimension_mm);
-						if ((cell_y >= 0) && (cell_y < grid_cells_y)) {
-
-							// colour of the ray
-							unsigned char r = img[i*3 + 2];
-							unsigned char g = img[i*3 + 1];
-							unsigned char b = img[i*3];
-
-							int histogram_index = (r/32)*64 + (g/32)*8 + (b/32);
-
-							layer_cell_index = cell_y*grid_cells_x + cell_x;
-							if ((int)voxel_histogram[layer_cell_index].size() == 0) {
-								voxel_histogram[layer_cell_index].resize(16*no_of_mirrors,0);
-							}
-							voxel_histogram[layer_cell_index][(histogram_index/32) + (mirror_idx*16)] |= (unsigned int)pow(2,histogram_index % 32);
-
-							voxel_colours[layer_cell_index].push_back(r);
-							voxel_colours[layer_cell_index].push_back(g);
-							voxel_colours[layer_cell_index].push_back(b);
-							pixel_index[layer_cell_index].push_back(i);
-							mirror_index[layer_cell_index].push_back(mirror_idx);
-						}
-					}
-				}
-			}
-		}
-
-		// determine colour consistency
-		layer_cell_index = 0;
-		for (int gy = 0; gy < grid_cells_y; gy++) {
-			for (int gx = 0; gx < grid_cells_x; gx++, layer_cell_index++) {
-
-				if ((int)pixel_index[layer_cell_index].size() > 0) {
-
-					memset((void*)cam,'\0',no_of_mirrors*sizeof(int));
-					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
-						int mirror = mirror_index[layer_cell_index][sample];
-						cam[mirror]++;
-					}
-
-					int correlation = 0;
-					int anticorrelation = 0;
-
-					int no_of_mirror_observations = 0;
-					for (int mirror0 = 0; mirror0 < no_of_mirrors; mirror0++) {
-						if (cam[mirror0] > 0) {
-							no_of_mirror_observations++;
-							for (int mirror1 = mirror0+1; mirror1 < no_of_mirrors; mirror1++) {
-								if (cam[mirror1] > 0) {
-                                    for (int idx = 0; idx < 16; idx++) {
-
-                                        int n2 = voxel_histogram[layer_cell_index][idx + (mirror0*16)];
-                                        unsigned int anti = 0;
-                                        for (int bit = 0; bit < 32; bit++) {
-                                            anti <<= 1;
-                                            anti |= n2 & 1;
-                                            n2 >>= 1;
-                                        }
-
-                                    	unsigned int match = voxel_histogram[layer_cell_index][idx+(mirror0*16)] & voxel_histogram[layer_cell_index][idx+(mirror1*16)];
-                                    	if (match > 0) {
-                                    		correlation +=
-                                                BitsSetTable256[match & 0xff] +
-                                                BitsSetTable256[(match >> 8) & 0xff] +
-                                                BitsSetTable256[(match >> 16) & 0xff] +
-                                                BitsSetTable256[match >> 24];
-                                    	}
-                                    	match = anti & voxel_histogram[layer_cell_index][idx+(mirror1*16)];
-                                    	if (match > 0) {
-                                    		anticorrelation +=
-                                                BitsSetTable256[match & 0xff] +
-                                                BitsSetTable256[(match >> 8) & 0xff] +
-                                                BitsSetTable256[(match >> 16) & 0xff] +
-                                                BitsSetTable256[match >> 24];
-                                    	}
-
-                                    }
-								}
-							}
-						}
-					}
-
-
-					int test_r=0;
-					int test_g=0;
-					int test_b=0;
-
-					memset((void*)colour_mean,'\0',no_of_mirrors*3*sizeof(int));
-					for (int sample = (int)pixel_index[layer_cell_index].size()-1; sample >= 0; sample--) {
-						int mirror = mirror_index[layer_cell_index][sample];
-						unsigned char r = voxel_colours[layer_cell_index][sample*3];
-						unsigned char g = voxel_colours[layer_cell_index][sample*3+1];
-						unsigned char b = voxel_colours[layer_cell_index][sample*3+2];
-
-						colour_mean[mirror*3] += (int)voxel_colours[layer_cell_index][sample*3];
-						colour_mean[mirror*3+1] += (int)voxel_colours[layer_cell_index][sample*3+1];
-						colour_mean[mirror*3+2] += (int)voxel_colours[layer_cell_index][sample*3+2];
-						test_r = (int)voxel_colours[layer_cell_index][sample*3];
-						test_g = (int)voxel_colours[layer_cell_index][sample*3+1];
-						test_b = (int)voxel_colours[layer_cell_index][sample*3+2];
-					}
-					if ((no_of_mirror_observations >= no_of_mirrors-1) &&
-						(correlation >= min_correlation)) {
-						// we have a winner - add it to the occlusions
-						for (int j = (int)pixel_index[layer_cell_index].size()-1; j >= 0; j--) {
-							img_occlusions[pixel_index[layer_cell_index][j]] = 1;
-						}
-						// create a voxel
-						occupied_voxels.push_back((short)gx);
-						occupied_voxels.push_back((short)gy);
-						occupied_voxels.push_back((short)layer);
-						//occupied_voxels.push_back((short)mean_r);
-						//occupied_voxels.push_back((short)mean_g);
-						//occupied_voxels.push_back((short)mean_b);
-						occupied_voxels.push_back((short)test_r);
-						occupied_voxels.push_back((short)test_g);
-						occupied_voxels.push_back((short)test_b);
-					}
-
-					voxel_colours[layer_cell_index].clear();
-					pixel_index[layer_cell_index].clear();
-					mirror_index[layer_cell_index].clear();
-				}
-			}
-		}
-
-	}
-}
-
-void omni::show_plane_occupancy(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	int no_of_planes,
-	int* plane_occupancy)
-{
-	memset((void*)img,'\0',img_width*img_height*3);
-
-	int max = 0;
-	for (int i = 0; i < no_of_planes; i++) {
-		if (plane_occupancy[i] > max) max = plane_occupancy[i];
-	}
-
-	if (max > 0) {
-		max  = max*120/100;
-		int prev_x = 0;
-		int prev_y = 0;
-		for (int i = 0; i < no_of_planes; i++) {
-			int x = i * img_width / no_of_planes;
-			int y = img_height-1-(plane_occupancy[i] * img_height / max);
-			if (i > 0) {
-				drawing::drawLine(img,img_width,img_height,prev_x,prev_y,x,y,0,255,0,1,false);
-			}
-			prev_x = x;
-			prev_y = y;
-		}
-	}
-}
-
-
-void omni::show_voxels(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	vector<short> &voxels,
-	int voxel_radius_pixels,
-	int view_type)
-{
-    int tx = 9999;
-    int ty = 9999;
-    int tz = 9999;
-    int bx = 0;
-    int by = 0;
-    int bz = 0;
-
-    // get the bounding box
-    for (int i = (int)voxels.size()-6; i >= 0; i-=6) {
-    	int x = voxels[i];
-    	int y = voxels[i+1];
-    	int z = voxels[i+2];
-    	if (x < tx) tx = x;
-    	if (x > bx) bx = x;
-    	if (y < ty) ty = y;
-    	if (y > by) by = y;
-    	if (z < tz) tz = z;
-    	if (z > bz) bz = z;
-    }
-
-    if (bz == tz) bz = tz+1;
-
-    memset((void*)img, '\0',img_width*img_height*3);
-    if ((bx - tx > 0) && (by - ty > 0) && (bz - tz > 0)) {
-		for (int i = (int)voxels.size()-6; i >= 0; i-=6) {
-			int x = (int)voxels[i];
-			int y = (int)voxels[i+1];
-			int z = (int)voxels[i+2];
-			switch(view_type) {
-				case 0: {
-					x = (x - tx) * img_height / (bx - tx);
-					y = (y - ty) * img_height / (by - ty);
-					break;
-				}
-				case 1: {
-					x = (x - tx) * img_height / (bx - tx);
-					y = (z - tz) * img_height / (bz - tz);
-					break;
-				}
-				case 2: {
-					x = (y - ty) * img_height / (by - ty);
-					y = (z - tz) * img_height / (bz - tz);
-					break;
-				}
-				case 3: {
-					int x0 = ((x - tx) * img_height / ((bx - tx)*2));
-					int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
-
-					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-							if ((xx > -1) && (xx < img_width) &&
-								(yy > -1) && (yy < img_height)) {
-								int n = ((yy * img_width) + xx) * 3;
-								img[n+2] = (unsigned char)voxels[i+3];
-								img[n+1] = (unsigned char)voxels[i+4];
-								img[n] = (unsigned char)voxels[i+5];
-							}
-						}
-					}
-
-					x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
-					y0 = ((z - tz) * img_height / ((bz - tz)*2));
-
-					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-							if ((xx > -1) && (xx < img_width) &&
-								(yy > -1) && (yy < img_height)) {
-								int n = ((yy * img_width) + xx) * 3;
-								img[n+2] = (unsigned char)voxels[i+3];
-								img[n+1] = (unsigned char)voxels[i+4];
-								img[n] = (unsigned char)voxels[i+5];
-							}
-						}
-					}
-
-					x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
-					y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
-					break;
-				}
-			}
-			for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
-				for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
-					if ((xx > -1) && (xx < img_width) &&
-						(yy > -1) && (yy < img_height)) {
-						int n = ((yy * img_width) + xx) * 3;
-						img[n+2] = (unsigned char)voxels[i+3];
-						img[n+1] = (unsigned char)voxels[i+4];
-						img[n] = (unsigned char)voxels[i+5];
-					}
-				}
-			}
-		}
-    }
-}
-
-void omni::show_feature_voxels(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	vector<short> &voxels,
-	int view_type)
-{
-    int tx = 99999;
-    int ty = 99999;
-    int tz = 99999;
-    int bx = 0;
-    int by = 0;
-    int bz = 0;
-
-    // get the bounding box
-    for (int i = (int)voxels.size()-8; i >= 0; i-=8) {
-    	int x = voxels[i];
-    	int y = voxels[i+1];
-    	int z = voxels[i+2];
-    	if (x < tx) tx = x;
-    	if (x > bx) bx = x;
-    	if (y < ty) ty = y;
-    	if (y > by) by = y;
-    	if (z < tz) tz = z;
-    	if (z > bz) bz = z;
-    }
-
-    if (bz == tz) bz = tz+1;
-
-    memset((void*)img, '\0',img_width*img_height*3);
-    if ((bx - tx > 0) && (by - ty > 0) && (bz - tz > 0)) {
-		for (int i = (int)voxels.size()-8; i >= 0; i -= 8) {
-			int x = (int)voxels[i];
-			int y = (int)voxels[i+1];
-			int z = (int)voxels[i+2];
-			int voxel_radius_pixels = (int)voxels[i+6] * img_width / (bx - tx);
-			switch(view_type) {
-				case 0: {
-					x = (x - tx) * img_height / (bx - tx);
-					y = (y - ty) * img_height / (by - ty);
-					break;
-				}
-				case 1: {
-					x = (x - tx) * img_height / (bx - tx);
-					y = (z - tz) * img_height / (bz - tz);
-					break;
-				}
-				case 2: {
-					x = (y - ty) * img_height / (by - ty);
-					y = (z - tz) * img_height / (bz - tz);
-					break;
-				}
-				case 3: {
-					int x0 = ((x - tx) * img_height / ((bx - tx)*2));
-					int y0 = (img_height/4) + ((y - ty) * img_height / ((by - ty)*2));
-
-					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-							if ((xx > -1) && (xx < img_width) &&
-								(yy > -1) && (yy < img_height)) {
-								int n = ((yy * img_width) + xx) * 3;
-								img[n+2] = (unsigned char)voxels[i+3];
-								img[n+1] = (unsigned char)voxels[i+4];
-								img[n] = (unsigned char)voxels[i+5];
-							}
-						}
-					}
-
-					x0 = (img_height/2) + ((x - tx) * img_height / ((bx - tx)*2));
-					y0 = ((z - tz) * img_height / ((bz - tz)*2));
-
-					for (int yy = y0-voxel_radius_pixels; yy <= y0+voxel_radius_pixels; yy++) {
-						for (int xx = x0-voxel_radius_pixels; xx <= x0+voxel_radius_pixels; xx++) {
-							if ((xx > -1) && (xx < img_width) &&
-								(yy > -1) && (yy < img_height)) {
-								int n = ((yy * img_width) + xx) * 3;
-								img[n+2] = (unsigned char)voxels[i+3];
-								img[n+1] = (unsigned char)voxels[i+4];
-								img[n] = (unsigned char)voxels[i+5];
-							}
-						}
-					}
-
-					x = (img_height/2) + ((y - ty) * img_height / ((by - ty)*2));
-					y = (img_height/2) + ((z - tz) * img_height / ((bz - tz)*2));
-					break;
-				}
-			}
-			for (int yy = y-voxel_radius_pixels; yy <= y+voxel_radius_pixels; yy++) {
-				for (int xx = x-voxel_radius_pixels; xx <= x+voxel_radius_pixels; xx++) {
-					if ((xx > -1) && (xx < img_width) &&
-						(yy > -1) && (yy < img_height)) {
-						int n = ((yy * img_width) + xx) * 3;
-						img[n+2] = (unsigned char)voxels[i+3];
-						img[n+1] = (unsigned char)voxels[i+4];
-						img[n] = (unsigned char)voxels[i+5];
-					}
-				}
-			}
-		}
-    }
-}
-
-void omni::show_height_field(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	int max_height_mm,
-	short* height_field,
-	unsigned char* height_field_colour,
-	int height_field_width,
-	int height_field_height,
-	int view_type)
-{
-    memset((void*)img, '\0',img_width*img_height*3);
-
-    int px=0,py=0;
-    for (int y = 0; y < img_height; y++) {
-    	int yy = y * height_field_height / img_height;
-    	for (int x = 0; x < img_width; x++) {
-    		int xx = x * height_field_width / img_width;
-    		int n = yy*height_field_width + xx;
-    		int height_mm = (int)height_field[n];
-			switch(view_type) {
-				case 0: {
-					px = x;
-					py = y;
-					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n*3+2];
-					img[n2+1] = height_field_colour[n*3+1];
-					img[n2+2] = height_field_colour[n*3];
-					break;
-				}
-				case 1: {
-					px = x;
-					py = img_height - 1 - (height_mm * img_height / max_height_mm);
-					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n*3+2];
-					img[n2+1] = height_field_colour[n*3+1];
-					img[n2+2] = height_field_colour[n*3];
-					break;
-				}
-				case 2: {
-					px = x;
-					py = img_height - 1 - (height_mm * img_height / max_height_mm);
-					int n2 = (py*img_width + px)*3;
-					img[n2] = height_field_colour[n*3+2];
-					img[n2+1] = height_field_colour[n*3+1];
-					img[n2+2] = height_field_colour[n*3];
-					break;
-				}
-				case 3: {
-					px = x/2;
-					py = (img_height/4) + (y/2);
-					int n2 = (py*img_width + px)*3;
-					if ((n2 > -1) && (n2 < img_width*img_height*3)) {
-					    img[n2] = height_field_colour[n*3];
-					    img[n2+1] = height_field_colour[n*3+1];
-					    img[n2+2] = height_field_colour[n*3+2];
-					}
-
-					px = (img_width/2) + (x/2);
-					py = img_height - 1 - (height_mm*(img_height/2)/max_height_mm);
-					n2 = (py*img_width + px)*3;
-					if ((n2 > -1) && (n2 < img_width*img_height*3)) {
-					    img[n2] = height_field_colour[n*3];
-					    img[n2+1] = height_field_colour[n*3+1];
-					    img[n2+2] = height_field_colour[n*3+2];
-					}
-
-					px = (img_width/2) + (x/2);
-					py = (img_height/2) - 1 - (height_mm*(img_height/2)/max_height_mm);
-					n2 = (py*img_width + px)*3;
-					if ((n2 > -1) && (n2 < img_width*img_height*3)) {
-					    img[n2] = height_field_colour[n*3];
-					    img[n2+1] = height_field_colour[n*3+1];
-					    img[n2+2] = height_field_colour[n*3+2];
-					}
-
-					break;
-				}
-			}
-
-    	}
-
-    }
-}
-
-float omni::get_z_fraction(
+void omni::create_ray_map(
+	float mirror_diameter,
+	float dist_to_mirror,
+	float dist_to_upper_mirror,
+	float focal_length,
+	float inner_radius_percent,
+	float outer_radius_percent,
+	float upper_mirror_outer_radius_percent,
 	float camera_height_mm,
-	float camera_to_backing_dist_mm,
-	float focal_length_mm,
-	float plane_height_mm,
-	float ray_map_height_mm)
+    int img_width,
+    int img_height)
 {
-	float dist = camera_to_backing_dist_mm + focal_length_mm;
-	float z_fraction = (dist + (camera_height_mm - plane_height_mm)) / (dist + ray_map_height_mm);
-    return (z_fraction);
-}
-
-void omni::reproject(
-	unsigned char* ground_img,
-	int plane_height_mm,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int img_width,
-	int img_height,
-	int ray_map_height_mm,
-	int tx_mm,
-	int ty_mm,
-	int bx_mm,
-	int by_mm,
-	int* ray_map,
-	unsigned char* reprojected_img,
-	int ray_map_width,
-	int ray_map_height)
-{
-	int min_dist = (bx_mm - tx_mm) / img_width;
-	if (min_dist < 2) min_dist = 2;
-	min_dist = min_dist*min_dist;
-	int ray_map_pixels = ray_map_width*ray_map_height;
-
-	memset((void*)reprojected_img,'\0',ray_map_width*ray_map_height*3);
-
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
-
-	int w = bx_mm - tx_mm;
-	int h = by_mm - ty_mm;
-	vector<int> reprojected_pixels[img_width*img_height];
-	for (int i = ray_map_pixels-1; i >= 0; i--) {
-		if (ray_map[i*6 + 2] != 0) {
-			int start_x_mm = ray_map[i*6];
-			int start_y_mm = ray_map[i*6 + 1];
-			int end_x_mm = ray_map[i*6 + 3];
-			int end_y_mm = ray_map[i*6 + 4];
-
-			int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-			if ((ray_x_mm > tx_mm) && (ray_x_mm < bx_mm)) {
-			    int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-			    if ((ray_y_mm > ty_mm) && (ray_y_mm < by_mm)) {
-			    	int x = ((ray_x_mm - tx_mm) * img_width / w);
-			    	int y = ((ray_y_mm - ty_mm) * img_height / h);
-			    	int n2 = y*img_width + x;
-					if (!((ground_img[n2*3] == 0) &&
-						  (ground_img[n2*3 + 1] == 0) &&
-						  (ground_img[n2*3 + 2] == 0))) {
-			    	    reprojected_pixels[n2].push_back(i);
-					}
-			    }
-			}
-		}
-	}
-
-	int n = 0;
-	for (int y = 0; y < img_height; y++) {
-		for (int x = 0; x < img_width; x++, n++) {
-			if (!((ground_img[n*3] == 0) &&
-				  (ground_img[n*3+1] == 0) &&
-				  (ground_img[n*3+2] == 0))) {
-				int n2 = y*img_width + (img_width-1-x);
-				for (int p = (int)reprojected_pixels[n2].size()-1; p >= 0; p--) {
-					int n3 = reprojected_pixels[n2][p]*3;
-					reprojected_img[n3] = ground_img[n*3];
-					reprojected_img[n3 + 1] = ground_img[n*3 + 1];
-					reprojected_img[n3 + 2] = ground_img[n*3 + 2];
-				}
-			}
-		}
-	}
-
-}
-
-
-void omni::reconstruct_volume(
-	unsigned char* ray_map_img,
-	int start_plane_height_mm,
-	int end_plane_height_mm,
-	int no_of_planes,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int tx_mm,
-	int ty_mm,
-	int bx_mm,
-	int by_mm,
-	int camera_base_width_mm,
-	int camera_base_height_mm,
-	int* ray_map,
-	unsigned char* mirror_map,
-	float* mirror_lookup,
-	unsigned char* projected_img,
-	int projected_img_width,
-	int projected_img_height,
-	int* colour_difference,
-	short* height_field,
-	unsigned char* height_field_img,
-	int patch_size_pixels,
-	int min_patch_observations,
-	int* plane_occupancy)
-{
-    int plane_step = abs(end_plane_height_mm - start_plane_height_mm) / no_of_planes;
-    if (plane_step < 1) plane_step = 1;
-	int p, mirror_index = -1;
-	int min_r_mm = 0;
-	int max_r_mm = 9999;
-	int patch_size_pixels_sqr = patch_size_pixels*patch_size_pixels;
-	int w = ray_map_width / patch_size_pixels;
-	int h = ray_map_height / patch_size_pixels;
-	int total_patches = w*h;
-    int average_occupancy_probability = 0;
-    int patches = 0;
-
-	memset((void*)height_field,'\0',total_patches*sizeof(short));
-	memset((void*)height_field_img,'\0',projected_img_width*projected_img_height*3);
-
-	short cell_occupancy[no_of_planes*total_patches];
-	memset((void*)plane_occupancy, '\0', no_of_planes*sizeof(int));
-	memset((void*)cell_occupancy, '\0', no_of_planes*total_patches*sizeof(short));
-
-	// pixel positions of the camera base
-	int camera_base_width_pixels = (projected_img_width * camera_base_width_mm / (bx_mm - tx_mm));
-	int camera_base_height_pixels = (projected_img_height * camera_base_height_mm / (by_mm - ty_mm));
-	int camera_base_tx = (projected_img_width/2) - (camera_base_width_pixels/2);
-	int camera_base_ty = (projected_img_height/2) - (camera_base_height_pixels/2);
-	int camera_base_bx = camera_base_tx + camera_base_width_pixels;
-	int camera_base_by = camera_base_ty + camera_base_height_pixels;
-
-	for (int y = camera_base_ty; y < camera_base_by; y += patch_size_pixels, y++) {
-		int hy = y / patch_size_pixels;
-		for (int x = camera_base_tx; x < camera_base_bx; x += patch_size_pixels, p++) {
-			int hx = x / patch_size_pixels;
-			int n = hy*w + hx;
-			height_field[n] = camera_height_mm;
-		}
-	}
-
-    for (int plane = no_of_planes-1; plane >= 0; plane--) {
-
-    	int plane_height_mm = start_plane_height_mm + (plane * (end_plane_height_mm - start_plane_height_mm) / no_of_planes);
-
-    	project(
-    		ray_map_img,
-    		plane_height_mm,
-    		focal_length_mm,
-    		camera_to_backing_dist_mm,
-    		camera_height_mm,
-    		ray_map_width,
-    		ray_map_height,
-    		ray_map_height_mm,
-    		tx_mm, ty_mm,
-    		bx_mm, by_mm,
-    		ray_map,
-    		mirror_map,
-    		mirror_lookup,
-    		mirror_index,
-    		min_r_mm,
-    		max_r_mm,
-    		projected_img,
-    		projected_img_width,
-    		projected_img_height,
-    		colour_difference);
-
-    	int tot_colour_difference = 0;
-    	int tot_observations = 1;
-    	p = 0;
-    	for (int y = 0; y < projected_img_height; y++) {
-    		for (int x = 0; x < projected_img_width; x++, p++) {
-    			if (!((x > camera_base_tx) && (x < camera_base_bx) &&
-    				(y > camera_base_ty) && (y < camera_base_by))) {
-    				if (colour_difference[p*2 + 1] > 0) {
-        		        tot_colour_difference += colour_difference[p*2];
-        		        tot_observations++;
-    				}
-    			}
-    		}
-    	}
-    	tot_colour_difference /= tot_observations;
-    	plane_occupancy[plane] = 1000000 / (1 + tot_colour_difference*tot_colour_difference);
-    	//printf("%d tot_colour_difference %d\n", plane_height_mm, plane_occupancy[plane]);
-
-    	/*
-    	p = 0;
-    	for (int y = 0; y < projected_img_height; y += patch_size_pixels, y++) {
-    		for (int x = 0; x < projected_img_width; x += patch_size_pixels, p++) {
-
-    			if (!((x > camera_base_tx) && (x < camera_base_bx) &&
-    				(y > camera_base_ty) && (y < camera_base_by))) {
-
-					// total colour difference for this patch
-					int patch_observations = 0;
-					int patch_colour_difference = 0;
-					for (int yy = y; yy < y + patch_size_pixels; yy++) {
-						for (int xx = x; xx < x + patch_size_pixels; xx++) {
-							int n = yy*projected_img_width + xx;
-							patch_observations += colour_difference[n*2 + 1];
-							patch_colour_difference += colour_difference[n*2];
-						}
-					}
-
-					if ((patch_observations > min_patch_observations) &&
-						(patch_colour_difference > 0)) {
-
-						// normalise for the number of observations
-						patch_colour_difference /= patch_size_pixels_sqr;
-
-						// turn the colour difference into a probability (crudely)
-						int prob = 10000 / (1 + patch_colour_difference);
-						cell_occupancy[plane*total_patches + p] = (short)prob;
-						average_occupancy_probability += prob;
-						patches++;
-					}
-    			}
-    		}
-    	}
-    	*/
-    }
-
-    /*
-    if (patches > 0) {
-    	average_occupancy_probability /= patches;
-
-    	// get the average occupancy for each plane
-    	int max_plane_occupancy = 0;
-    	for (int plane = 0; plane < no_of_planes; plane++) {
-    		if (max_plane_occupancy < plane_occupancy[plane]) {
-    		    max_plane_occupancy = plane_occupancy[plane];
-    		}
-    	}
-
-    	// thresholds
-    	int plane_occupancy_threshold = max_plane_occupancy * 98/100;
-    	short cell_occupancy_threshold = (short)(average_occupancy_probability * 5/100);
-
-    	int camera_base_plane = (start_plane_height_mm - camera_height_mm) * no_of_planes / (end_plane_height_mm - start_plane_height_mm);
-    	if (camera_base_plane == no_of_planes) camera_base_plane = no_of_planes-1;
-    	//printf("camera_base_plane %d/%d\n", camera_base_plane,no_of_planes);
-
-    	// apply thresholds
-    	for (int plane = no_of_planes - 1; plane >= 0; plane--) {
-    		if ((plane_occupancy[plane] > plane_occupancy_threshold) ||
-    			(plane == camera_base_plane)) {
-
-            	short plane_height_mm = (short)(start_plane_height_mm + (plane * (end_plane_height_mm - start_plane_height_mm) / no_of_planes));
-
-            	project(
-            		ray_map_img,
-            		plane_height_mm,
-            		focal_length_mm,
-            		camera_to_backing_dist_mm,
-            		camera_height_mm,
-            		ray_map_width,
-            		ray_map_height,
-            		tx_mm, ty_mm,
-            		bx_mm, by_mm,
-            		ray_map,
-            		mirror_map,
-            		mirror_lookup,
-            		mirror_index,
-            		min_r_mm,
-            		max_r_mm,
-            		projected_img,
-            		projected_img_width,
-            		projected_img_height,
-            		colour_difference);
-
-            	if (plane_occupancy[plane] > plane_occupancy_threshold) {
-
-					for (int y = 0; y < projected_img_height; y++) {
-						int y2 = y / patch_size_pixels;
-						for (int x = 0; x < projected_img_width; x++) {
-							int x2 = x / patch_size_pixels;
-							int n = y2*w + x2;
-							if (cell_occupancy[plane*total_patches + n] > cell_occupancy_threshold) {
-
-								int n2 = y*projected_img_width + x;
-								height_field[n] = plane_height_mm;
-								height_field_img[n2*3] = projected_img[n2*3];
-								height_field_img[n2*3 + 1] = projected_img[n2*3 + 1];
-								height_field_img[n2*3 + 2] = projected_img[n2*3 + 2];
-
-							}
-						}
-					}
-            	}
-            	else {
-
-					for (int y = camera_base_ty; y < camera_base_by; y++) {
-						int y2 = y / patch_size_pixels;
-						for (int x = camera_base_tx; x < camera_base_bx; x++) {
-							int x2 = x / patch_size_pixels;
-
-							int n = y2*w + x2;
-							int n2 = y*projected_img_width + x;
-							height_field[n] = plane_height_mm;
-							height_field_img[n2*3] = projected_img[n2*3];
-							height_field_img[n2*3 + 1] = projected_img[n2*3 + 1];
-							height_field_img[n2*3 + 2] = projected_img[n2*3 + 2];
-						}
-					}
-            	}
-    		}
-    	}
-
-    }
-*/
-}
-
-
-void omni::project(
-	unsigned char* ray_map_img,
-	int plane_height_mm,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int tx_mm,
-	int ty_mm,
-	int bx_mm,
-	int by_mm,
-	int* ray_map,
-	unsigned char* mirror_map,
-	float* mirror_lookup,
-	int mirror_index,
-	int min_r_mm,
-	int max_r_mm,
-	unsigned char* projected_img,
-	int projected_img_width,
-	int projected_img_height,
-	int* colour_difference)
-{
-	int pow2[] = {
-		2,4,8,16,32,64,128,256
-	};
-
-	int w = bx_mm - tx_mm;
-	int h = by_mm - ty_mm;
-
-	memset((void*)projected_img,'\0',projected_img_width*projected_img_height*3);
-	memset((void*)colour_difference,'\0',projected_img_width*projected_img_height*2*sizeof(int));
-
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
-
-	int n = 0;
-	for (int y = 0; y < ray_map_height; y++) {
-		for (int x = 0; x < ray_map_width; x++, n++) {
-			int mirror = mirror_map[n] - 1;
-			if ((mirror > -1) &&
-				(!((ray_map_img[n*3] == 0) && (ray_map_img[n*3+1] == 0) && (ray_map_img[n*3+2] == 0))) &&
-				((mirror == mirror_index) || (mirror_index == -1))) {
-				if ((mirror_lookup[n*2] >= min_r_mm) &&
-					(mirror_lookup[n*2] <= max_r_mm)) {
-					if ((ray_map[n*6 + 2] != 0) &&
-						(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
-
-						int start_x_mm = ray_map[n*6];
-						int start_y_mm = ray_map[n*6 + 1];
-						int end_x_mm = ray_map[n*6 + 3];
-						int end_y_mm = ray_map[n*6 + 4];
-
-						int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-
-						int plane_x = (ray_x_mm - tx_mm) * projected_img_width / w;
-						int ray_radius =  ((abs(ray_x_mm) + abs(ray_y_mm))*4/projected_img_width);
-						if (ray_radius > 15) ray_radius = 15;
-						if ((plane_x > ray_radius) && (plane_x < projected_img_width-ray_radius-1)) {
-							int plane_y = (ray_y_mm - ty_mm) * projected_img_height / h;
-							if ((plane_y > ray_radius) && (plane_y < projected_img_height-ray_radius-1)) {
-
-								for (int py = plane_y-ray_radius; py <= plane_y+ray_radius; py++) {
-									for (int px = plane_x-ray_radius; px <= plane_x+ray_radius; px++) {
-
-										int n2 = (py * projected_img_width) + (ray_map_width-1-px);
-										int n3 = n2*3;
-										if ((projected_img[n3] == 0) &&
-											(projected_img[n3+1] == 0) &&
-											(projected_img[n3+2] == 0)) {
-
-											// update plane colour
-											projected_img[n3] = ray_map_img[n*3];
-											projected_img[n3 + 1] = ray_map_img[n*3 + 1];
-											projected_img[n3 + 2] = ray_map_img[n*3 + 2];
-										}
-										else {
-
-											if (colour_difference != NULL) {
-												// colour difference
-												int diff =
-													abs(ray_map_img[n*3] - projected_img[n3]) +
-													abs(ray_map_img[n*3 + 1] - projected_img[n3 + 1]) +
-													abs(ray_map_img[n*3 + 2] - projected_img[n3 + 2]);
-												colour_difference[n2*2] += diff;
-												colour_difference[n2*2 + 1]++;
-
-												// total colour difference
-												//colour_difference[0] += diff;
-												//colour_difference[1]++;
-											}
-
-											// update plane colour
-											projected_img[n3] += (ray_map_img[n*3] - projected_img[n3])/2;
-											projected_img[n3 + 1] += (ray_map_img[n*3 + 1] - projected_img[n3 + 1])/2;
-											projected_img[n3 + 2] += (ray_map_img[n*3 + 2] - projected_img[n3 + 2])/2;
-
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// normalise colour difference for number of observations
-	if (colour_difference != NULL) {
-		for (int i = projected_img_width*projected_img_height-1; i >= 0; i--) {
-			if (colour_difference[i*2 + 1] > 0) {
-				colour_difference[i*2] /= colour_difference[i*2 + 1];
-			}
-		}
-	}
-
-}
-
-void omni::voxels_from_features(
-	vector<int> &features,
-	unsigned char* ray_map_img,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int start_plane_height_mm,
-	int end_plane_height_mm,
-	int no_of_planes,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int* ray_map,
-	int no_of_mirrors,
-	unsigned char* mirror_map,
-	int outer_radius_percent,
-	int mirror_diameter_mm,
-	vector<short> &voxels)
-{
-	voxels.clear();
-	vector<vector<int> > features_on_plane;
-	vector<int> vox;
-	vector<int> projected_points;
-	vector<int> matched_features;
-	int ray_radius_mm = 0;
-	int mult = 10;
-	int minimum_matching_score_percent = 0;
-	float pixel_diameter_mm = mirror_diameter_mm / (float)(outer_radius_percent * ray_map_width / 200);
-	pixel_diameter_mm *= mult;
-	bool remove_matched_pixels = false;
-
-	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-		vector<int> f;
-		features_on_plane.push_back(f);
-	}
-
-	for (int p = 0; p < no_of_planes; p++) {
-		int plane_height_mm = start_plane_height_mm + ((end_plane_height_mm - start_plane_height_mm) * p / no_of_planes);
-
-		match_features_on_plane(
-			features,
-			features_on_plane,
-			no_of_mirrors,
-			ray_map_img,
-			plane_height_mm,
-			focal_length_mm,
-			camera_to_backing_dist_mm,
+	if (dist_to_upper_mirror == -1) {
+		// single mirror system
+		create_ray_map(
+			mirror_diameter,
+			dist_to_mirror,
+			focal_length,
+			0,
+			outer_radius_percent,
 			camera_height_mm,
-			ray_map_width,
-			ray_map_height,
-			ray_map_height_mm,
-			ray_map,
-			mirror_map,
-			-1,
-			pixel_diameter_mm,
-			vox,
-			projected_points,
-			matched_features,
-			minimum_matching_score_percent,
-			ray_radius_mm,
-			remove_matched_pixels);
-
-		ray_radius_mm /= mult;
-
-		for (int i = (int)vox.size()-4; i >= 0; i -= 4) {
-			short n = (short)vox[i]*3;
-			short x_mm = (short)vox[i+1];
-			short y_mm = (short)vox[i+2];
-			short score = (short)vox[i+3];
-
-			voxels.push_back(x_mm);
-			voxels.push_back(y_mm);
-			voxels.push_back((short)plane_height_mm);
-			voxels.push_back((short)ray_map_img[n+2]);
-			voxels.push_back((short)ray_map_img[n+1]);
-			voxels.push_back((short)ray_map_img[n]);
-			voxels.push_back((short)ray_radius_mm);
-			voxels.push_back(score);
-
-		}
-	}
-}
-
-void omni::match_features_on_plane(
-	vector<int> &features,
-	vector<vector<int> > &features_on_plane,
-	int no_of_mirrors,
-	unsigned char* ray_map_img,
-	int plane_height_mm,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int* ray_map,
-	unsigned char* mirror_map,
-	int mirror_index,
-	float pixel_diameter_mm,
-	vector<int> &voxels,
-	vector<int> &projected_points,
-	vector<int> &matched_features,
-	int minimum_matching_score_percent,
-	int &ray_radius_mm,
-	bool remove_matched_pixels)
-{
-	if ((int)features_on_plane.size() < no_of_mirrors) {
-		printf("features_on_plane is too small\n");
+			img_width,
+			img_height,
+			true, true, false);
 	}
 	else {
-
-		const int histogram_radius = 5;
-
-		int pow2[32];
-		for (int i = 0; i < 32; i++) {
-			pow2[i] = (int)pow(2, i);
-		}
-
-		/* lookup table used for counting the number of set bits */
-		const unsigned char BitsSetTable256[] =
-		{
-			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-			4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
-		};
-
-		int minimum_matches = no_of_mirrors-2;
-
-		for (int i = 0; i < no_of_mirrors; i++) {
-			features_on_plane[i].clear();
-		}
-		matched_features.clear();
-		voxels.clear();
-		projected_points.clear();
-
-		float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
-
-		// approximate radius of the ray on the projection plane
-		int ray_length_mm = ((camera_to_backing_dist_mm + focal_length_mm)*2) + abs(camera_height_mm - plane_height_mm);
-		ray_radius_mm = ray_length_mm * pixel_diameter_mm / (camera_to_backing_dist_mm + focal_length_mm);
-
-		for (int f = (int)features.size()-2; f >= 0; f -= 2) {
-			int fx = features[f];
-			int fy = features[f+1];
-
-			if ((fx > histogram_radius) && (fx < ray_map_width-histogram_radius) &&
-				(fy > histogram_radius) && (fy < ray_map_height-histogram_radius)) {
-
-				int n = fy*ray_map_width + fx;
-
-				int mirror = mirror_map[n] - 1;
-				if ((mirror > -1) &&
-					((mirror == mirror_index) || (mirror_index == -1))) {
-					if ((!((ray_map_img[n*3] == 0) && (ray_map_img[n*3+1] == 0) && (ray_map_img[n*3+2] == 0))) &&
-						(ray_map[n*6 + 2] != 0) &&
-						(ray_map[n*6 + 5] < ray_map[n*6 + 2])) {
-
-						int start_x_mm = -ray_map[n*6];
-						int start_y_mm = ray_map[n*6 + 1];
-						int end_x_mm = -ray_map[n*6 + 3];
-						int end_y_mm = ray_map[n*6 + 4];
-
-						int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-
-						projected_points.push_back(n);
-						projected_points.push_back(ray_x_mm);
-						projected_points.push_back(ray_y_mm);
-						projected_points.push_back(0);
-
-						features_on_plane[mirror].push_back(f);
-						features_on_plane[mirror].push_back(ray_x_mm);
-						features_on_plane[mirror].push_back(ray_y_mm);
-						features_on_plane[mirror].push_back(0);
-						features_on_plane[mirror].push_back(0);
-						features_on_plane[mirror].push_back(0);
-
-					}
-
-				}
-			}
-
-		}
-
-		for (int f0 = (int)features_on_plane[no_of_mirrors-1].size()-6; f0 >= 0; f0 -= 6) {
-			int fx0 = features_on_plane[no_of_mirrors-1][f0 + 1];
-			int fy0 = features_on_plane[no_of_mirrors-1][f0 + 2];
-			vector<int> matches;
-
-			// do any rays from other mirror match this one?
-			for (int mirror = 0; mirror < no_of_mirrors-1; mirror++) {
-				int min_separation = ray_radius_mm*ray_radius_mm;
-				int best_f1 = -1;
-
-				for (int f1 = (int)features_on_plane[mirror].size()-6; f1 >= 0; f1 -= 6) {
-
-					// is this feature within range?
-					int fx1 = features_on_plane[mirror][f1 + 1];
-					int dx = fx1 - fx0;
-					if ((dx > -ray_radius_mm) && (dx < ray_radius_mm)) {
-						int fy1 = features_on_plane[mirror][f1 + 2];
-						int dy = fy1 - fy0;
-						if ((dy > -ray_radius_mm) && (dy < ray_radius_mm)) {
-							int separation = dx*dx + dy*dy;
-							if (separation < min_separation) {
-								// closest feature
-								min_separation = separation;
-								best_f1 = f1;
-								//printf("min_separation %d\n", min_separation);
-							}
-						}
-					}
-				}
-
-				// add the best match to the list
-				if (best_f1 > -1) {
-					matches.push_back(mirror);
-					matches.push_back(best_f1);
-				}
-			}
-
-			if ((int)matches.size() >= minimum_matches*2) {
-				// are these matches photo consistent?
-
-				bool matched = true;
-				int matching_score = 0;
-				int matching_score_hits = 0;
-
-				unsigned int histogram_r0 = 0;
-				unsigned int histogram_g0 = 0;
-				unsigned int histogram_b0 = 0;
-				for (int y = fy0-histogram_radius; y <= fy0+histogram_radius; y++) {
-					int n2 = (y*ray_map_width + fx0 - histogram_radius)*3;
-					for (int x = fx0-histogram_radius; x <= fx0+histogram_radius; x++, n2 += 3) {
-						histogram_r0 |= pow2[ray_map_img[n2 + 2] / 8];
-						histogram_g0 |= pow2[ray_map_img[n2 + 1] / 8];
-						histogram_b0 |= pow2[ray_map_img[n2] / 8];
-					}
-				}
-
-				int no_of_bits_set =
-					BitsSetTable256[histogram_r0 & 0xff] +
-					BitsSetTable256[(histogram_r0 >> 8) & 0xff] +
-					BitsSetTable256[(histogram_r0 >> 16) & 0xff] +
-					BitsSetTable256[histogram_r0 >> 24] +
-
-					BitsSetTable256[histogram_g0 & 0xff] +
-					BitsSetTable256[(histogram_g0 >> 8) & 0xff] +
-					BitsSetTable256[(histogram_g0 >> 16) & 0xff] +
-					BitsSetTable256[histogram_g0 >> 24] +
-
-					BitsSetTable256[histogram_b0 & 0xff] +
-					BitsSetTable256[(histogram_b0 >> 8) & 0xff] +
-					BitsSetTable256[(histogram_b0 >> 16) & 0xff] +
-					BitsSetTable256[histogram_b0 >> 24];
-
-				if (no_of_bits_set > 0) {
-
-					for (int i = (int)matches.size()-2; i >= 0; i -= 2) {
-						int mirror = matches[i];
-						int f1 = matches[i + 1];
-
-						unsigned int histogram_r1 = features_on_plane[mirror][f1 + 3];
-						unsigned int histogram_g1 = features_on_plane[mirror][f1 + 4];
-						unsigned int histogram_b1 = features_on_plane[mirror][f1 + 5];
-						if ((histogram_r1 == 0) &&
-							(histogram_g1 == 0) &&
-							(histogram_b1 == 0)) {
-							int fx1 = features_on_plane[mirror][f1 + 1];
-							int fy1 = features_on_plane[mirror][f1 + 2];
-
-							for (int y = fy1-histogram_radius; y <= fy1+histogram_radius; y++) {
-								int n2 = (y*ray_map_width + fx1 - histogram_radius)*3;
-								for (int x = fx1-histogram_radius; x <= fx1+histogram_radius; x++, n2 += 3) {
-									histogram_r1 |= pow2[ray_map_img[n2 + 2] / 8];
-									histogram_g1 |= pow2[ray_map_img[n2 + 1] / 8];
-									histogram_b1 |= pow2[ray_map_img[n2] / 8];
-								}
-							}
-							features_on_plane[mirror][f1 + 3] = histogram_r1;
-							features_on_plane[mirror][f1 + 4] = histogram_g1;
-							features_on_plane[mirror][f1 + 5] = histogram_b1;
-						}
-
-						unsigned int dr = histogram_r0 & histogram_r1;
-						unsigned int dg = histogram_g0 & histogram_g1;
-						unsigned int db = histogram_b0 & histogram_b1;
-
-						if ((dr > 0) || (dg > 0) || (db > 0)) {
-							int correlation =
-								BitsSetTable256[dr & 0xff] +
-								BitsSetTable256[(dr >> 8) & 0xff] +
-								BitsSetTable256[(dr >> 16) & 0xff] +
-								BitsSetTable256[dr >> 24] +
-
-								BitsSetTable256[dg & 0xff] +
-								BitsSetTable256[(dg >> 8) & 0xff] +
-								BitsSetTable256[(dg >> 16) & 0xff] +
-								BitsSetTable256[dg >> 24] +
-
-								BitsSetTable256[db & 0xff] +
-								BitsSetTable256[(db >> 8) & 0xff] +
-								BitsSetTable256[(db >> 16) & 0xff] +
-								BitsSetTable256[db >> 24];
-
-							int correlation_percent = correlation * 100 / no_of_bits_set;
-
-							if ((correlation_percent < 20) || (correlation_percent > 180)) {
-								// the histograms do not match
-								matched = false;
-								break;
-							}
-							else {
-								matching_score += 100 - abs(correlation_percent - 100);
-								matching_score_hits++;
-							}
-						}
-					}
-
-					if ((matched) &&
-						(matching_score > minimum_matching_score_percent*matching_score_hits)) {
-
-						int f = features_on_plane[no_of_mirrors-1][f0];
-						int px = features[f];
-						int py = features[f + 1];
-
-						voxels.push_back(py*ray_map_width + px);
-						voxels.push_back(fx0);
-						voxels.push_back(fy0);
-						voxels.push_back(matching_score);
-
-						matched_features.push_back(f);
-						for (int i = (int)matches.size()-2; i >= 0; i -= 2) {
-							int mirror = matches[i];
-							int f1 = matches[i + 1];
-							f = features_on_plane[mirror][f1];
-							matched_features.push_back(f);
-						}
-
-					}
-				}
-			}
-		}
-
-		if (remove_matched_pixels) {
-			sort (matched_features.begin(),matched_features.end());
-
-			int prev_f = 99999;
-			for (int i = (int)matched_features.size()-1; i >= 0; i--) {
-				int f = matched_features[i];
-				if (prev_f > f) {
-					features.erase(features.begin()+f);
-					features.erase(features.begin()+f);
-					prev_f = f;
-				}
-			}
-		}
-	}
-}
-
-/*!
- * \brief project the given image features onto the given height plane
- * \param features list of features in image coordinates
- * \param mirror_index index number of the mirror from which features will be projected
- * \param plane_height_mm height that features are to be projected to
- * \param focal_length_mm focal length of the camera
- * \param camera_to_backing_dist_mm distance between the camera and the mirror backing plane
- * \param camera_height_mm height of the camera above the ground
- * \param ray_map_width width of the camera image
- * \param ray_map_height height of the camera image
- * \param ray_map lookup table containing ray vectors
- * \param mirror_map map containing mirror indexes
- * \param max_range_mm maximum range in mm
- * \param projected_features returned projected features (x,y,pixel index)
- */
-void omni::project_features(
-	vector<int> &features,
-	int mirror_index,
-	int plane_height_mm,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int* ray_map,
-	unsigned char* mirror_map,
-	int max_range_mm,
-    vector<int> &projected_features)
-{
-	projected_features.clear();
-
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
-
-	for (int f = 0; f < (int)features.size(); f += 2) {
-		int fx = features[f];
-		int fy = features[f+1];
-
-		int n = fy*ray_map_width + fx;
-
-		int mirror = mirror_map[n] - 1;
-		if ((mirror > -1) &&
-			((mirror == mirror_index) || (mirror_index == -1))) {
-			int n2 = n*6;
-			if ((ray_map[n2 + 2] != 0) &&
-				(ray_map[n2 + 5] < ray_map[n2 + 2])) {
-
-				int start_x_mm = ray_map[n2];
-				int start_y_mm = ray_map[n2 + 1];
-				int end_x_mm = ray_map[n2 + 3];
-				int end_y_mm = ray_map[n2 + 4];
-
-				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-
-				if ((ray_x_mm > -max_range_mm) && (ray_x_mm < max_range_mm) &&
-					(ray_y_mm > -max_range_mm) && (ray_y_mm < max_range_mm)) {
-				    projected_features.push_back(ray_x_mm);
-				    projected_features.push_back(ray_y_mm);
-				    projected_features.push_back(n);
-				}
-
-			}
-		}
-	}
-}
-
-/*!
- * \brief returns features grouped by mirror
- * \param features list of features (x,y)
- * \param no_of_mirrors number of mirrors
- * \param ray_map_width width of the image
- * \param mirror_map lookup table containing mirror indexes
- * \param grouped_features returned grouped features
- */
-void omni::mirror_features(
-	vector<int> &features,
-	int no_of_mirrors,
-	int ray_map_width,
-	unsigned char* mirror_map,
-    vector<vector<int> > &grouped_features)
-{
-	grouped_features.clear();
-	for (int i = 0; i < no_of_mirrors; i++) {
-		vector<int> feats;
-		grouped_features.push_back(feats);
-	}
-
-	for (int i = (int)features.size()-2; i >= 0; i -= 2) {
-		int x = features[i];
-		int y = features[i + 1];
-		int n = y*ray_map_width + x;
-		int mirror = mirror_map[n]-1;
-		if (mirror > -1) {
-			grouped_features[mirror].push_back(x);
-			grouped_features[mirror].push_back(y);
-		}
-	}
-}
-
-void omni::show_feature_rays(
-	vector<int> &features,
-	int no_of_mirrors,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-	int* ray_map,
-	unsigned char* mirror_map,
-	int max_range_mm,
-    unsigned char* img)
-{
-	memset((void*)img, '\0', ray_map_width*ray_map_height*3);
-
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, 0, ray_map_height_mm);
-
-	int r=0, g=0, b=0;
-
-	for (int f = 0; f < (int)features.size(); f += 2) {
-		int fx = features[f];
-		int fy = features[f+1];
-
-		int n = fy*ray_map_width + fx;
-
-		int mirror = mirror_map[n] - 1;
-		if (mirror > -1) {
-
-			switch(mirror) {
-			case 0: {
-				r = 255;
-				g = 0;
-				b = 0;
-				break;
-			}
-			case 1: {
-				r = 0;
-				g = 255;
-				b = 0;
-				break;
-			}
-			case 2: {
-				r = 0;
-				g = 0;
-				b = 255;
-				break;
-			}
-			case 3: {
-				r = 255;
-				g = 0;
-				b = 255;
-				break;
-			}
-			case 4: {
-				r = 255;
-				g = 255;
-				b = 0;
-				break;
-			}
-			case 5: {
-				r = 0;
-				g = 255;
-				b = 255;
-				break;
-			}
-			}
-
-			int n2 = n*6;
-			if ((ray_map[n2 + 2] != 0) &&
-				(ray_map[n2 + 5] <= ray_map[n2 + 2])) {
-
-				int start_x_mm = ray_map[n2];
-				int start_y_mm = ray_map[n2 + 1];
-				int start_z_mm = ray_map[n2 + 2] + camera_height_mm - ray_map_height_mm + camera_to_backing_dist_mm;
-				int end_x_mm = ray_map[n2 + 3];
-				int end_y_mm = ray_map[n2 + 4];
-				int end_z_mm = ray_map[n2 + 5] + camera_height_mm - ray_map_height_mm + camera_to_backing_dist_mm;
-
-				int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-				int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-				int ray_z_mm = start_z_mm + (int)((end_z_mm - start_z_mm) * z_fraction);
-
-				if ((ray_x_mm > -max_range_mm) && (ray_x_mm < max_range_mm) &&
-					(ray_y_mm > -max_range_mm) && (ray_y_mm < max_range_mm)) {
-
-					int x0 = (start_x_mm + max_range_mm) * ray_map_height / (max_range_mm*2);
-					int y0 = (start_y_mm + max_range_mm) * ray_map_height / (max_range_mm*2);
-					int x1 = (ray_x_mm + max_range_mm) * ray_map_height / (max_range_mm*2);
-					int y1 = (ray_y_mm + max_range_mm) * ray_map_height / (max_range_mm*2);
-
-					int dx = x1 - x0;
-					int dy = y1 - y0;
-					int dz = ray_z_mm - start_z_mm;
-					int dist = (int)sqrt(dx*dx + dy*dy);
-
-					if (dist > 0) {
-						int max_ray_width = 40;
-						int bit = (int)pow(2,mirror);
-						for (int i = 0; i <= dist; i++) {
-							int x = x0 + (i * dx / dist);
-							int y = y0 + (i * dy / dist);
-							int xx = x;
-							int yy = y;
-							int ray_width = i * max_ray_width / ray_map_height;
-							int height = (start_z_mm + (i * dz / dist)) * 15 / (camera_height_mm+camera_to_backing_dist_mm);
-							int height_bit0 = 0;
-							int height_bit1 = 0;
-							if (height < 8)
-								height_bit0 = (int)pow(2,height);
-							else
-								height_bit1 = (int)pow(2,height-8);
-							for (int j = -ray_width; j <= ray_width; j++) {
-								xx = x + (dy*j/dist);
-								yy = y + (dx*j/dist);
-
-								if ((xx > 0) && (xx < ray_map_width) &&
-									(yy > 0) && (yy < ray_map_height)) {
-
-									int n = (yy*ray_map_width + xx)*3;
-									img[n] |= bit;
-									img[n+1] |= height_bit0;
-									img[n+2] |= height_bit1;
-
-									//img[n+1-3] |= height_bit;
-									//img[n+1-(ray_map_width*3)] |= height_bit;
-									//img[n+1-3-(ray_map_width*3)] |= height_bit;
-								}
-							}
-						}
-					}
-
-					//drawing::drawLine(img, ray_map_width, ray_map_height, x0,y0,x1,y1, r,g,b, 0,false);
-				}
-
-			}
-		}
-	}
-
-	for (int i = ray_map_width*ray_map_height*3-3; i >= 0; i -= 3) {
-		if (img[i] > 0) {
-			int mirror_hits = 0;
-			int height_hits0 = 0;
-			int average_height0 = 0;
-			int height_hits1 = 0;
-			int average_height1 = 0;
-			for (int b = 0; b < 8; b++) {
-				int bit = (int)pow(2,b);
-				if (img[i] & bit) mirror_hits++;
-				if (img[i+1] & bit) {
-					height_hits0++;
-					average_height0 += b;
-				}
-				if (img[i+2] & bit) {
-					height_hits1++;
-					average_height1 += b+8;
-				}
-			}
-			if (height_hits0 > 0) average_height0 /= height_hits0;
-			if (height_hits1 > 0) average_height1 /= height_hits1;
-
-			if ((mirror_hits > 1) && ((height_hits0 > 0) && (height_hits1 <3))) {
-				int value = average_height0 * 255 / 8;
-				img[i] = value;
-				img[i+1] = value;
-				img[i+2] = value;
-			}
-			else {
-				img[i] = 0;
-				img[i+1] = 0;
-				img[i+2] = 0;
-			}
-		}
-	}
-}
-
-int omni::matching_score(
-	unsigned char* img,
-	int img_width,
-	int x0, int y0,
-	int x1, int y1,
-	int radius,
-	unsigned char *hist0,
-	unsigned char *hist1)
-{
-	int score = 0;
-	memset((void*)hist0, '\0', 256);
-	memset((void*)hist1, '\0', 256);
-	for (int y = -radius; y <= radius; y++) {
-		int n0 = ((y+y0)*img_width + x0 - radius)*3;
-		int n1 = ((y+y1)*img_width + x1 - radius)*3;
-		for (int x = -radius; x <= radius; x++, n0 += 3, n1 += 3) {
-            hist0[img[n0]]++;
-            hist1[img[n1]]++;
-
-            hist0[img[n0 + 1]]++;
-            hist1[img[n1 + 1]]++;
-
-            hist0[img[n0 + 2]]++;
-            hist1[img[n1 + 2]]++;
-		}
-	}
-	for (int b = 255; b >= 0; b--) {
-		if ((hist0[b] > 0) && (hist1[b] > 0)) {
-			score += 255 - (hist0[b] - hist1[b]);
-		}
-	}
-	return(score);
-}
-
-
-/*!
- * \brief reproject features from a plane (typically the ground) into image coordinates
- * \param img colour image data
- * \param plane_features features on the plane
- * \param mirror_index index number of the mirror
- * \param no_of_mirrors number of mirrors
- * \param plane_height_mm height of the plane above the ground
- * \param plane_tollerance_mm tolerance of the intercept point above and below the plane
- * \param focal_length_mm focal length of the camera
- * \param camera_to_backing_dist_mm distance between the camera and the mirror backing plane
- * \param camera_height_mm height of the camera above the ground
- * \param ray_map lookup table containing ray vectors
- * \param ray_map_width width of the image
- * \param ray_map_height height of the image
- * \param mirror_map lookup table containing mirror indexes
- * \param ground_plane_tollerance_mm tollerance for matching rays on the plane
- * \param max_range_mm maximum range in millimetres
- * \param ground_features_lookup lookup table for feature projection
- * \param matching_pixels returned original pixel indices from which rays were projected
- * \param plane_features_accurate more accurate positions for the plane features
- * \param reprojected_features returned reprojected features in image coordinates
- */
-void omni::reproject_features(
-	unsigned char* img,
-	vector<int> &plane_features,
-	int mirror_index,
-	int no_of_mirrors,
-	int plane_height_mm,
-	int plane_tollerance_mm,
-	float focal_length_mm,
-	int camera_to_backing_dist_mm,
-	int camera_height_mm,
-	int* ray_map,
-	int ray_map_width,
-	int ray_map_height,
-	int ray_map_height_mm,
-    unsigned char* mirror_map,
-    int ground_plane_tollerance_mm,
-    int max_range_mm,
-    unsigned short *ground_features_lookup,
-    vector<int> &matching_pixels,
-    vector<int> &plane_features_accurate,
-    vector<int> &reprojected_features,
-    vector<int> &match_score)
-{
-	unsigned char hist0[256];
-	unsigned char hist1[256];
-
-	match_score.clear();
-	matching_pixels.clear();
-	reprojected_features.clear();
-	plane_features_accurate.clear();
-
-	// multiplier for this plane height
-	float z_fraction = get_z_fraction(camera_height_mm, camera_to_backing_dist_mm, focal_length_mm, plane_height_mm, ray_map_height_mm);
-
-	// locate the bounding box within which the features are contained
-	int bounding_box_tx = 99999;
-	int bounding_box_ty = 99999;
-	int bounding_box_bx = -99999;
-	int bounding_box_by = -99999;
-	for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
-		int x = plane_features[f];
-		int y = plane_features[f + 1];
-		if (x < bounding_box_tx) bounding_box_tx = x;
-		if (y < bounding_box_ty) bounding_box_ty = y;
-		if (x > bounding_box_bx) bounding_box_bx = x;
-		if (y > bounding_box_by) bounding_box_by = y;
-	}
-	bounding_box_tx -= ground_plane_tollerance_mm;
-	bounding_box_ty -= ground_plane_tollerance_mm;
-	bounding_box_bx += ground_plane_tollerance_mm;
-	bounding_box_by += ground_plane_tollerance_mm;
-
-	// limit the bounding box to a maximum range
-	if (bounding_box_tx < -max_range_mm) bounding_box_tx = -max_range_mm;
-	if (bounding_box_ty < -max_range_mm) bounding_box_ty = -max_range_mm;
-	if (bounding_box_bx > max_range_mm) bounding_box_bx = max_range_mm;
-	if (bounding_box_by > max_range_mm) bounding_box_by = max_range_mm;
-
-	// dimensions of the bounding box
-	int bounding_box_width = bounding_box_bx - bounding_box_tx;
-	int bounding_box_height = bounding_box_by - bounding_box_ty;
-
-	if ((bounding_box_width > 0) && (bounding_box_height > 0)) {
-		// divide the bounding box into a grid
-		int grid_width = bounding_box_width / ground_plane_tollerance_mm;
-		int grid_height = bounding_box_height / ground_plane_tollerance_mm;
-
-		// limit the size of the array to prevent running out of memory
-		if (grid_width > 1024) {
-			grid_width = 1024;
-			ground_plane_tollerance_mm = bounding_box_width / grid_width;
-			grid_height = bounding_box_height / ground_plane_tollerance_mm;
-		}
-		if (grid_height > 1024) {
-			grid_height = 1024;
-			ground_plane_tollerance_mm = bounding_box_height / grid_height;
-			grid_width = bounding_box_width / ground_plane_tollerance_mm;
-		}
-
-		// clear the grid
-		memset((void*)ground_features_lookup,'\0',(grid_width+1)*(grid_height+1)*10*sizeof(unsigned short));
-
-		// insert plane features into the grid
-		for (int f = (int)plane_features.size()-3; f >= 0; f -= 3) {
-
-			// get the location of the feature within the grid
-			int grid_x = (plane_features[f] - bounding_box_tx) * grid_width / bounding_box_width;
-			int grid_y = (plane_features[f + 1] - bounding_box_ty) * grid_height / bounding_box_height;
-
-			int n = (grid_y*grid_width + grid_x)*10;
-			if (ground_features_lookup[n] < 9) {
-
-				// store the feature index at this grid location
-				ground_features_lookup[n + ground_features_lookup[n] + 1] = (unsigned short)(f + 1);
-
-				// increment the number of features at this grid location
-				ground_features_lookup[n]++;
-			}
-		}
-
-		// match rays against the grid
-		int n = 0;
-		int i = 0;
-		for (int y = 0; y < ray_map_height; y++) {
-			for (int x = 0; x < ray_map_width; x++, i += 6, n++) {
-
-				if ((ray_map[i + 2] != 0) &&
-					(ray_map[i + 5] < ray_map[i + 2]) &&
-					(((mirror_index == -1) && (mirror_map[n] != no_of_mirrors)) ||
-					  (mirror_map[n]-1 == mirror_index))) {
-
-					int start_x_mm = ray_map[i];
-					int start_y_mm = ray_map[i + 1];
-					int end_x_mm = ray_map[i + 3];
-					int end_y_mm = ray_map[i + 4];
-
-					int ray_x_mm = start_x_mm + (int)((end_x_mm - start_x_mm) * z_fraction);
-					if ((ray_x_mm > bounding_box_tx) && (ray_x_mm < bounding_box_bx)) {
-						int ray_y_mm = start_y_mm + (int)((end_y_mm - start_y_mm) * z_fraction);
-						if ((ray_y_mm > bounding_box_ty) && (ray_y_mm < bounding_box_by)) {
-
-							// grid coordinate of this ray
-							int grid_x = ((ray_x_mm - bounding_box_tx) * grid_width) / bounding_box_width;
-							int grid_y = ((ray_y_mm - bounding_box_ty) * grid_height) / bounding_box_height;
-
-							int ground_features_index = (grid_y*grid_width + grid_x) * 10;
-							if (ground_features_lookup[ground_features_index] > 0) {
-
-								int start_z_mm = ray_map[i + 2] + camera_height_mm;
-								int end_z_mm = ray_map[i + 5] + camera_height_mm;
-
-								int max_gf = ground_features_lookup[ground_features_index];
-								for (int gf = max_gf-1; gf >= 0; gf--) {
-
-									// find vertical intercept point between the two rays
-									int plane_features_index = (int)ground_features_lookup[ground_features_index + gf + 1] - 1;
-									int pixel_index = plane_features[plane_features_index + 2];
-									int ray_map_index = pixel_index * 6;
-									int plane_start_x_mm = ray_map[ray_map_index];
-									int plane_start_y_mm = ray_map[ray_map_index + 1];
-									int plane_start_z_mm = ray_map[ray_map_index + 2] + camera_height_mm;
-									int plane_end_x_mm = ray_map[ray_map_index + 3];
-									int plane_end_y_mm = ray_map[ray_map_index + 4];
-									int plane_end_z_mm = ray_map[ray_map_index + 5] + camera_height_mm;
-
-									// locate the interception point for the rays
-									float ix=0, iy=0, iz=0;
-									rays_intercept(
-										start_x_mm, start_y_mm, start_z_mm,
-										end_x_mm, end_y_mm, end_z_mm,
-										plane_start_x_mm, plane_start_y_mm, plane_start_z_mm,
-										plane_end_x_mm, plane_end_y_mm, plane_end_z_mm,
-										ix, iy, iz);
-
-									// difference between the interception point height and the plane
-									int deviation_from_plane_mm = (int)(iz - plane_height_mm);
-
-
-									if ((deviation_from_plane_mm >= -plane_tollerance_mm) &&
-										(deviation_from_plane_mm <= plane_tollerance_mm)) {
-
-										// store originating projected pixel
-										matching_pixels.push_back(pixel_index);
-
-										// image coordinate
-										reprojected_features.push_back(x);
-										reprojected_features.push_back(y);
-
-										// cartesian coordinate
-										plane_features_accurate.push_back((int)ix);
-										plane_features_accurate.push_back((int)iy);
-										plane_features_accurate.push_back((int)iz);
-
-										int y2 = pixel_index / ray_map_width;
-										int x2 = pixel_index - (y2*ray_map_width);
-										match_score.push_back(matching_score(
-											img, ray_map_width,
-											x, y, x2, y2, 4,
-											hist0, hist1));
-
-										gf = -1;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-
-void omni::show_voxels(
-	unsigned char* ray_map_img,
-	int tx_mm,
-	int ty_mm,
-	int bx_mm,
-	int by_mm,
-	vector<int> &voxels,
-	int img_width,
-	int img_height,
-	unsigned char* result)
-{
-	memset((void*)result,'\0',img_width*img_height*3);
-
-	for (int i = (int)voxels.size()-4; i >= 0; i -= 4) {
-		int n = voxels[i]*3;
-		int x_mm = voxels[i + 1];
-		int y_mm = voxels[i + 2];
-		int x = (x_mm - tx_mm) * img_width / (bx_mm - tx_mm);
-		int y = (y_mm - ty_mm) * img_height / (by_mm - ty_mm);
-		int n2 = (y*img_width + x)*3;
-		result[n2] = ray_map_img[n];
-		result[n2+1] = ray_map_img[n+1];
-		result[n2+2] = ray_map_img[n+2];
-	}
-}
-
-
-void omni::show_rays(
-	unsigned char* mirror_map,
-	int* ray_map,
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	int radius_mm,
-	int point_radius_pixels)
-{
-    memset((void*)img,'\0',img_width*img_height*3);
-
-    int point_radius_sqr = point_radius_pixels*point_radius_pixels;
-    int n = 0;
-    for (int y = 0; y < img_height; y++) {
-    	for (int x = 0; x < img_width; x++, n++) {
-            if (mirror_map[n] > 0) {
-            	int mirror = mirror_map[n] - 1;
-				int ray_start_z_mm = ray_map[n*6 + 2];
-				int ray_end_x_mm = ray_map[n*6 + 3];
-				int ray_end_y_mm = ray_map[n*6 + 4];
-				int ray_end_z_mm = ray_map[n*6 + 5];
-				if (ray_end_z_mm < ray_start_z_mm) {
-					if ((ray_end_x_mm > -radius_mm) &&
-						(ray_end_x_mm < radius_mm) &&
-						(ray_end_y_mm > -radius_mm) &&
-						(ray_end_y_mm < radius_mm)) {
-						int xx = (ray_end_x_mm + radius_mm) * img_height / (radius_mm*2);
-						int yy = (ray_end_y_mm + radius_mm) * img_height / (radius_mm*2);
-						if ((xx > 0) && (xx < img_width-1) &&
-						    (yy > 0) && (yy < img_height-1)) {
-
-						    for (int yy2 = yy-point_radius_pixels; yy2 <= yy+point_radius_pixels; yy2++) {
-						    	int dy = yy2 - yy;
-							    for (int xx2 = xx-point_radius_pixels; xx2 <= xx+point_radius_pixels; xx2++) {
-							    	int dx = xx2 - xx;
-
-							    	if (dx*dx + dy*dy < point_radius_sqr) {
-
-										int n2 = ((yy2*img_width) + xx2)*3;
-										switch(mirror) {
-											case 0: {
-												img[n2] = 255;
-												break;
-											}
-											case 1: {
-												img[n2+1] = 255;
-												break;
-											}
-											case 2: {
-												img[n2+2] = 255;
-												break;
-											}
-											case 3: {
-												img[n2+1] = 255;
-												img[n2+2] = 255;
-												break;
-											}
-											case 4: {
-												img[n2] = 255;
-												img[n2+2] = 255;
-												break;
-											}
-										}
-
-							    	}
-							    }
-						    }
-						}
-					}
-				}
-            }
-    	}
-    }
-
-    n = 0;
-    for (int y = 0; y < img_height; y++) {
-    	for (int x = 0; x < img_width; x++, n++) {
-            if (mirror_map[n] > 0) {
-            	int mirror = mirror_map[n] - 1;
-				int ray_start_x_mm = ray_map[n*6];
-				int ray_start_y_mm = ray_map[n*6 + 1];
-				int ray_start_z_mm = ray_map[n*6 + 2];
-				int ray_end_x_mm = ray_map[n*6 + 3];
-				int ray_end_y_mm = ray_map[n*6 + 4];
-				int ray_end_z_mm = ray_map[n*6 + 5];
-				if (ray_end_z_mm < ray_start_z_mm) {
-					if ((ray_end_x_mm > -radius_mm) &&
-						(ray_end_x_mm < radius_mm) &&
-						(ray_end_y_mm > -radius_mm) &&
-						(ray_end_y_mm < radius_mm)) {
-						int xx = (ray_start_x_mm + radius_mm) * img_height / (radius_mm*2);
-						int yy = (ray_start_y_mm + radius_mm) * img_height / (radius_mm*2);
-						if ((xx > 0) && (xx < img_width-1) &&
-						    (yy > 0) && (yy < img_height-1)) {
-
-						    for (int yy2 = yy-point_radius_pixels; yy2 <= yy+point_radius_pixels; yy2++) {
-						    	int dy = yy2 - yy;
-							    for (int xx2 = xx-point_radius_pixels; xx2 <= xx+point_radius_pixels; xx2++) {
-							    	int dx = xx2 - xx;
-
-							    	if (dx*dx + dy*dy < point_radius_sqr) {
-
-										int n2 = ((yy2*img_width) + xx2)*3;
-										switch(mirror) {
-											case 0: {
-												img[n2] = 255;
-												img[n2+1] = 0;
-												img[n2+2] = 0;
-												break;
-											}
-											case 1: {
-												img[n2] = 0;
-												img[n2+1] = 255;
-												img[n2+2] = 0;
-												break;
-											}
-											case 2: {
-												img[n2] = 0;
-												img[n2+1] = 0;
-												img[n2+2] = 255;
-												break;
-											}
-											case 3: {
-												img[n2] = 0;
-												img[n2+1] = 255;
-												img[n2+2] = 255;
-												break;
-											}
-											case 4: {
-												img[n2+1] = 0;
-												img[n2] = 255;
-												img[n2+2] = 255;
-												break;
-											}
-										}
-
-							    	}
-							    }
-						    }
-						}
-					}
-				}
-            }
-    	}
-    }
-
-}
-
-void omni::create_ray_map(
-	float mirror_diameter_mm,
-	float dist_to_mirror_backing_mm,
-	float focal_length,
-	float outer_radius_percent,
-	float camera_height_mm,
-	int no_of_mirrors,
-	float* mirror_position,
-	float* mirror_position_pixels,
-    int img_width,
-    int img_height,
-    int* ray_map,
-    unsigned char* mirror_map,
-    float* mirror_lookup)
-{
-	int mirror_radius_pixels = img_width * outer_radius_percent / 200;
-
-	memset((void*)ray_map,'\0',img_width*img_height*6*sizeof(int));
-	memset((void*)mirror_lookup,'\0',img_width*img_height*2*sizeof(float));
-
-	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-		// mirror distance from the centre of the backing plane (xy)
-		float mirror_dist_from_backing_centre =
-			(float)sqrt(mirror_position[mirror*2]*mirror_position[mirror*2] +
-					mirror_position[mirror*2+1]*mirror_position[mirror*2+1]);
-
-		// angle of the mirror on the xz plane
-		float tilt_radians = (float)atan2(mirror_dist_from_backing_centre, dist_to_mirror_backing_mm + focal_length);
-
-		// rotation of the mirror on the backing plane (xy)
-		float rotate_radians = (float)atan2(mirror_position[mirror*2], mirror_position[mirror*2+1]);
-
-		// distance to the centre of the mirror
-		float dist_to_mirror_centre_mm = (float)sqrt(mirror_dist_from_backing_centre*mirror_dist_from_backing_centre + (dist_to_mirror_backing_mm+focal_length)*(dist_to_mirror_backing_mm+focal_length));
-
-		create_ray_map_mirror(
-			mirror,
-			mirror_position_pixels[mirror*2]*img_width/100,
-			mirror_position_pixels[mirror*2 + 1]*img_height/100,
-			mirror_position[mirror*2],
-			mirror_position[mirror*2 + 1],
-			mirror_radius_pixels,
-			ray_map,
-			mirror_map,
-			mirror_lookup,
-			img_width, img_height,
-			tilt_radians,
-			rotate_radians,
-			mirror_diameter_mm,
-			dist_to_mirror_centre_mm,
-			camera_height_mm);
-	}
-}
-
-void omni::create_ray_map_mirror_inner(
-	int mirror,
-	int centre_x_pixels,
-	int centre_y_pixels,
-	int centre_x_mm,
-	int centre_y_mm,
-	int radius_pixels,
-	int* ray_map,
-	unsigned char* mirror_map,
-	float* mirror_lookup,
-	int ray_map_width,
-	int ray_map_height,
-	float tilt_radians,
-	float rotate_radians,
-	float mirror_diameter_mm,
-	float dist_to_mirror_centre_mm,
-	float camera_height_mm,
-	float centre_x,
-	float centre_y,
-	float centre_z,
-	float r,
-	bool negative)
-{
-	float z0 = (float)sqrt(radius_pixels*radius_pixels - r*r);
-	if (negative) z0 = -z0;
-	float sphere_ang = (float)asin(r / (float)radius_pixels);
-
-	//float sphere_x = (float)fabs(mirror_diameter_mm*0.5*sin(sphere_ang));
-	//float sphere_z = dist_to_mirror_centre_mm - (float)fabs(mirror_diameter_mm*0.5f*cos(sphere_ang));
-
-	float sphere_x = r * mirror_diameter_mm * 0.5f / radius_pixels;
-	float sphere_y = 0;
-	float sphere_z = dist_to_mirror_centre_mm - (z0 * mirror_diameter_mm * 0.5f / radius_pixels);
-	float viewing_angle = (float)fabs(atan2(sphere_x, sphere_z));
-	float ang2 = viewing_angle + (sphere_ang * 2);
-	float ray_end_y = 0;
-	float ray_end_z = 0;
-	float ray_end_x = sphere_x + (sphere_z * (float)tan(ang2));
-	bool ground = true;
-	if (ray_end_x < 0) {
-		ray_end_x = sphere_x - (sphere_z * (float)tan(ang2));
-		ray_end_z = sphere_z * 2;
-		ground = false;
-	}
-
-	for (float ang = 0; ang < 360; ang += 0.2f) {
-
-		float ang_radians = (ang / 180 * 3.1415927f);
-
-		// rotate
-		float sphere_x2 = (float)((cos(ang_radians+3.1415927f) * sphere_x) - (sin(ang_radians+3.1415927f) * sphere_y));
-		float sphere_y2 = (float)((sin(ang_radians) * sphere_x) + (cos(ang_radians) * sphere_y));
-		float sphere_z2 = sphere_z;
-		float ray_end_x2 = (float)((cos(ang_radians+3.1415927f) * ray_end_x) - (sin(ang_radians+3.1415927f) * ray_end_y));
-		float ray_end_y2 = (float)((sin(ang_radians) * ray_end_x) + (cos(ang_radians) * ray_end_y));
-		float ray_end_z2 = ray_end_z;
-
-		// tilt
-		float sphere_x3 = (float)((cos(tilt_radians+3.1415927f) * sphere_x2) - (sin(tilt_radians+3.1415927f) * sphere_z2));
-		float sphere_y3 = sphere_y2;
-		float sphere_z3 = (float)((sin(tilt_radians) * sphere_x2) + (cos(tilt_radians) * sphere_z2));;
-		float ray_end_x3 = (float)((cos(tilt_radians+3.1415927f) * ray_end_x2) - (sin(tilt_radians+3.1415927f) * ray_end_z2));
-		float ray_end_y3 = ray_end_y2;
-		float ray_end_z3 = (float)((sin(tilt_radians) * ray_end_x2) + (cos(tilt_radians) * ray_end_z2));
-
-		// rotate
-		float sphere_x4 = (float)((cos(rotate_radians+3.1415927f) * sphere_x3) - (sin(rotate_radians+3.1415927f) * sphere_y3));
-		float sphere_y4 = (float)((sin(rotate_radians) * sphere_x3) + (cos(rotate_radians) * sphere_y3));
-		float sphere_z4 = sphere_z3 + camera_height_mm;
-		float ray_end_x4 = (float)((cos(rotate_radians+3.1415927f) * ray_end_x3) - (sin(rotate_radians+3.1415927f) * ray_end_y3));
-		float ray_end_y4 = (float)((sin(rotate_radians) * ray_end_x3) + (cos(rotate_radians) * ray_end_y3));
-		float ray_end_z4 = ray_end_z3 + camera_height_mm;
-
-		// rotate
-		float sphere_x5 = (float)((cos(-rotate_radians+3.1415927f) * sphere_x2) - (sin(-rotate_radians+3.1415927f) * sphere_y2));
-		float sphere_y5 = (float)((sin(-rotate_radians) * sphere_x2) + (cos(-rotate_radians) * sphere_y2));
-
-		//int px = centre_x_pixels + (int)((sphere_x4 - centre_x) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
-		//int py = centre_y_pixels + (int)((sphere_y4 - centre_y) * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
-		int px = centre_x_pixels + (int)(sphere_x5 * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
-		int py = centre_y_pixels + (int)(sphere_y5 * (radius_pixels+2) / (mirror_diameter_mm * 0.5f));
-		//int px = centre_x_pixels + (int)(r * sin(ang_radians+rotate_radians));
-		//int py = centre_y_pixels + (int)(r * cos(ang_radians+rotate_radians));
-		if ((px > -1) && (px < ray_map_width) &&
-			(py > -1) && (py < ray_map_height)) {
-
-			if (ground) {
-				float ix=9999, iy=9999,iz=0;
-
-				intersection(
-					0,0, 100,0,
-					sphere_x4, sphere_z4, ray_end_x4, ray_end_z4,
-					ix, iz);
-				if (ix != 9999) {
-					intersection(
-						0,0, 100,0,
-						sphere_y4, sphere_z4, ray_end_y4, ray_end_z4,
-						iy, iz);
-					if (iy != 9999) {
-						ray_end_x4 = ix;
-						ray_end_y4 = iy;
-						ray_end_z4 = 0;
-					}
-				}
-			}
-
-			int n = py*ray_map_width + px;
-			ray_map[n*6] = (int)sphere_x4;
-			ray_map[n*6+1] = (int)sphere_y4;
-			ray_map[n*6+2] = (int)sphere_z4;
-			ray_map[n*6+3] = (int)ray_end_x4;
-			ray_map[n*6+4] = (int)ray_end_y4;
-			ray_map[n*6+5] = (int)ray_end_z4;
-
-			mirror_lookup[n*2] = r;
-			mirror_lookup[n*2+1] = ang_radians;
-
-			mirror_map[n] = mirror+1;
-		}
-	}
-}
-
-void omni::create_ray_map_mirror(
-	int mirror,
-	int centre_x_pixels,
-	int centre_y_pixels,
-	int centre_x_mm,
-	int centre_y_mm,
-	int radius_pixels,
-	int* ray_map,
-	unsigned char* mirror_map,
-	float* mirror_lookup,
-	int ray_map_width,
-	int ray_map_height,
-	float tilt_radians,
-	float rotate_radians,
-	float mirror_diameter_mm,
-	float dist_to_mirror_centre_mm,
-	float camera_height_mm)
-{
-	float centre_x = 0;
-	float centre_y = 0;
-	float centre_z = dist_to_mirror_centre_mm;
-
-	// tilt
-	float centre_x2 = (float)((cos(tilt_radians+3.1415927f) * centre_x) - (sin(tilt_radians+3.1415927f) * centre_z));
-	float centre_y2 = centre_y;
-	float centre_z2 = (float)((sin(tilt_radians) * centre_x) + (cos(tilt_radians) * centre_z));;
-
-	// rotate
-	centre_x = (float)((cos(rotate_radians+3.1415927f) * centre_x2) - (sin(rotate_radians+3.1415927f) * centre_y2));
-	centre_y = (float)((sin(rotate_radians) * centre_x2) + (cos(rotate_radians) * centre_y2));
-	centre_z = centre_z2 + camera_height_mm;
-
-	for (float r = radius_pixels; r >= 0; r -= 0.2f) {
-		create_ray_map_mirror_inner(
-			mirror,
-			centre_x_pixels, centre_y_pixels,
-			centre_x_mm, centre_y_mm,
-			radius_pixels,
-			ray_map,
-			mirror_map,
-			mirror_lookup,
-			ray_map_width,
-			ray_map_height,
-			tilt_radians,
-			rotate_radians,
-			mirror_diameter_mm,
-			dist_to_mirror_centre_mm,
+		// stacked mirror system
+		printf("Stacked configuration\n");
+
+		// upper mirror
+		create_ray_map(
+			mirror_diameter,
+			dist_to_upper_mirror,
+			focal_length,
+			0,
+			upper_mirror_outer_radius_percent,
 			camera_height_mm,
-			centre_x, centre_y, centre_z,
-			r, false);
+			img_width,
+			img_height,
+			true, false, false);
+
+		// lower mirror
+		create_ray_map(
+			mirror_diameter,
+			dist_to_mirror,
+			focal_length,
+			inner_radius_percent,
+			outer_radius_percent,
+			camera_height_mm,
+			img_width,
+			img_height,
+			false, true, true);
+
 	}
 }
-
-
-void omni::show_mirror_lookup(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	float* lookup,
-	bool show_radius,
-	float outer_radius_percent)
-{
-	memset((void*)img, '\0', img_width*img_height*3);
-	int radius_pixels = img_width * outer_radius_percent / 200;
-
-	int n = img_width*img_height*2-2;
-	for (int i = img_width*img_height*3-3; i >= 0; i -= 3, n-=2) {
-        if ((lookup[n] != 0) && (lookup[n+1] != 0)) {
-            int v = 0;
-            if (show_radius) {
-                v = 255 - (int)(lookup[n] * 255 / radius_pixels);
-            }
-            else {
-            	v = (int)(lookup[n+1] * 255 / (2*3.1415927f));
-            }
-            img[i] = 255 - v;
-            img[i+1] = v;
-            img[i+2] = 0;
-        }
-	}
-}
-
 
 void omni::create_ray_map(
 	float mirror_diameter,
-	float dist_to_mirror_backing,
+	float dist_to_mirror,
 	float focal_length,
+	float inner_radius_percent,
 	float outer_radius_percent,
 	float camera_height_mm,
-	int no_of_mirrors,
-	float* mirror_position,
-	float* mirror_position_pixels,
     int img_width,
-    int img_height)
+    int img_height,
+    bool clear_map,
+    bool update_unwarp,
+    bool unwarp_stacked)
 {
 	if (ray_map == NULL) {
 		ray_map = new int[img_width*img_height*6];
 		memset((void*)ray_map,'\0',img_width*img_height*6*sizeof(int));
-		mirror_map = new unsigned char[img_width*img_height];
-		memset((void*)mirror_map,'\0',img_width*img_height);
-		mirror_lookup = new float[img_width*img_height*2];
-		feature_map = new unsigned short[img_width*img_height];
-		ground_features_lookup = new unsigned short[1025*1025*10];
-		feature_matches = new float[img_width*img_height*4];
-	}
 
-	float half_pi = 3.1415927f/2;
-	float ang_incr = 3.1415927f / (180*100);
-	int max_index = (int)(half_pi / ang_incr)+1;
-	float* lookup_pixel_x = new float[max_index];
-	float* lookup_ray = new float[max_index*4];
-	float* lookup_angle = new float[max_index];
-	float* calibration_radius = new float[img_width*4];
-	unwarp_lookup = new int[img_width*img_height];
-	unwarp_lookup_reverse = new int[img_width*img_height];
-
-	float outer_radius_pixels = outer_radius_percent * img_width / 200;
-	int cx = img_width/2;
-	int cy = img_height/2;
-
-	memset((void*)ray_map,'\0', img_width*img_height*6*sizeof(int));
-
-	// get the bounding box for all mirrors
-	float bounding_box_tx = 9999;
-	float bounding_box_ty = 9999;
-	float bounding_box_bx = -9999;
-	float bounding_box_by = -9999;
-	float centre_x = 0, centre_y = 0;
-	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-		centre_x += mirror_position[mirror*2];
-		centre_y += mirror_position[mirror*2+1];
-	}
-	centre_x /= no_of_mirrors;
-	centre_y /= no_of_mirrors;
-	float max_dx = 0;
-	float max_dy = 0;
-	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-		max_dx += fabs(mirror_position[mirror*2] - centre_x);
-		max_dy += fabs(mirror_position[mirror*2+1] - centre_y);
-	}
-	max_dx /= no_of_mirrors;
-	max_dy /= no_of_mirrors;
-	bounding_box_tx = centre_x - max_dx - (mirror_diameter*0.5f);
-	bounding_box_ty = centre_y - max_dy - (mirror_diameter*0.5f);
-	bounding_box_bx = centre_x + max_dx + (mirror_diameter*0.5f);
-	bounding_box_by = centre_y + max_dy + (mirror_diameter*0.5f);
-
-	for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-
-		// mirror distance from the centre of the backing plane (xy)
-		float mirror_dist_from_backing_centre =
-			(float)sqrt(mirror_position[mirror*2]*mirror_position[mirror*2] +
-					mirror_position[mirror*2+1]*mirror_position[mirror*2+1]);
-
-		// distance from camera to the centre of the mirror
-		float dist_to_mirror =
-			(float)sqrt(mirror_dist_from_backing_centre*mirror_dist_from_backing_centre +
-			dist_to_mirror_backing*dist_to_mirror_backing);
-
-		// angle of the mirror on the xz plane
-		float mirror_angle = (float)atan2(mirror_dist_from_backing_centre, dist_to_mirror_backing);
-		float mirror_angle2 = mirror_angle + 3.1415927f;
-
-		// rotation of the mirror on the backing plane (xy)
-		float mirror_rotation = -(float)atan2(mirror_position[mirror*2], mirror_position[mirror*2+1]);
-		float mirror_rotation2 = mirror_rotation + 3.1415927f;
-
-		float dist_to_mirror_centre = focal_length + dist_to_mirror;
-		float sphere_x = (float)fabs(mirror_diameter*0.5*sin(half_pi));
-		float sphere_y = dist_to_mirror_centre - (float)(mirror_diameter*0.5f*cos(half_pi));
-		float max_viewing_angle = (float)fabs(atan(sphere_x / sphere_y));
-		float pixel_x = 0;
-		memset((void*)lookup_pixel_x,'\0',max_index*sizeof(float));
-		memset((void*)lookup_ray,'\0',max_index*4*sizeof(float));
-		memset((void*)lookup_angle,'\0',max_index*sizeof(float));
-
-		int i = 0;
-		float min_angle = 9999;
-		float max_angle = -9999;
-		for (float ang = ang_incr; ang < half_pi; ang += ang_incr, i++) {
-			sphere_x = (float)fabs(mirror_diameter*0.5*sin(ang));
-			sphere_y = dist_to_mirror_centre - (float)fabs(mirror_diameter*0.5f*cos(ang));
-			float viewing_angle = (float)fabs(atan2(sphere_x, sphere_y));
-			float ang2 = viewing_angle + (ang*2);
-			float ray_end_y = 0;
-			float ray_end_x = sphere_x + (sphere_y * (float)tan(ang2));
-			if (ray_end_x < 0) {
-				ray_end_x = sphere_x - (sphere_y * (float)tan(ang2));
-				ray_end_y = sphere_y * 2;
-			}
-
-			pixel_x = viewing_angle * outer_radius_pixels / max_viewing_angle;
-
-			lookup_pixel_x[i] = pixel_x;
-			lookup_ray[i*4] = sphere_x;
-			lookup_ray[i*4+1] = sphere_y;
-			lookup_ray[i*4+2] = ray_end_x;
-			lookup_ray[i*4+3] = ray_end_y;
-			lookup_angle[i] = (float)atan2(ray_end_x, dist_to_mirror_centre);
-			if (lookup_angle[i] < min_angle) min_angle = lookup_angle[i];
-			if (lookup_angle[i] > max_angle) max_angle = lookup_angle[i];
-		}
-
-		// create unwarp lookup
+		unwarp_lookup = new int[img_width*img_height];
+		unwarp_lookup_reverse = new int[img_width*img_height];
 		memset((void*)unwarp_lookup, '\0', img_width*img_height*sizeof(int));
 		memset((void*)unwarp_lookup_reverse, '\0', img_width*img_height*sizeof(int));
-		int n = 0;
-		float angle;
-		if (mirror == no_of_mirrors-1) {
-			for (int j = 0; j < img_height; j++) {
-				float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
-				int k = 0;
-				for (k = 0; k < i; k++) {
-					if (lookup_angle[k] >= target_ang) break;
-				}
-				calibration_radius[j] = lookup_pixel_x[k];
-			}
+	}
 
+	int pixels = img_width*img_height;
+	float half_pi = 3.1415927f/2;
+	float dist_to_mirror_centre = focal_length + dist_to_mirror + (mirror_diameter * 0.5f);
+	float ang_incr = 3.1415927f / (180*100);
+	float inner_radius_pixels = inner_radius_percent * img_width / 200;
+	float outer_radius_pixels = outer_radius_percent * img_width / 200;
+    float sphere_x = (float)fabs(mirror_diameter*0.5f*sin(half_pi));
+    float sphere_y = dist_to_mirror_centre - (float)(mirror_diameter*0.5f*cos(half_pi));
+    float max_viewing_angle = (float)atan(sphere_x / sphere_y);
+    float pixel_x = 0;
+    epipole = 0;
+    int max_index = (int)(half_pi / ang_incr);
+    float lookup_pixel_x[max_index];
+    float lookup_ray[max_index*4];
+    float lookup_angle[max_index];
+    memset((void*)lookup_pixel_x,'\0',max_index*sizeof(float));
+    memset((void*)lookup_ray,'\0',max_index*4*sizeof(float));
+    memset((void*)lookup_angle,'\0',max_index*sizeof(float));
+    int i = 0;
+    float min_angle = 9999;
+    float max_angle = -9999;
+	for (float ang = ang_incr; ang < half_pi; ang += ang_incr, i++) {
+        sphere_x = (float)fabs(mirror_diameter*0.5f*sin(ang));
+        sphere_y = camera_height_mm + dist_to_mirror_centre - (float)fabs(mirror_diameter*0.5f*cos(ang));
+        float viewing_angle = (float)atan(sphere_x / (sphere_y - camera_height_mm));
+        pixel_x = viewing_angle * outer_radius_pixels / max_viewing_angle;
+        float ang2 = viewing_angle + (ang*2);
+        if (ang2 >= half_pi) {
+        	if (epipole == 0) {
+        		epipole = (int)pixel_x;
+        	}
+        }
+        float ray_end_y = 0;
+        float ray_end_x = sphere_x + (sphere_y * (float)tan(ang2));
+        if (ray_end_x < 0) {
+        	ray_end_x = sphere_x - (sphere_y * (float)tan(ang2));
+        	ray_end_y = sphere_y * 2;
+        }
+        lookup_pixel_x[i] = pixel_x;
+        lookup_ray[i*4] = sphere_x;
+        lookup_ray[i*4+1] = sphere_y;
+        lookup_ray[i*4+2] = ray_end_x;
+        lookup_ray[i*4+3] = ray_end_y;
+        lookup_angle[i] = (float)atan2(ray_end_x, dist_to_mirror_centre);
+        if (lookup_angle[i] < min_angle) min_angle = lookup_angle[i];
+        if (lookup_angle[i] > max_angle) max_angle = lookup_angle[i];
+	}
+
+	float calibration_radius[img_width*4];
+
+	// create unwarp lookup
+	for (int j = 0; j < img_height; j++) {
+		float target_ang = min_angle + (j * (max_angle-min_angle) / (img_width/2));
+		int k = 0;
+		for (k = 0; k < i; k++) {
+			if (lookup_angle[k] >= target_ang) break;
+		}
+		calibration_radius[j] = lookup_pixel_x[k];
+	}
+
+    int n = 0;
+    float angle;
+    if (update_unwarp) {
+    	if (!unwarp_stacked) {
+    		// unwarp for single mirror
 			for (int x = 0; x < img_width; x++) {
 				angle = x * 3.1415927f*2 / img_width;
+				float sin_ang = (float)sin(angle);
+				float cos_ang = (float)cos(angle);
 				for (int y = 0; y < img_height; y++) {
 					float raw_radius = calibration_radius[y];
-					int raw_x = cx + (int)(raw_radius * sin(angle));
-					int raw_y = cy + (int)(raw_radius * cos(angle));
+					int raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
+					int raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
 					n = ((img_height-1-y) * img_width)+x;
 					int n2 = (raw_y * img_width)+raw_x;
-					if ((n2 > -1) && (n2 < img_width*img_height)) {
+					if ((n2 > -1) && (n2 < pixels)) {
 						unwarp_lookup[n] = n2;
 						unwarp_lookup_reverse[n2] = n;
 					}
 				}
 			}
-		}
-
-		float prev_x = 0;
-		float prev_ray_start_x = 0;
-		float prev_ray_start_y = 0;
-		float prev_ray_end_x = 0;
-		float prev_ray_end_y = 0;
-		memset((void*)calibration_radius,'\0', img_width*4*sizeof(float));
-		for (int j = 0; j < i; j++) {
-			int x = (int)lookup_pixel_x[j];
-			if (x != prev_x) {
-				for (int k = prev_x; k <= x; k++) {
-				   calibration_radius[k*4] = (prev_ray_start_x + (((k-prev_x) * (lookup_ray[j*4] - prev_ray_start_x)) / (float)(x-prev_x)));
-				   calibration_radius[k*4+1] = (prev_ray_start_y + (((k-prev_x) * (lookup_ray[j*4+1] - prev_ray_start_y)) / (float)(x-prev_x)));
-
-				   calibration_radius[k*4+2] = (prev_ray_end_x + (((k-prev_x) * (lookup_ray[j*4+2] - prev_ray_end_x)) / (float)(x-prev_x)));
-				   calibration_radius[k*4+3] = (prev_ray_end_y + (((k-prev_x) * (lookup_ray[j*4+3] - prev_ray_end_y)) / (float)(x-prev_x)));
+    	}
+    	else {
+    		// unwarp for stacked mirrors
+    		int idx, raw_x,raw_y,n2;
+    		float raw_radius;
+    		int inner_rad = 0;
+			for (int y = 0; y < img_height; y++) {
+				float raw_radius = calibration_radius[y];
+				if (raw_radius >= inner_radius_pixels) {
+					inner_rad = y;
+					break;
 				}
-				prev_x = x;
-				prev_ray_start_x = lookup_ray[j*4];
-				prev_ray_start_y = lookup_ray[j*4+1];
-				prev_ray_end_x = lookup_ray[j*4+2];
-				prev_ray_end_y = lookup_ray[j*4+3];
+			}
+			for (int x = 0; x < img_width; x++) {
+				angle = x * 3.1415927f*2 / img_width;
+				float sin_ang = (float)sin(angle);
+				float cos_ang = (float)cos(angle);
+				for (int y = 0; y < img_height; y++) {
+
+					// upper
+					idx = y * inner_rad / img_height;
+					raw_radius = calibration_radius[idx];
+					raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
+					raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
+					n = (((img_height/2)-(y/2)) * img_width)+x;
+					n2 = (raw_y * img_width)+raw_x;
+					if ((n2 > -1) && (n2 < pixels) &&
+						(n > -1) && (n < pixels)) {
+						unwarp_lookup[n] = n2;
+						unwarp_lookup_reverse[n2] = n;
+					}
+
+					// lower
+					if (y < img_height/2) {
+						idx = inner_rad + (y * (img_height - inner_rad) / img_height);
+						raw_radius = calibration_radius[idx];
+						raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
+						raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
+						n = ((img_height-1-y) * img_width)+x;
+						n2 = (raw_y * img_width)+raw_x;
+						if ((n2 > -1) && (n2 < pixels) &&
+							(n > -1) && (n < pixels)) {
+							unwarp_lookup[n] = n2;
+							unwarp_lookup_reverse[n2] = n;
+						}
+					}
+
+				}
 			}
 		}
+    }
 
-	}
+	float prev_x = 0;
+	float prev_ray_start_x = 0;
+	float prev_ray_start_y = 0;
+	float prev_ray_end_x = 0;
+	float prev_ray_end_y = 0;
+	memset((void*)calibration_radius,'\0', img_width*4*sizeof(float));
+    for (int j = 0; j < i; j++) {
+		int x = (int)lookup_pixel_x[j];
+		if (x != prev_x) {
+			for (int k = prev_x; k <= x; k++) {
+			   calibration_radius[k*4] = (prev_ray_start_x + (((k-prev_x) * (lookup_ray[j*4] - prev_ray_start_x)) / (float)(x-prev_x)));
+			   calibration_radius[k*4+1] = (prev_ray_start_y + (((k-prev_x) * (lookup_ray[j*4+1] - prev_ray_start_y)) / (float)(x-prev_x)));
 
-    delete[] calibration_radius;
-    delete[] lookup_pixel_x;
-    delete[] lookup_ray;
-    delete[] lookup_angle;
+			   calibration_radius[k*4+2] = (prev_ray_end_x + (((k-prev_x) * (lookup_ray[j*4+2] - prev_ray_end_x)) / (float)(x-prev_x)));
+			   calibration_radius[k*4+3] = (prev_ray_end_y + (((k-prev_x) * (lookup_ray[j*4+3] - prev_ray_end_y)) / (float)(x-prev_x)));
+			}
+		    prev_x = x;
+		    prev_ray_start_x = lookup_ray[j*4];
+		    prev_ray_start_y = lookup_ray[j*4+1];
+		    prev_ray_end_x = lookup_ray[j*4+2];
+		    prev_ray_end_y = lookup_ray[j*4+3];
+    	}
+    }
+    if (clear_map) memset((void*)ray_map,'\0', pixels*6*sizeof(int));
+    int cx = img_width/2;
+    int cy = img_height/2;
+    n = 0;
+    for (int y = 0; y < img_height; y++) {
+    	int dy = y - cy;
+        for (int x = 0; x < img_width; x++, n++) {
+        	int dx = x - cx;
+            int r = (int)sqrt(dx*dx + dy*dy);
+            if ((r >= inner_radius_pixels) &&
+            	(r <= outer_radius_pixels)) {
+				angle = (float)acos(dy/(float)r);
+				if (dx < 0) angle = (3.1415927f*2) - angle;
+				ray_map[n*6] = (int)(calibration_radius[r*4]*sin(angle));
+				ray_map[n*6+1] = (int)(calibration_radius[r*4]*cos(angle));
+				ray_map[n*6+2] = (int)(calibration_radius[r*4+1]);
 
-	create_ray_map(
-	  	mirror_diameter,
-	  	dist_to_mirror_backing,
-	  	focal_length,
-	  	outer_radius_percent,
-	  	camera_height_mm,
-	  	no_of_mirrors,
-	  	mirror_position,
-	  	mirror_position_pixels,
-	    img_width,img_height,
-	    ray_map,
-	    mirror_map,
-	    mirror_lookup);
+				ray_map[n*6+3] = (int)(calibration_radius[r*4+2]*sin(angle));
+				ray_map[n*6+4] = (int)(calibration_radius[r*4+2]*cos(angle));
+				ray_map[n*6+5] = (int)(calibration_radius[r*4+3]);
+            }
+        }
+    }
+
 }
 
 void omni::show_ray_map_side(
@@ -3786,180 +1409,34 @@ void omni::show_ray_map_side(
 	int img_height,
 	int max_height_mm,
 	int focal_length_mm,
-	int camera_height_mm,
-	bool show_all)
+	int camera_height_mm)
 {
 	for (int i = 0; i < img_width*img_height*3; i++)
 		img[i]=255;
 
     int camera_height_y = camera_height_mm * img_height / max_height_mm;
 
-    int start_y = img_height/2;
-    int end_y = (img_height/2)+1;
+	int n = (img_height/2) * img_width * 6;
+	const int step = 1;
+    for (int x = 0; x < img_width; x+=step, n+=6*step) {
+    	float start_x = ray_map[n];
+    	float start_z = ray_map[n+2];
+    	float end_x = ray_map[n+3];
+    	float end_z = ray_map[n+5];
 
-    if (show_all) {
-    	start_y = 0;
-    	end_y = img_height;
-    }
+    	int x0 = (img_width/2) + (int)(start_x * img_width / max_height_mm);
+    	int y0 = img_height-1-(int)(start_z * img_height / max_height_mm);
 
-    for (int y = start_y; y < end_y; y+=2) {
-		int n = (y * img_width)*6;
-		for (int x = 0; x < img_width; x+=4, n+=6*4) {
-			float start_x = ray_map[n+1];
-			float start_z = ray_map[n+2];
-			float end_x = ray_map[n+4];
-			float end_z = ray_map[n+5];
+    	int x1 = (img_width/2) + (int)(end_x * img_width / max_height_mm);
+    	int y1 = img_height-1-(int)(end_z * img_height / max_height_mm);
 
-			int x0 = (img_width/2) + (int)(start_x * img_width / max_height_mm);
-			int y0 = img_height-1-(int)(start_z * img_height / max_height_mm);
-
-			int x1 = (img_width/2) + (int)(end_x * img_width / max_height_mm);
-			int y1 = img_height-1-(int)(end_z * img_height / max_height_mm);
-
-			drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,0,0,0,0,false);
-			drawing::drawLine(img,img_width,img_height,x0,y0,img_width/2,img_height-1-camera_height_y,0,0,0,0,false);
-		}
+    	drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,0,0,0,0,false);
+    	drawing::drawLine(img,img_width,img_height,x0,y0,img_width/2,img_height-1-camera_height_y,0,0,0,0,false);
     }
     int focal_plane_y = img_height-1-camera_height_y-(focal_length_mm * img_height / max_height_mm);
     drawing::drawLine(img,img_width,img_height,img_width*48/100,focal_plane_y,img_width*52/100,focal_plane_y,255,0,0,0,false);
 }
 
-void omni::show_ray_map_above(
-	unsigned char* img,
-	int img_width,
-	int img_height,
-	int max_radius_mm)
-{
-	for (int i = 0; i < img_width*img_height*3; i++)
-		img[i]=255;
-
-    for (int y = 0; y < img_height; y+=4) {
-		int n = (y * img_width)*6;
-		for (int x = 0; x < img_width; x+=4, n+=6*4) {
-			float start_x = ray_map[n];
-			float start_y = ray_map[n+1];
-			float end_x = ray_map[n+3];
-			float end_y = ray_map[n+4];
-
-			int x0 = (img_width/2) + (int)(start_x * img_height / max_radius_mm);
-			int y0 = (img_height/2) + (int)(start_y * img_height / max_radius_mm);
-
-			int x1 = (img_width/2) + (int)(end_x * img_height / max_radius_mm);
-			int y1 = (img_height/2) + (int)(end_y * img_height / max_radius_mm);
-
-			drawing::drawLine(img,img_width,img_height,x0,y0,x1,y1,0,0,0,0,false);
-			drawing::drawLine(img,img_width,img_height,x0,y0,img_width/2,img_height/2,0,0,0,0,false);
-		}
-    }
-}
-
-void omni::show_ray_pixels(
-	unsigned char* img,
-	int img_width,
-	int img_height)
-{
-	const int max_dist = 64;
-	const int max_dist2 = 75;
-	const int max_dist3 = 100;
-	int n = 0,n2 = 0;
-    for (int y = 0; y < img_height; y++) {
-		for (int x = 0; x < img_width; x++, n+=6, n2+=3) {
-			if ((ray_map[n]!=0) || (ray_map[n+1]!=0)) {
-				float dist = (float)sqrt(ray_map[n]*ray_map[n] + ray_map[n+1]*ray_map[n+1]);
-
-				if (dist < max_dist) {
-					img[n2+1] = (unsigned char)255;
-				}
-				else {
-					if (dist < max_dist2) {
-						img[n2+1] = (unsigned char)150;
-					}
-					else {
-						if (dist < max_dist3) {
-							img[n2+1] = (unsigned char)100;
-						}
-					}
-				}
-
-			}
-		}
-    }
-}
-
-void omni::show_ray_directions(
-	unsigned char* img,
-	int img_width,
-	int img_height)
-{
-	int n = 0,n2 = 0;
-    for (int y = 0; y < img_height; y++) {
-		for (int x = 0; x < img_width; x++, n+=6, n2+=3) {
-			if ((ray_map[n]!=0) || (ray_map[n+1]!=0)) {
-				int angle = (int)((float)atan2(ray_map[n], ray_map[n+1])*180/3.1415927f)/5;
-
-				if (angle == 8) {
-					img[n2+2] = (unsigned char)255;
-				}
-				if (angle == 9) {
-					img[n2+2] = (unsigned char)255;
-					img[n2] = (unsigned char)255;
-				}
-
-				if (angle == 26) {
-					img[n2+1] = (unsigned char)255;
-				}
-				if (angle == 27) {
-					img[n2] = (unsigned char)255;
-				}
-
-				if (angle == -8) {
-					img[n2+1] = (unsigned char)255;
-					img[n2+2] = (unsigned char)255;
-				}
-				if (angle == -9) {
-					img[n2+2] = (unsigned char)255;
-				}
-
-				if (angle == -26) {
-					img[n2] = (unsigned char)255;
-				}
-				if (angle == -27) {
-					img[n2] = (unsigned char)255;
-					img[n2+1] = (unsigned char)255;
-				}
-
-
-
-/*
-				switch(angle % 5) {
-			    case 0: {
-			    	img[n2] = (unsigned char)255;
-			    	break;
-			    }
-			    case 1: {
-			    	img[n2+1] = (unsigned char)255;
-			    	break;
-			    }
-			    case 2: {
-			    	img[n2+2] = (unsigned char)255;
-			    	break;
-			    }
-			    case 3: {
-			    	img[n2+1] = (unsigned char)255;
-			    	img[n2+2] = (unsigned char)255;
-			    	break;
-			    }
-			    case 4: {
-			    	img[n2] = (unsigned char)255;
-			    	img[n2+2] = (unsigned char)255;
-			    	break;
-			    }
-				}
-*/
-			}
-		}
-    }
-}
 
 void omni::show_ground_plane(
     unsigned char* img,
@@ -3980,46 +1457,24 @@ void omni::show_ground_plane(
 	int n = 0;
 	for (int y = 0; y < img_height; y++) {
 		for (int x = 0; x < img_width; x++, n += 6) {
-			if ((!((ray_map[n+3] == 0) && (ray_map[n+4] == 0))) &&
-				(ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
-				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y) &&
-				(ray_map[n+5] == 0)) {
+			if ((ray_map[n+3] > min_x) && (ray_map[n+3] < max_x) &&
+				(ray_map[n+4] > min_y) && (ray_map[n+4] < max_y)) {
 				int xx = (ray_map[n+3] - min_x) * (img_width-1) / (max_x-min_x);
-				if ((xx > -1) && (xx < img_width)) {
-
-					int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
-					if ((yy > -1) && (yy < img_height)) {
-
-						int xx2 = xx+8;
-						//if (ray_map[n+3+6] != 0) xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
-						if ((xx2 > 0) && (xx2 < img_width)) {
-
-							int yy2 = yy+8;
-							//if (ray_map[n+4+6+(img_width*6)] != 0) yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
-							if ((yy2 > 0) && (yy2 < img_height)) {
-
-								if ((xx2 == 0) && (yy2 ==0)) {
-									xx2 = xx;
-									yy2 = yy;
-								}
-
-								int n0 = ((y * img_width) + x)*3;
-								for (int yyy = yy; yyy <= yy2; yyy++) {
-									for (int xxx = xx; xxx <= xx2; xxx++) {
-										int n2 = ((yyy * img_width) + xxx)*3;
-										if (img_buffer[n2] > 0) break;
-										img_buffer[n2] = img[n0];
-										img_buffer[n2+1] = img[n0+1];
-										img_buffer[n2+2] = img[n0+2];
-									}
-								}
-
+				int yy = (ray_map[n+4] - min_y) * (img_height-1) / (max_y-min_y);
+				int xx2 = (ray_map[n+3+6] - min_x) * (img_width-1) / (max_x-min_x);
+				int yy2 = (ray_map[n+4+6+(img_width*6)] - min_y) * (img_height-1) / (max_y-min_y);
+				int n0 = ((y * img_width) + x)*3;
+				for (int yyy = yy; yyy <= yy2; yyy++) {
+					if ((yyy > -1) && (yyy < img_height)) {
+						for (int xxx = xx; xxx <= xx2; xxx++) {
+							if ((xxx > -1) && (xxx < img_width)) {
+								int n2 = ((yyy * img_width) + xxx)*3;
+								img_buffer[n2] = img[n0];
+								img_buffer[n2+1] = img[n0+1];
+								img_buffer[n2+2] = img[n0+2];
 							}
-
 						}
-
 					}
-
 				}
 			}
 		}
@@ -4514,343 +1969,3 @@ void omni::unwarp_features(
 
     memcpy((void*)img, (void*)img_buffer, img_width*img_height*bytes_per_pixel);
 }
-
-bool omni::save_configuration(
-	std::string filename,
-	int no_of_mirrors,
-	float* mirror_position_pixels,
-	float* mirror_position,
-	float focal_length,
-	float mirror_diameter,
-	float outer_radius_percent,
-	float inner_radius_percent,
-	float dist_to_mirror_centre,
-	float camera_height,
-	float baseline,
-	float range)
-{
-	bool saved = false;
-	FILE *file = fopen(filename.c_str(), "w");
-	if (file != NULL) {
-
-		fprintf(file,"Number of mirrors %d\n", no_of_mirrors);
-		fprintf(file,"Image coordinates as percentages\n");
-		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fprintf(file,"%.2f,%.2f\n", mirror_position_pixels[mirror*2], mirror_position_pixels[mirror*2+1]);
-		}
-		fprintf(file,"\nReal coordinates in millimetres\n");
-		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fprintf(file,"%.2f,%.2f\n", mirror_position[mirror*2], mirror_position[mirror*2+1]);
-		}
-
-		fprintf(file,"\nFocal length (mm) %.2f\n", focal_length);
-		fprintf(file,"Mirror diameter (mm) %.2f\n", mirror_diameter);
-		fprintf(file,"Outer radius (percent of image width) %.2f\n", outer_radius_percent);
-		fprintf(file,"Inner radius (percent of image width) %.2f\n", inner_radius_percent);
-		fprintf(file,"Distance from camera to mirror plane (mm) %.2f\n", dist_to_mirror_centre);
-		fprintf(file,"Camera elevation (mm) %.2f\n", camera_height);
-		fprintf(file,"Baseline (mm) %.2f\n", baseline);
-		fprintf(file,"Mapping range (mm) %.2f\n", range);
-
-		fclose(file);
-		saved = true;
-	}
-	return(saved);
-}
-
-bool omni::load_configuration(
-	std::string filename,
-	int& no_of_mirrors,
-	float* mirror_position_pixels,
-	float* mirror_position,
-	float &focal_length,
-	float &mirror_diameter,
-	float &outer_radius_percent,
-	float &inner_radius_percent,
-	float &dist_to_mirror_centre,
-	float &camera_height,
-	float &baseline,
-	float &range)
-{
-	bool loaded = false;
-	FILE *file = fopen(filename.c_str(), "r");
-	if (file != NULL) {
-
-		float x=0,y=0;
-		fscanf(file,"Number of mirrors %d\n", &no_of_mirrors);
-		fscanf(file,"Image coordinates as percentages\n");
-		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fscanf(file,"%f,%f\n", &x, &y);
-			mirror_position_pixels[mirror*2] = x;
-			mirror_position_pixels[mirror*2+1] = y;
-		}
-		fscanf(file,"\nReal coordinates in millimetres\n");
-		for (int mirror = 0; mirror < no_of_mirrors; mirror++) {
-			fscanf(file,"%f,%f\n", &x, &y);
-			mirror_position[mirror*2] = x;
-			mirror_position[mirror*2+1] = y;
-		}
-
-		fscanf(file,"\nFocal length (mm) %f\n", &focal_length);
-		fscanf(file,"Mirror diameter (mm) %f\n", &mirror_diameter);
-		fscanf(file,"Outer radius (percent of image width) %f\n", &outer_radius_percent);
-		fscanf(file,"Inner radius (percent of image width) %f\n", &inner_radius_percent);
-		fscanf(file,"Distance from camera to mirror plane (mm) %f\n", &dist_to_mirror_centre);
-		fscanf(file,"Camera elevation (mm) %f\n", &camera_height);
-		fscanf(file,"Baseline (mm) %f\n", &baseline);
-		fscanf(file,"Mapping range (mm) %f\n", &range);
-
-		fclose(file);
-		loaded = true;
-	}
-	return(loaded);
-}
-
-/*!
- * \brief determines the closest point between two 3D rays.  Based on an algorithm written by John Burkardt
- */
-void omni::rays_intercept(
-	float ray1_x_start,
-	float ray1_y_start,
-	float ray1_z_start,
-	float ray1_x_end,
-	float ray1_y_end,
-	float ray1_z_end,
-	float ray2_x_start,
-	float ray2_y_start,
-	float ray2_z_start,
-	float ray2_x_end,
-	float ray2_y_end,
-	float ray2_z_end,
-	float& ix, float& iy, float& iz)
-{
-	float a;
-	float b;
-	float c;
-	float d;
-	float det;
-	float e;
-	int i;
-	float sn=0;
-	float tn=0;
-	float pn[3];
-	float qn[3];
-	float u[3];
-	float v[3];
-	float w0[3];
-	float p1[3];
-	float p2[3];
-	float q1[3];
-	float q2[3];
-
-	p1[0] = ray1_x_start;
-	p1[1] = ray1_y_start;
-	p1[2] = ray1_z_start;
-	p2[0] = ray1_x_end;
-	p2[1] = ray1_y_end;
-	p2[2] = ray1_z_end;
-	q1[0] = ray2_x_start;
-	q1[1] = ray2_y_start;
-	q1[2] = ray2_z_start;
-	q2[0] = ray2_x_end;
-	q2[1] = ray2_y_end;
-	q2[2] = ray2_z_end;
-
-	//
-	//  The lines are identical.
-	//  THIS CASE NOT SET UP YET
-	//
-	// if ( lines_exp_equal_3d ( p1, p2, q1, q2 ) ) then
-	// end if
-	//
-	//  The lines are not identical, but parallel
-	//  THIS CASE NOT SET UP YET.
-	//
-	// if ( lines_exp_parallel_3d ( p1, p2, q1, q2 ) ) then
-	// end if
-	//
-	//  C: The lines are not identical, not parallel.
-	//
-
-	//
-	//  Let U = (P2-P1) and V = (Q2-Q1) be the direction vectors on
-	//  the two lines.
-	//
-	for (i = 0; i < 3; i++) {
-		u[i] = p2[i] - p1[i];
-	}
-	for (i = 0; i < 3; i++) {
-		v[i] = q2[i] - q1[i];
-	}
-	//
-	//  Let SN be the unknown coordinate of the nearest point PN on line 1,
-	//  so that PN = P(SN) = P1 + SN * (P2-P1).
-	//
-	//  Let TN be the unknown coordinate of the nearest point QN on line 2,
-	//  so that QN = Q(TN) = Q1 + TN * (Q2-Q1).
-	//
-	//  Let W0 = (P1-Q1).
-	//
-	for (i = 0; i < 3; i++) {
-		w0[i] = p1[i] - q1[i];
-	}
-	//
-	//  The vector direction WC = P(SN) - Q(TC) is unique (among directions)
-	//  perpendicular to both U and V, so
-	//
-	//    U dot WC = 0
-	//    V dot WC = 0
-	//
-	//  or, equivalently:
-	//
-	//    U dot ( P1 + SN * (P2 - P1) - Q1 - TN * (Q2 - Q1) ) = 0
-	//    V dot ( P1 + SN * (P2 - P1) - Q1 - TN * (Q2 - Q1) ) = 0
-	//
-	//  or, equivalently:
-	//
-	//    (u dot u ) * sn - (u dot v ) tc = -u * w0
-	//    (v dot u ) * sn - (v dot v ) tc = -v * w0
-	//
-	//  or, equivalently:
-	//
-	//   ( a  -b ) * ( sn ) = ( -d )
-	//   ( b  -c )   ( tc )   ( -e )
-	//
-
-	a = 0.0f;
-	for (i = 0; i < 3; i++) {
-		a = a + u[i] * u[i];
-	}
-
-	b = 0.0f;
-	for (i = 0; i < 3; i++) {
-		b = b + u[i] * v[i];
-	}
-
-	c = 0.0f;
-	for (i = 0; i < 3; i++) {
-		c = c + v[i] * v[i];
-	}
-
-	d = 0.0f;
-	for (i = 0; i < 3; i++) {
-		d = d + u[i] * w0[i];
-	}
-
-	e = 0.0f;
-	for (i = 0; i < 3; i++) {
-		e = e + v[i] * w0[i];
-	}
-
-	//
-	//  Check the determinant.
-	//
-	det = -a * c + b * b;
-
-	if (fabs(det) < 0.00001f) {
-		sn = 0.0;
-		if (fabs(b) < fabs(c)) {
-			if (fabs(c) > 0.00001f) tn = e / c;
-		} else {
-			if (fabs(b) > 0.00001f) tn = d / b;
-		}
-	} else {
-		sn = (c * d - b * e) / det;
-		tn = (b * d - a * e) / det;
-	}
-
-	for (i = 0; i < 3; i++) {
-		pn[i] = p1[i] + sn * (p2[i] - p1[i]);
-	}
-
-	for (i = 0; i < 3; i++) {
-		qn[i] = q1[i] + tn * (q2[i] - q1[i]);
-	}
-
-	ix = (pn[0] + qn[0]) * 0.5f;
-	iy = (pn[1] + qn[1]) * 0.5f;
-	iz = (pn[2] + qn[2]) * 0.5f;
-}
-
-void omni::create_ground_grid(
-	int* ground_height_mm,
-	unsigned char* ground_img,
-	int ground_width,
-	int ground_height,
-	int tx_mm, int ty_mm,
-	int bx_mm, int by_mm,
-	int grid_tx_mm, int grid_ty_mm,
-	int grid_bx_mm, int grid_by_mm,
-	int grid_dimension_mm,
-	int height_mm,
-	int line_width_mm,
-	int r, int g, int b)
-{
-	for (int x = tx_mm; x < bx_mm; x+= grid_dimension_mm) {
-		create_obstacle(
-			ground_height_mm,
-			ground_img,
-			ground_width,
-			ground_height,
-			tx_mm, ty_mm,
-			bx_mm, by_mm,
-			x, grid_ty_mm,
-			x, grid_by_mm,
-			height_mm,
-			line_width_mm,
-			r, g, b);
-	}
-
-	for (int y = ty_mm; y < by_mm; y += grid_dimension_mm) {
-		create_obstacle(
-			ground_height_mm,
-			ground_img,
-			ground_width,
-			ground_height,
-			tx_mm, ty_mm,
-			bx_mm, by_mm,
-			grid_tx_mm, y,
-			grid_bx_mm, y,
-			height_mm,
-			line_width_mm,
-			r, g, b);
-	}
-}
-
-void omni::create_obstacle(
-	int* ground_height_mm,
-	unsigned char* ground_img,
-	int ground_width,
-	int ground_height,
-	int tx_mm, int ty_mm,
-	int bx_mm, int by_mm,
-	int obstacle_tx_mm, int obstacle_ty_mm,
-	int obstacle_bx_mm, int obstacle_by_mm,
-	int height_mm,
-	int width_mm,
-	int r, int g, int b)
-{
-	int dx = obstacle_bx_mm - obstacle_tx_mm;
-	int dy = obstacle_by_mm - obstacle_ty_mm;
-	int dist_mm = (int)sqrt(dx*dx + dy*dy);
-	for (int i = 0; i < dist_mm; i += 4) {
-		int x = obstacle_tx_mm + (i * dx / dist_mm);
-		int y = obstacle_ty_mm + (i * dy / dist_mm);
-		for (int xx = x - width_mm; xx <= x + width_mm; xx += 4) {
-			int gx = (xx - tx_mm) * ground_width / (bx_mm - tx_mm);
-			if ((gx > -1) && (gx < ground_width)) {
-				for (int yy = y - width_mm; yy <= y + width_mm; yy += 4) {
-					int gy = (yy - ty_mm) * ground_height / (by_mm - ty_mm);
-					if ((gy > -1) && (gy < ground_height)) {
-						int n = (gy * ground_width) + gx;
-						ground_height_mm[n] = height_mm;
-						ground_img[n*3] = b;
-						ground_img[n*3 + 1] = g;
-						ground_img[n*3 + 2] = r;
-					}
-				}
-			}
-		}
-	}
-}
-

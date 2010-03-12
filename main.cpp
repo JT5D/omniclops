@@ -20,10 +20,6 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-    --grid --mirrors 5 --loadconfig /home/motters/develop/omniclops/docs/mirrors5.txt --dist 150 --elevation 200 --range 500
-
-    --dev /dev/video1 --nearfeatures --mirrors 5 --radius 36 --inner 0 --mirrorx0 19 --mirrory0 14 --mirrorx1 19 --mirrory1 77 --mirrorx2 82 --mirrory2 77 --mirrorx3 83 --mirrory3 17 --mirrorx4 49 --mirrory4 45 --elevation 1650
 */
 
 #include <iostream>
@@ -38,35 +34,18 @@
 #include "anyoption.h"
 #include "drawing.h"
 #include "omni.h"
-#include "detectfloor.h"
-#include "pointcloud.h"
 #include "fast.h"
 #include "libcam.h"
 #include "harris.h"
-#include "graphslam.h"
+#include "stackedstereo.h"
 
-#include "cppunitlite/TestHarness.h"
-#include "cppunitlite/TestResultStdErr.h"
-#include "unittests/tests_ray_map.h"
-#include "unittests/tests_mirror_lookup.h"
-#include "unittests/tests_volumetric.h"
-#include "unittests/tests_feature_matching.h"
-
-#define VERSION 0.2
-#define MAX_FLOW_MATCHES 150
+#define VERSION 0.3
 
 using namespace std;
 
-struct Match2D {
-	unsigned short int x0;
-	unsigned short int y0;
-	unsigned short int x1;
-	unsigned short int y1;
-};
-
 void compute_optical_flow(
-	IplImage* frame1,  // previous frame
-	IplImage* frame2,  // current frame
+	IplImage* frame1,
+	IplImage* frame2,
 	IplImage* output,
 	int number_of_features,
 	int max_magnitude,
@@ -76,23 +55,30 @@ void compute_optical_flow(
 	IplImage *&temp_image,
 	IplImage *&pyramid1,
 	IplImage *&pyramid2,
-	std::string flow_filename,
-	int& no_of_matches,
-	Match2D* matches,
-	bool show_arrows)
+	std::string flow_filename)
 {
-	no_of_matches = 0;
+	if (frame1_1C == NULL) {
+		frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+		frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
+		eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+		temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
+		pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+		pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+	}
 
-	if (frame1_1C == NULL) frame1_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
-	if (frame2_1C == NULL) frame2_1C = cvCreateImage(cvSize(frame1->width,frame1->height), 8, 1);
-	if (eig_image == NULL) eig_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-	if (temp_image == NULL) temp_image = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_32F, 1);
-	if (pyramid1 == NULL) pyramid1 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
-	if (pyramid2 == NULL) pyramid2 = cvCreateImage(cvSize(frame1->width,frame1->height), IPL_DEPTH_8U, 1);
+	struct MatchData {
+		unsigned short int x0;
+		unsigned short int y0;
+		unsigned short int x1;
+		unsigned short int y1;
+	};
 
 	FILE *file = NULL;
+	MatchData *m = NULL;
 	if (flow_filename != "") {
 		file = fopen(flow_filename.c_str(), "wb");
+		m = new MatchData[number_of_features*4];
+		memset((void*)m,'\0',number_of_features*4*sizeof(unsigned short int));
 	}
 
 	cvConvertImage(frame1, frame1_1C, CV_BGR2GRAY);
@@ -101,7 +87,7 @@ void compute_optical_flow(
     CvPoint2D32f frame1_features[number_of_features];
 
     cvGoodFeaturesToTrack(frame1_1C, eig_image, temp_image, frame1_features, &
-number_of_features, .01, .001, NULL, 16, 1, 0.001);
+number_of_features, .01, .01, NULL);
 
     CvPoint2D32f frame2_features[number_of_features];
 
@@ -109,7 +95,7 @@ number_of_features, .01, .001, NULL, 16, 1, 0.001);
     float optical_flow_feature_error[number_of_features];
     CvSize optical_flow_window = cvSize(3,3);
     CvTermCriteria optical_flow_termination_criteria
-        = cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .0003 );
+        = cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .3 );
 
     cvCalcOpticalFlowPyrLK(frame1_1C, frame2_1C, pyramid1, pyramid2, frame1_features,
 frame2_features, number_of_features, optical_flow_window, 5,
@@ -117,7 +103,8 @@ optical_flow_found_feature, optical_flow_feature_error,
 optical_flow_termination_criteria, 0);
 
     /* let's paint and make blended drinks */
-    for(int i = 0; i < number_of_features; i++) {
+    for(int i = 0; i < number_of_features; i++)
+    {
          if (optical_flow_found_feature[i] == 0) continue;
          int line_thickness = 1;
          CvScalar line_color = CV_RGB(255,0,0);
@@ -127,71 +114,52 @@ optical_flow_termination_criteria, 0);
          q.x = (int) frame2_features[i].x;
          q.y = (int) frame2_features[i].y;
          double hypotenuse = sqrt( (p.y - q.y)*(p.y - q.y) + (p.x - q.x)*(p.x - q.x) );
-         if (hypotenuse < max_magnitude) {  /* ignore big magnitudes which are probably bogus */
-
-        	 /* store the match for later use */
-        	 matches[no_of_matches].x0 = (unsigned short)p.x;
-        	 matches[no_of_matches].y0 = (unsigned short)p.y;
-        	 matches[no_of_matches].x1 = (unsigned short)q.x;
-        	 matches[no_of_matches].y1 = (unsigned short)q.y;
-        	 no_of_matches++;
-
-        	 if (hypotenuse > 0) { /* don't bother to show features which havn't moved */
-        		 if (show_arrows) {
-					 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
-					 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
-					 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
-					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-					 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
-					 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
-					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-					 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
-					 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
-					 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
-        		 }
-        	 }
+         if ((hypotenuse > 3) && (hypotenuse < max_magnitude)) {
+			 if (flow_filename != "") {
+				 m[i].x0 = (unsigned short int)p.x;
+				 m[i].y0 = (unsigned short int)p.y;
+				 m[i].x1 = (unsigned short int)q.x;
+				 m[i].y1 = (unsigned short int)q.y;
+			 }
+			 double angle = atan2( (double) p.y - q.y, (double) p.x - q.x );
+			 q.x = (int) (p.x - 3 * hypotenuse * cos(angle));
+			 q.y = (int) (p.y - 3 * hypotenuse * sin(angle));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+			 p.x = (int) (q.x + 5 * cos(angle + 3.1415927 / 4));
+			 p.y = (int) (q.y + 5 * sin(angle + 3.1415927 / 4));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
+			 p.x = (int) (q.x + 5 * cos(angle - 3.1415927 / 4));
+			 p.y = (int) (q.y + 5 * sin(angle - 3.1415927 / 4));
+			 cvLine( output, p, q, line_color, line_thickness, CV_AA, 0 );
          }
     }
 
 	if (flow_filename != "") {
-		fprintf(file, "%d",no_of_matches);
-		fwrite(matches, sizeof(Match2D), no_of_matches, file);
+		fprintf(file, "%d",number_of_features);
+		fwrite(m, sizeof(MatchData), number_of_features, file);
+		delete[] m;
 
 		fclose(file);
 	}
 }
 
-/*!
- * \brief run all unit tests
- */
-void RunUnitTests()
-{
-    TestResultStdErr result;
-    TestRegistry::runAllTests(result);
-}
 
 int main(int argc, char* argv[]) {
-
-  //RunUnitTests();
-  //return(0);
-
   int ww = 640;
   int hh = 480;
   int skip_frames = 1;
   bool show_FAST = false;
   bool show_features = false;
   bool show_ground_features = false;
-  bool show_point_cloud = false;
-  bool show_feature_rays = false;
   bool show_ground = false;
   bool show_lines = false;
-  bool show_harris_corners = false;
   bool unwarp_features = false;
-  bool show_overlay_angles = false;
-  bool show_overlay = false;
-  bool show_occupancy_grid = false;
-  bool show_close_features = false;
-  float outer_radius = 37; //115;
+  bool show_harris_corners = false;
+  bool show_stereo_disparity = false;
+
+  float outer_radius = 90;
+  float inner_radius = 30;
+  float upper_mirror_outer_radius = 40;
   //int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
@@ -209,81 +177,58 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --dev                  Video device to be used");
   opt->addUsage( " -w  --width                Image width in pixels");
   opt->addUsage( " -h  --height               Image height in pixels");
-  opt->addUsage( "     --mirrors              Number of mirrors");
-  opt->addUsage( "     --baseline             Baseline distance between mirrors in mm");
   opt->addUsage( "     --diam                 Diameter of the spherical mirror in millimetres");
-  opt->addUsage( "     --dist                 Distance from camera lens to the centre of the mirror in millimetres");
+  opt->addUsage( "     --dist                 Distance from camera lens to nearest point on the mirror surface in millimetres");
+  opt->addUsage( "     --distupper            Distance from camera lens to nearest point on the upper mirror surface in millimetres for a stacked configuration");
   opt->addUsage( "     --focal                Focal length in millimetres");
   opt->addUsage( "     --elevation            Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
+  opt->addUsage( "     --radiusupper          Outer radius of the upper mirror as a percentage of the image width");
   opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
-  opt->addUsage( "     --gridcell             Occupancy grid cell size in millimetres");
-  opt->addUsage( "     --griddim              Occupancy grid dimension in cells");
-  opt->addUsage( "     --grid                 Show occupancy grid");
   opt->addUsage( "     --features             Show edge features");
-  opt->addUsage( "     --nearfeatures         Show nearby edge features");
-  opt->addUsage( "     --harris <filename>    Show Harris corners and save them to the given filename");
-  opt->addUsage( "     --harrisfeatures       Show Harris corners");
+  opt->addUsage( "     --circles              Show circles for inner radius");
+  opt->addUsage( "     --stereodisparity      Show stereo disparity for stacked mirror configuration");
   opt->addUsage( "     --lines                Show radial lines");
   opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
-  opt->addUsage( "     --featurerays          Show rays");
-  opt->addUsage( "     --pointcloud           Show point cloud");
   opt->addUsage( "     --ground               Show ground plane");
-  opt->addUsage( "     --overlay              Show overlaid ray intersections with the image plane");
-  opt->addUsage( "     --overlayangles        Show overlaid ray angles with the image plane");
   opt->addUsage( "     --range                Maximum range when displaying ground plane");
   opt->addUsage( "     --fast                 Show FAST corners");
+  opt->addUsage( "     --harris <filename>    Show Harris corners and save them to the given filename");
+  opt->addUsage( "     --harrisfeatures       Show Harris corners");
   opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
   opt->addUsage( "     --raypaths             Saves image showing ray paths");
   opt->addUsage( "     --rays                 Saves file containing rays for each observed edge feature");
   opt->addUsage( "     --fov                  Field of view in degrees");
-  opt->addUsage( "     --basewidth            Width of the camera base in mm");
-  opt->addUsage( "     --baseheight           Height of the camera base in mm");
   opt->addUsage( " -f  --fps                  Frames per second");
   opt->addUsage( " -s  --skip                 Skip this number of frames");
   opt->addUsage( " -V  --version              Show version number");
-  opt->addUsage( "     --load                 Load raw image");
   opt->addUsage( "     --save                 Save raw image");
   opt->addUsage( "     --savecalib            Save calibration image");
   opt->addUsage( "     --saveedges            Save edges to file");
   opt->addUsage( "     --saveflow             Save optical flow vectors");
   opt->addUsage( "     --saveradial           Save radial lines to file");
-  opt->addUsage( "     --loadconfig           Load a configuration file");
-  opt->addUsage( "     --saveconfig           Save a configuration file");
   opt->addUsage( "     --flip                 Flip the image");
   opt->addUsage( "     --unwarp               Unwarp the image");
   opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
   opt->addUsage( "     --flow                 Compute optical flow");
   opt->addUsage( "     --stream               Stream output using gstreamer");
   opt->addUsage( "     --headless             Disable video output (for use with --stream)");
-  opt->addUsage( "     --mirrorx0             Relative x coordinate of the first mirror as a percent of image width");
-  opt->addUsage( "     --mirrory0             Relative y coordinate of the first mirror as a percent of image height");
-  opt->addUsage( "     --mirrorx1             Relative x coordinate of the second mirror as a percent of image width");
-  opt->addUsage( "     --mirrory1             Relative y coordinate of the second mirror as a percent of image height");
-  opt->addUsage( "     --mirrorx2             Relative x coordinate of the third mirror as a percent of image width");
-  opt->addUsage( "     --mirrory2             Relative y coordinate of the third mirror as a percent of image height");
-  opt->addUsage( "     --mirrorx3             Relative x coordinate of the fourth mirror as a percent of image width");
-  opt->addUsage( "     --mirrory3             Relative y coordinate of the fourth mirror as a percent of image height");
-  opt->addUsage( "     --mirrorx4             Relative x coordinate of the fifth mirror as a percent of image width");
-  opt->addUsage( "     --mirrory4             Relative y coordinate of the fifth mirror as a percent of image height");
-  opt->addUsage( "     --tests                Run unit tests");
   opt->addUsage( "     --help                 Show help");
   opt->addUsage( "" );
 
   opt->setOption(  "fast" );
   opt->setOption(  "diam" );
   opt->setOption(  "dist" );
+  opt->setOption(  "distupper" );
   opt->setOption(  "focal" );
-  opt->setOption(  "mirrors" );
-  opt->setOption(  "baseline" );
   opt->setOption(  "elevation" );
   opt->setOption(  "range" );
   opt->setOption(  "raypaths" );
   opt->setOption(  "rays" );
   opt->setOption(  "radius" );
+  opt->setOption(  "radiusupper" );
   opt->setOption(  "inner" );
   opt->setOption(  "descriptors" );
-  opt->setOption(  "load" );
   opt->setOption(  "save" );
   opt->setOption(  "savecalib" );
   opt->setOption(  "saveedges" );
@@ -296,22 +241,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "skip", 's' );
   opt->setOption(  "fov" );
   opt->setOption(  "harris" );
-  opt->setOption(  "mirrorx0" );
-  opt->setOption(  "mirrory0" );
-  opt->setOption(  "mirrorx1" );
-  opt->setOption(  "mirrory1" );
-  opt->setOption(  "mirrorx2" );
-  opt->setOption(  "mirrory2" );
-  opt->setOption(  "mirrorx3" );
-  opt->setOption(  "mirrory3" );
-  opt->setOption(  "mirrorx4" );
-  opt->setOption(  "mirrory4" );
-  opt->setOption(  "saveconfig" );
-  opt->setOption(  "loadconfig" );
-  opt->setOption(  "gridcell" );
-  opt->setOption(  "griddim" );
-  opt->setOption(  "basewidth" );
-  opt->setOption(  "baseheight" );
+
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
   opt->setFlag(  "unwarp" );
@@ -323,15 +253,10 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "features" );
   opt->setFlag(  "lines" );
   opt->setFlag(  "groundfeatures" );
-  opt->setFlag(  "pointcloud" );
-  opt->setFlag(  "featurerays" );
   opt->setFlag(  "ground" );
-  opt->setFlag(  "overlay" );
-  opt->setFlag(  "overlayangles" );
-  opt->setFlag(  "grid" );
-  opt->setFlag(  "tests" );
-  opt->setFlag(  "nearfeatures" );
   opt->setFlag(  "harrisfeatures" );
+  opt->setFlag(  "stereodisparity" );
+  opt->setFlag(  "circles" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -341,12 +266,6 @@ int main(int argc, char* argv[]) {
       opt->printUsage();
       delete opt;
       return(0);
-  }
-
-  if ( opt->getFlag("tests") ) {
-	  RunUnitTests();
-	  delete opt;
-	  return(0);
   }
 
   if( opt->getFlag( "version" ) || opt->getFlag( 'V' ) )
@@ -372,6 +291,12 @@ int main(int argc, char* argv[]) {
 	  flip_image = true;
   }
 
+  bool show_circles = false;
+  if( opt->getFlag( "circles" ) )
+  {
+	  show_circles = true;
+  }
+
   bool unwarp_image = false;
   if( opt->getFlag( "unwarp" ) )
   {
@@ -384,12 +309,6 @@ int main(int argc, char* argv[]) {
   	  save_filename = opt->getValue("save");
   	  if (save_filename == "") save_filename = "image_";
   	  save_image = true;
-  }
-
-  std::string load_filename = "";
-  if( opt->getValue( "load" ) != NULL  ) {
-  	  load_filename = opt->getValue("load");
-  	  if (load_filename == "") load_filename = "image_";
   }
 
   std::string calibration_image_filename = "";
@@ -422,102 +341,39 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
+  if( opt->getFlag( "stereodisparity" ) ) {
+	  show_stereo_disparity = true;
+  	  show_harris_corners = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
   std::string harris_filename = "";
   if( opt->getValue( "harris" ) != NULL  || opt->getFlag( "harrisfeatures" )) {
 	  if (opt->getValue( "harris" ) != NULL) harris_filename = opt->getValue("harris");
+	  show_stereo_disparity = false;
   	  show_harris_corners = true;
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
-	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
-	  show_close_features = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "nearfeatures" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = false;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = true;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "grid" ) ) {
-	  show_occupancy_grid = true;
-	  show_overlay_angles = false;
-	  show_overlay = false;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = false;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "overlay" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = true;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = false;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "overlayangles" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = true;
-	  show_overlay = false;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = false;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "ground" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = false;
 	  show_lines = false;
 	  show_ground = true;
 	  show_ground_features = false;
-	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
   }
 
   bool optical_flow = false;
@@ -526,234 +382,47 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = true;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
-	  show_point_cloud = false;
 	  show_features = true;
 	  show_FAST = false;
 	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = true;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
-	  show_point_cloud = false;
 	  show_features = false;
 	  unwarp_features = true;
 	  show_FAST = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "lines" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = true;
 	  show_lines = true;
 	  show_ground = false;
 	  show_ground_features = false;
-	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = true;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = true;
-	  show_point_cloud = false;
 	  show_features = false;
 	  show_FAST = false;
 	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "pointcloud" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = true;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-	  show_feature_rays = false;
-  }
-
-  if( opt->getFlag( "featurerays" ) ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
-	  show_lines = false;
-	  show_ground = false;
-	  show_ground_features = false;
-	  show_point_cloud = false;
-	  show_feature_rays = true;
-	  show_features = false;
-	  show_FAST = false;
-	  unwarp_features = false;
-	  show_close_features = false;
-	  show_harris_corners = false;
-  }
-
-  float baseline = 100;
-  if( opt->getValue( "baseline" ) != NULL  ) {
-	  baseline = atof(opt->getValue("baseline"));
-  }
-
-  int no_of_mirrors = 1;
-  float mirror_position[5*2];
-  float mirror_position_pixels[5*2];
-  mirror_position[0] = 0;
-  mirror_position[1] = 0;
-  mirror_position_pixels[0] = 50;
-  mirror_position_pixels[1] = 50;
-  if( opt->getValue( "mirrors" ) != NULL  ) {
-	  no_of_mirrors = atoi(opt->getValue("mirrors"));
-	  switch(no_of_mirrors)
-	  {
-		  case 1: {
-			  mirror_position[0] = 0;
-			  mirror_position[1] = 0;
-			  mirror_position_pixels[0] = 50;
-			  mirror_position_pixels[1] = 50;
-			  break;
-		  }
-		  case 2: {
-			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = 0;
-			  mirror_position_pixels[0] = 20;
-			  mirror_position_pixels[1] = 50;
-			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = 0;
-			  mirror_position_pixels[2] = 80;
-			  mirror_position_pixels[3] = 50;
-			  break;
-		  }
-		  case 3: {
-			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline/2;
-			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline/2;
-			  mirror_position[4] = 0;
-			  mirror_position[5] = baseline/2;
-
-			  mirror_position_pixels[0] = 20;
-			  mirror_position_pixels[1] = 20;
-			  mirror_position_pixels[2] = 80;
-			  mirror_position_pixels[3] = 20;
-			  mirror_position_pixels[4] = 50;
-			  mirror_position_pixels[5] = 80;
-			  break;
-		  }
-		  case 4: {
-			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline*hh/ww;
-			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline*hh/ww;
-			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline*hh/ww;
-			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline*hh/ww;
-
-			  mirror_position_pixels[0] = 20;
-			  mirror_position_pixels[1] = 20;
-
-			  mirror_position_pixels[2] = 20;
-			  mirror_position_pixels[3] = 80;
-
-			  mirror_position_pixels[4] = 80;
-			  mirror_position_pixels[5] = 80;
-
-			  mirror_position_pixels[6] = 80;
-			  mirror_position_pixels[7] = 20;
-			  break;
-		  }
-		  case 5: {
-			  mirror_position[0] = -baseline/2;
-			  mirror_position[1] = -baseline*hh/ww;
-			  mirror_position[2] = baseline/2;
-			  mirror_position[3] = -baseline*hh/ww;
-			  mirror_position[4] = baseline/2;
-			  mirror_position[5] = baseline*hh/ww;
-			  mirror_position[6] = -baseline/2;
-			  mirror_position[7] = baseline*hh/ww;
-			  mirror_position[8] = 0;
-			  mirror_position[9] = 0;
-
-			  mirror_position_pixels[0] = 20;
-			  mirror_position_pixels[1] = 20;
-
-			  mirror_position_pixels[2] = 20;
-			  mirror_position_pixels[3] = 80;
-
-			  mirror_position_pixels[4] = 80;
-			  mirror_position_pixels[5] = 80;
-
-			  mirror_position_pixels[6] = 80;
-			  mirror_position_pixels[7] = 20;
-
-			  mirror_position_pixels[8] = 50;
-			  mirror_position_pixels[9] = 50;
-			  break;
-		  }
-	  }
-  }
-
-  if( opt->getValue( "mirrorx0" ) != NULL  ) {
-	  mirror_position_pixels[0] = atof(opt->getValue("mirrorx0"));
-  }
-  if( opt->getValue( "mirrory0" ) != NULL  ) {
-	  mirror_position_pixels[1] = atof(opt->getValue("mirrory0"));
-  }
-  if( opt->getValue( "mirrorx1" ) != NULL  ) {
-	  mirror_position_pixels[2] = atof(opt->getValue("mirrorx1"));
-  }
-  if( opt->getValue( "mirrory1" ) != NULL  ) {
-	  mirror_position_pixels[3] = atof(opt->getValue("mirrory1"));
-  }
-  if( opt->getValue( "mirrorx2" ) != NULL  ) {
-	  mirror_position_pixels[4] = atof(opt->getValue("mirrorx2"));
-  }
-  if( opt->getValue( "mirrory2" ) != NULL  ) {
-	  mirror_position_pixels[5] = atof(opt->getValue("mirrory2"));
-  }
-  if( opt->getValue( "mirrorx3" ) != NULL  ) {
-	  mirror_position_pixels[6] = atof(opt->getValue("mirrorx3"));
-  }
-  if( opt->getValue( "mirrory3" ) != NULL  ) {
-	  mirror_position_pixels[7] = atof(opt->getValue("mirrory3"));
-  }
-  if( opt->getValue( "mirrorx4" ) != NULL  ) {
-	  mirror_position_pixels[8] = atof(opt->getValue("mirrorx4"));
-  }
-  if( opt->getValue( "mirrory4" ) != NULL  ) {
-	  mirror_position_pixels[9] = atof(opt->getValue("mirrory4"));
   }
 
   float focal_length = 3.6f;
@@ -764,7 +433,6 @@ int main(int argc, char* argv[]) {
   float camera_height = 0;
   if( opt->getValue( "elevation" ) != NULL  ) {
 	  camera_height = atof(opt->getValue("elevation"));
-	  //printf("elevation: %f\n", camera_height);
   }
 
   std::string save_ray_paths_image = "";
@@ -779,54 +447,61 @@ int main(int argc, char* argv[]) {
 	  if (save_rays == "") save_rays = "rays.dat";
   }
 
-  int camera_base_width_mm = 0;
-  int camera_base_height_mm = 0;
-  if( opt->getValue( "basewidth" ) != NULL  ) {
-	  camera_base_width_mm = atoi(opt->getValue("basewidth"));
-  }
-  if( opt->getValue( "baseheight" ) != NULL  ) {
-	  camera_base_height_mm = atoi(opt->getValue("baseheight"));
-  }
-
-  int grid_cell_size = 4;
-  if( opt->getValue( "gridcell" ) != NULL  ) {
-	  grid_cell_size = atoi(opt->getValue("gridcell"));
-  }
-
-  int grid_dimension = 128;
-  if( opt->getValue( "griddim" ) != NULL  ) {
-	  grid_cell_size = atoi(opt->getValue("griddim"));
-  }
-
   float mirror_diameter = 60;
   if( opt->getValue( "diam" ) != NULL  ) {
 	  mirror_diameter = atof(opt->getValue("diam"));
   }
 
-  float dist_to_mirror_centre = 50+(mirror_diameter/2);
+  // distance between the camera and closest point on the mirror
+  float dist_to_mirror = 60;
   if( opt->getValue( "dist" ) != NULL  ) {
-	  dist_to_mirror_centre = atof(opt->getValue("dist"));
+	  dist_to_mirror = atof(opt->getValue("dist"));
   }
 
+  // distance from the camera to te upper mirror in a stacked configuration
+  float dist_to_upper_mirror = -1;
+  if( opt->getValue( "distupper" ) != NULL  ) {
+	  dist_to_upper_mirror = atof(opt->getValue("distupper"));
+
+	  float dist_to_backing0 = dist_to_mirror + (mirror_diameter/2) + focal_length;
+	  float dist_to_backing1 = dist_to_upper_mirror + (mirror_diameter/2) + focal_length;
+	  float angle0 = (float)atan2(mirror_diameter/2, dist_to_backing0);
+	  float angle1 = (float)atan2(mirror_diameter/2, dist_to_backing1);
+
+	  if (angle0 > 0) upper_mirror_outer_radius = outer_radius * angle1 / angle0;
+	  inner_radius = upper_mirror_outer_radius;
+  }
+  else {
+	  if (show_stereo_disparity) {
+		  printf("You must specify the height of the upper mirror using --distupper\n");
+	      delete opt;
+	      return(0);
+	  }
+  }
+
+  // outer radius as a percent of image width
   if( opt->getValue( "radius" ) != NULL  ) {
-	  outer_radius = atoi(opt->getValue("radius"));
+	  outer_radius = atof(opt->getValue("radius"));
   }
 
-  float inner_radius = 30;
+  // inner radius as a percent of image width
   if( opt->getValue( "inner" ) != NULL  ) {
 	  inner_radius = atoi(opt->getValue("inner"));
   }
 
-  float range_mm = 200;
+  // outer radius of the upper mirror as a percent of image width
+  if( opt->getValue( "radiusupper" ) != NULL  ) {
+	  upper_mirror_outer_radius = atof(opt->getValue("radiusupper"));
+  }
+
+  int range_mm = 500;
   if( opt->getValue( "range" ) != NULL  ) {
-	  range_mm = atof(opt->getValue("range"));
+	  range_mm = atoi(opt->getValue("range"));
   }
 
   int desired_corner_features = 70;
   if( opt->getValue( "fast" ) != NULL  ) {
-	  show_occupancy_grid = false;
-	  show_overlay_angles = false;
-	  show_overlay = false;
+  	  show_harris_corners = true;
 	  show_lines = false;
 	  show_ground = false;
 	  show_ground_features = false;
@@ -869,50 +544,6 @@ int main(int argc, char* argv[]) {
 	  skip_frames = atoi(opt->getValue("skip"));
   }
 
-  if( opt->getValue( "loadconfig" ) != NULL  ) {
-	  string config_filename = opt->getValue("loadconfig");
-	  if (omni::load_configuration(
-			  config_filename,
-			  no_of_mirrors,
-			  mirror_position_pixels,
-			  mirror_position,
-			  focal_length,
-			  mirror_diameter,
-			  outer_radius,
-			  inner_radius,
-			  dist_to_mirror_centre,
-			  camera_height,
-			  baseline,
-			  range_mm)) {
-		  printf("Configuration loaded from %s\n", config_filename.c_str());
-	  }
-	  else {
-		  printf("Warning: Configuration could not be loaded from %s\n", config_filename.c_str());
-	  }
-  }
-
-  if( opt->getValue( "saveconfig" ) != NULL  ) {
-	  string config_filename = opt->getValue("saveconfig");
-	  if (omni::save_configuration(
-			  config_filename,
-			  no_of_mirrors,
-			  mirror_position_pixels,
-			  mirror_position,
-			  focal_length,
-			  mirror_diameter,
-			  outer_radius,
-			  inner_radius,
-			  dist_to_mirror_centre,
-			  camera_height,
-			  baseline,
-			  range_mm)) {
-		  printf("Configuration saved to %s\n", config_filename.c_str());
-	  }
-	  else {
-		  printf("Warning: Configuration could not be saved to %s\n", config_filename.c_str());
-	  }
-  }
-
   delete opt;
 
   Camera c(dev.c_str(), ww, hh, fps);
@@ -935,7 +566,6 @@ int main(int argc, char* argv[]) {
   }
 
   IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
-  IplImage *buf=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *prev=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *flow=cvCreateImage(cvSize(ww, hh), 8, 3);
   IplImage *frame1_1C = NULL;
@@ -945,16 +575,11 @@ int main(int argc, char* argv[]) {
   IplImage *pyramid1 = NULL;
   IplImage *pyramid2 = NULL;
   unsigned char *l_=(unsigned char *)l->imageData;
-  unsigned char *buf_=(unsigned char *)buf->imageData;
   unsigned char *prev_=(unsigned char *)prev->imageData;
   unsigned char *flow_=(unsigned char *)flow->imageData;
-  int* colour_difference = NULL;
-  short* height_field = NULL;
-  int* plane_occupancy = NULL;
-  unsigned char* height_field_img = NULL;
 
   /* feature detection params */
-  int inhibition_radius = 4;
+  int inhibition_radius = 6;
   unsigned int minimum_response = 250;
 
   omni* lcam = new omni(ww, hh);
@@ -1003,45 +628,19 @@ int main(int argc, char* argv[]) {
 	}
   }
 
-
-  int ray_map_height_mm = (int)camera_height;
-  if ((show_occupancy_grid) ||
-	  (show_ground_features) ||
-	  (show_point_cloud) ||
-	  (show_feature_rays)) {
-	  ray_map_height_mm = 0;
-  }
-
-  /* create lookup table which maps pixels to 3D rays */
   lcam->create_ray_map(
-  	mirror_diameter,
-  	dist_to_mirror_centre,
-  	focal_length,
-  	outer_radius,
-  	ray_map_height_mm,
-  	no_of_mirrors,
-  	mirror_position,
-  	mirror_position_pixels,
-    ww,hh);
-
-  Match2D flow_matches[MAX_FLOW_MATCHES];
-  unsigned char* img_occlusions = NULL;
-  vector<int> features;
-
-  /* load image from file */
-  if (load_filename != "") {
-	  cvReleaseImage(&prev);
-	  prev = cvLoadImage( load_filename.c_str(), CV_LOAD_IMAGE_COLOR );
-	  if (prev == NULL) {
-		  printf("Couldn't load %s\n", load_filename.c_str());
-		  return 0;
-	  }
-      prev_ = (unsigned char *)prev->imageData;
-  }
+      	mirror_diameter,
+      	dist_to_mirror,
+      	dist_to_upper_mirror,
+      	focal_length,
+      	inner_radius,
+      	outer_radius,
+      	upper_mirror_outer_radius,
+      	camera_height,
+        ww, hh);
 
   // Harris corners
   vector<int> harris_features;
-  graphslam *slam = new graphslam();
 
   while(1){
 
@@ -1053,27 +652,25 @@ int main(int argc, char* argv[]) {
     	lcam->flip(l_, NULL);
     }
 
-    if (no_of_mirrors == 1)
-        lcam->remove(l_, ww, hh, 3, outer_radius, inner_radius);
+    int inner_rad = inner_radius;
+    if (dist_to_upper_mirror > -1) inner_rad = 0;
+    lcam->remove(l_, ww, hh, 3, outer_radius, inner_rad);
 
 	int no_of_feats = 0;
 	int no_of_feats_horizontal = 0;
 
 	/* display the features */
 	if ((show_features) ||
-		(show_close_features) ||
 		(unwarp_features) ||
 		(edges_filename != "") ||
 		(radial_lines_filename != "") ||
 		(save_rays != "") ||
 		(show_ground_features) ||
-		(show_point_cloud) ||
-		(show_feature_rays) ||
 		(show_lines)) {
 
 		int inner = (int)inner_radius;
 		int outer = (int)outer_radius;
-		if ((unwarp_image) || (no_of_mirrors > 1)) {
+		if (unwarp_image) {
 			inner = 0;
 			outer = 9999;
 		}
@@ -1091,8 +688,6 @@ int main(int argc, char* argv[]) {
 		if ((!show_lines) &&
 			(!unwarp_features)) {
 
-			features.clear();
-
 			/* vertically oriented features */
 			int row = 0;
 			int feats_remaining = lcam->features_per_row[row];
@@ -1102,15 +697,7 @@ int main(int argc, char* argv[]) {
 				int x = (int)lcam->feature_x[f] / OMNI_SUB_PIXEL;
 				int y = 4 + (row * OMNI_VERTICAL_SAMPLING);
 
-				features.push_back(x);
-				features.push_back(y);
-
-				if ((!show_close_features) &&
-					(!show_ground_features) &&
-					(!show_point_cloud) &&
-					(!show_feature_rays)) {
-				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
-				}
+				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 
 				/* move to the next row */
 				if (feats_remaining <= 0) {
@@ -1128,15 +715,7 @@ int main(int argc, char* argv[]) {
 				int y = (int)lcam->feature_y[f] / OMNI_SUB_PIXEL;
 				int x = 4 + (col * OMNI_HORIZONTAL_SAMPLING);
 
-				features.push_back(x);
-				features.push_back(y);
-
-				if ((!show_close_features) &&
-					(!show_ground_features) &&
-                    (!show_point_cloud) &&
-                    (!show_feature_rays)) {
-				    drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
-				}
+				drawing::drawCross(l_, ww, hh, x, y, 2, 0, 255, 0, 0);
 
 				/* move to the next column */
 				if (feats_remaining <= 0) {
@@ -1148,11 +727,11 @@ int main(int argc, char* argv[]) {
 
 	}
 
-    if (unwarp_image) {
+    if ((unwarp_image) && (!show_stereo_disparity)) {
     	lcam->unwarp(l_,ww,hh,3);
     }
 
-    if (unwarp_features) {
+    if ((unwarp_features) && (!show_stereo_disparity)) {
     	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal);
     }
 
@@ -1198,7 +777,7 @@ int main(int argc, char* argv[]) {
 	    lcam->show_ground_plane(l_,ww,hh,range_mm);
 	}
 
-	if ((show_ground_features) && (no_of_mirrors == 1)) {
+	if (show_ground_features) {
 	    lcam->show_ground_plane_features(l_,ww,hh,range_mm,no_of_feats,no_of_feats_horizontal);
 	}
 
@@ -1210,210 +789,53 @@ int main(int argc, char* argv[]) {
 	    lcam->show_radial_lines(l_,ww,hh,range_mm);
 	}
 
-	if (show_overlay) {
-		lcam->show_ray_pixels(l_,ww,hh);
-	}
+	if (optical_flow) {
+    	memcpy((void*)flow_,l_,ww*hh*3);
+    	compute_optical_flow(
+    		prev, l, flow, 150, 20,
+            frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2,
+            flow_filename);
+        memcpy((void*)prev_,l_,ww*hh*3);
+        memcpy((void*)l_,flow_,ww*hh*3);
+    }
 
-	if (show_overlay_angles) {
-		lcam->show_ray_directions(l_,ww,hh);
-	}
+	if (show_stereo_disparity) {
+		int max_disparity_pixels = hh*10/100;
+		bool show_feats = true;
+		int max_range_mm = 3000;
+		vector<short> points;
 
-	if (show_occupancy_grid) {
+		// unwarp the mirror images
+		lcam->unwarp(l_,ww,hh,3);
 
-		int start_plane_height_mm = (int)camera_height;
-		int end_plane_height_mm = 0;
-		int no_of_planes = 20;
-		int patch_size_pixels = 8;
-		int min_patch_observations = 3;
-
-		int tx_mm = -range_mm;
-		int ty_mm = -range_mm;
-		int bx_mm = range_mm;
-		int by_mm = range_mm;
-
-		int mirror_index = -1;
-		int min_r_mm = 0;
-		int max_r_mm = 60;
-
-		if (colour_difference == NULL) {
-			colour_difference = new int[ww*hh*2];
-			height_field = new short[ww*hh];
-			height_field_img = new unsigned char[ww*hh*3];
-			plane_occupancy = new int[no_of_planes];
-		}
-		//memcpy((void*)buf_,(void*)l_,ww*hh*3);
-
-		/*
-		omni::project(
-			buf_,
-			0,
-			focal_length,
-			dist_to_mirror_centre,
-			camera_height,
-		  	ww,hh,
-			tx_mm, ty_mm,
-			bx_mm, by_mm,
+		stackedstereo::get_point_cloud(
+			l_,ww,hh,
+			lcam->unwarp_lookup_reverse,
 			lcam->ray_map,
-			lcam->mirror_map,
-			lcam->mirror_lookup,
-			mirror_index,
-			min_r_mm,
-			max_r_mm,
-			l_,
-			ww, hh,
-			colour_difference);
-
-
-		int grid_centre_x_mm = 0;
-		int grid_centre_y_mm = 0;
-		int grid_centre_z_mm = 0;
-		vector<short> occupied_voxels;
-		int min_correlation = 0;
-		if (img_occlusions == NULL) {
-			img_occlusions = new unsigned char[ww*hh];
-		}
-
-		omni::voxel_paint(
-		    lcam->ray_map,
-		    dist_to_mirror_centre,
-			mirror_diameter,
-			no_of_mirrors,
-			lcam->mirror_map,
-			l_,
-			img_occlusions,
-			ww,hh,
-			grid_dimension,
-			grid_dimension,
-			grid_dimension,
-			grid_cell_size,
-			grid_centre_x_mm,
-			grid_centre_y_mm,
-			grid_centre_z_mm,
-			min_correlation,
-			occupied_voxels);
-
-    	int voxel_radius_pixels = 2;
-    	int view_type = 3;
-
-		omni::show_voxels(l_,ww,hh, occupied_voxels, voxel_radius_pixels, view_type);
-		*/
-
-		omni::reconstruct_volume(
-			l_,
-			start_plane_height_mm,
-			end_plane_height_mm,
-			no_of_planes,
-			focal_length,
-			(int)dist_to_mirror_centre,
-			(int)camera_height,
-			ww, hh,
-			ray_map_height_mm,
-			tx_mm, ty_mm,
-			bx_mm, by_mm,
-			camera_base_width_mm,
-			camera_base_height_mm,
-			lcam->ray_map,
-			lcam->mirror_map,
-			lcam->mirror_lookup,
-			buf_,
-			ww, hh,
-			colour_difference,
-			height_field,
-			height_field_img,
-			patch_size_pixels,
-			min_patch_observations,
-			plane_occupancy);
-/*
-	    omni::show_height_field(
-	    	l_,
-	    	ww,hh,
-	    	(int)dist_to_mirror_centre,
-	    	height_field,
-	    	height_field_img,
-	    	ww,hh,3);
-*/
-	    omni::show_plane_occupancy(l_,ww,hh,no_of_planes,plane_occupancy);
-
+			max_range_mm,
+			points,
+			show_feats);
 	}
 
-	if (show_close_features) {
-		vector<int> closest_features;
-		vector<int> closest_features2;
-		vector<vector<unsigned char> > floor_colour;
-		for (int col = 0; col < 3; col++) {
-			vector<unsigned char> fcolour;
-			floor_colour.push_back(fcolour);
-		}
-		int angular_increment_degrees = 4;
-		int cam_width = 28;
-		int cam_height = 15;
-		int centre_x = (int)(mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100);
-		int centre_y = (int)(mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100);
-		detectfloor::get_closest_features(
-			features,
-			centre_x,
-			centre_y,
-			no_of_mirrors-1,
-			ww, hh,
-			l_,
-			lcam->mirror_map,
-			angular_increment_degrees,
-			cam_width, cam_height,
-			closest_features,
-			floor_colour);
+	if (show_circles) {
+		int inner_radius_pixels = (int)(ww * inner_radius / 200);
+		int outer_radius_pixels = (int)(ww * outer_radius / 200);
 
-/*
-		for (int m = 0; m < no_of_mirrors; m++) {
-			detectfloor::find_floor_using_colour(
-				features,
-				floor_colour,
-				m,
-				ww, hh,
-				l_,
-				lcam->mirror_map,
-				true,
-				0,255,0,
-				0,
-				closest_features2);
+		drawing::drawCircle(l_,ww,hh,ww/2,hh/2,inner_radius_pixels, 255,0,0, 0);
+		drawing::drawCircle(l_,ww,hh,ww/2,hh/2,outer_radius_pixels, 0,255,0, 0);
+		if (dist_to_upper_mirror > -1) {
+			int upper_mirror_outer_radius_pixels = (int)(ww * upper_mirror_outer_radius / 200)+2;
+			drawing::drawCircle(l_,ww,hh,ww/2,hh/2,upper_mirror_outer_radius_pixels, 0,0,255, 0);
 		}
-*/
-		for (int i = 0; i < (int)closest_features.size(); i += 2) {
-			drawing::drawCross(l_, ww, hh, closest_features[i], closest_features[i+1], 2, 255, 0, 0, 0);
-		}
-
-		drawing::drawLine(
-			l_, ww, hh,
-			centre_x - cam_width, centre_y-cam_height,
-			centre_x + cam_width, centre_y-cam_height,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			centre_x - cam_width, centre_y-cam_height,
-			centre_x - cam_width, centre_y+cam_height,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			centre_x - cam_width, centre_y+cam_height,
-			centre_x + cam_width, centre_y+cam_height,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			centre_x + cam_width, centre_y-cam_height,
-			centre_x + cam_width, centre_y+cam_height,
-			255,0,0,
-			0,false);
-
 	}
 
 	if (show_harris_corners) {
 		// detect corners
 	    int minimum_separation = 8;
+	    int sensitivity_percent = 99;
 
-		int centre_x = mirror_position_pixels[(no_of_mirrors-1)*2] * ww / 100;
-		int centre_y = mirror_position_pixels[(no_of_mirrors-1)*2+1] * hh / 100;
+		int centre_x = ww/2;
+		int centre_y = hh/2;
 		int outer_radius_pixels = (int)(ww * outer_radius / 200)*90/100;
 
 	    harris::get_features(
@@ -1425,6 +847,7 @@ int main(int argc, char* argv[]) {
 			minimum_separation,
 			centre_x, centre_y,
 			outer_radius_pixels,
+			sensitivity_percent,
 			harris_filename,
 			harris_features);
 
@@ -1434,169 +857,26 @@ int main(int argc, char* argv[]) {
         }
 	}
 
-	if ((show_point_cloud) && (no_of_mirrors > 1)) {
-
-		int height_step_mm = 200;
-		int max_range_mm = 5000;
-		int camera_width_percent = 50; //45;
-		int camera_height_percent = 40; //30;
-		int view_type = 5;
-		vector<int> point_cloud;
-		vector<int> perimeter_2D;
-		vector<int> feature_heights;
-		pointcloud::update(
-			l_,
-		    features,
-		    camera_height,
-		    dist_to_mirror_centre,
-		    focal_length,
-		    mirror_position_pixels,
-		    outer_radius,
-		    mirror_diameter,
-		    no_of_mirrors,
-		    ww,hh,
-		    ray_map_height_mm,
-		    (int)camera_height,
-		    height_step_mm,
-		    max_range_mm,
-		    camera_width_percent,
-		    camera_height_percent,
-		    lcam->ray_map,
-		    lcam->mirror_map,
-		    lcam->feature_map,
-		    lcam->ground_features_lookup,
-		    lcam->feature_matches,
-		    view_type,
-		    point_cloud,
-		    feature_heights,
-		    perimeter_2D);
-	}
-
-	if (show_feature_rays) {
-
-		int max_range_mm = 3000;
-
-	    omni::show_feature_rays(
-	    	features,
-	    	no_of_mirrors,
-	    	focal_length,
-	    	(int)dist_to_mirror_centre,
-	    	(int)camera_height,
-	    	ww, hh,
-	    	ray_map_height_mm,
-	    	lcam->ray_map,
-	    	lcam->mirror_map,
-	    	max_range_mm,
-	        l_);
-	}
-
-	if ((show_ground_features) && (no_of_mirrors > 1)) {
-		vector<int> floor_features;
-		vector<int> floor_features_positions;
-		vector<int> match_score;
-		int floor_height_mm = 0;
-		int plane_tollerance_mm = 50;
-		int ground_plane_tollerance_mm = 64; // + (floor_height_mm / 20);
-		int image_plane_tollerance_pixels = 2;
-		int camera_width_pixels = (int)((outer_radius * ww / 200) * 45/100);
-		int camera_height_pixels = (int)((outer_radius * ww / 200) * 30/100);
-		int x_offset = -5;
-		int y_offset = 0;
-		int camera_tx = (mirror_position_pixels[(no_of_mirrors-1)*2]*ww/100) - (camera_width_pixels/2) + x_offset;
-		int camera_ty = (mirror_position_pixels[(no_of_mirrors-1)*2+1]*hh/100) - (camera_height_pixels/2) + y_offset;
-		int camera_bx = camera_tx + camera_width_pixels;
-		int camera_by = camera_ty + camera_height_pixels;
-		int max_range_mm = 5000;
-		detectfloor::detect(
-			features,
-			no_of_mirrors,
-			ww,hh,
-			ray_map_height_mm,
-			floor_height_mm,
-			plane_tollerance_mm,
-			focal_length,
-			(int)dist_to_mirror_centre,
-			(int)camera_height,
-			l_,
-			lcam->ray_map,
-			lcam->mirror_map,
-			lcam->feature_map,
-			lcam->ground_features_lookup,
-			ground_plane_tollerance_mm,
-			image_plane_tollerance_pixels,
-			max_range_mm,
-			camera_tx,
-			camera_ty,
-			camera_bx,
-			camera_by,
-			floor_features_positions,
-			floor_features,
-			match_score);
-
-		for (int f = (int)floor_features.size()-2; f >= 0; f -= 2) {
-			drawing::drawCross(l_, ww, hh, floor_features[f], floor_features[f+1], 2, 0, 255, 0, 0);
-		}
-		/*
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_tx,camera_ty,
-			camera_bx,camera_ty,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_bx,camera_ty,
-			camera_bx,camera_by,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_bx,camera_by,
-			camera_tx,camera_by,
-			255,0,0,
-			0,false);
-		drawing::drawLine(
-			l_, ww, hh,
-			camera_tx,camera_by,
-			camera_tx,camera_ty,
-			255,0,0,
-			0,false);
-		*/
-	}
-
-	if (optical_flow) {
-	    int no_of_flow_matches = 0;
-
-    	memcpy((void*)flow_,l_,ww*hh*3);
-    	compute_optical_flow(
-    		prev, l, flow, MAX_FLOW_MATCHES, 20,
-            frame1_1C, frame2_1C, eig_image, temp_image, pyramid1, pyramid2,
-            flow_filename,no_of_flow_matches,flow_matches,true);
-        memcpy((void*)prev_,l_,ww*hh*3);
-        memcpy((void*)l_,flow_,ww*hh*3);
-    }
-
 	if (skip_frames == 0) {
 
 		/* save image to file, then quit */
 		if (save_image) {
 			std::string filename = save_filename + ".jpg";
-			if (!optical_flow) {
-			    cvSaveImage(filename.c_str(), l);
-			}
-			else {
-				cvSaveImage(filename.c_str(), prev);
-			}
+			cvSaveImage(filename.c_str(), l);
 			if (save_ray_paths_image == "") break;
 		}
 	}
 
 	if (save_ray_paths_image != "") {
-	    lcam->show_ray_map_side(
-		    l_, ww,hh,(int)((camera_height+focal_length+dist_to_mirror_centre)*1.1f),(int)focal_length, (int)camera_height, true);
 
-	    //float max_radius_mm = 130;
-	    //lcam->show_ray_map_above(l_, ww, hh, max_radius_mm);
+		float camera_mirror_dist = dist_to_mirror;
+		if (dist_to_upper_mirror > dist_to_mirror) {
+			camera_mirror_dist = dist_to_upper_mirror;
+		}
+		int max_height = (int)((camera_height+focal_length+camera_mirror_dist+(mirror_diameter*0.5f))*1.01f);
+
+	    lcam->show_ray_map_side(
+		    l_, ww,hh,max_height,(int)focal_length, (int)camera_height);
 	    cvSaveImage(save_ray_paths_image.c_str(), l);
 		printf("Ray paths saved to %s\n", save_ray_paths_image.c_str());
 	    break;
@@ -1632,33 +912,20 @@ int main(int argc, char* argv[]) {
 	  cvDestroyWindow(image_title.c_str());
   }
   cvReleaseImage(&l);
-  cvReleaseImage(&buf);
   cvReleaseImage(&prev);
   cvReleaseImage(&flow);
 
-  if (colour_difference != NULL) {
-	  delete[] colour_difference;
+  if (frame1_1C != NULL) {
+	  cvReleaseImage(&frame1_1C);
+	  cvReleaseImage(&frame2_1C);
+	  cvReleaseImage(&eig_image);
+	  cvReleaseImage(&temp_image);
+	  cvReleaseImage(&pyramid1);
+	  cvReleaseImage(&pyramid2);
   }
-  if (height_field != NULL) {
-	  delete[] height_field;
-	  delete[] height_field_img;
-  }
-  if (plane_occupancy != NULL) {
-	  delete[] plane_occupancy;
-  }
-  if (img_occlusions == NULL) {
-	  delete[] img_occlusions;
-  }
-  if (frame1_1C != NULL) cvReleaseImage(&frame1_1C);
-  if (frame2_1C != NULL) cvReleaseImage(&frame2_1C);
-  if (eig_image != NULL) cvReleaseImage(&eig_image);
-  if (temp_image != NULL) cvReleaseImage(&temp_image);
-  if (pyramid1 != NULL) cvReleaseImage(&pyramid1);
-  if (pyramid2 != NULL) cvReleaseImage(&pyramid2);
 
   delete lcam;
   delete corners;
-  delete slam;
 
   return 0;
 }
