@@ -25,9 +25,11 @@
 #include <highgui.h>
 #include <stdio.h>
 #include <sstream>
+#include "drawing.h"
 
-#define MOTION_IMAGE_WIDTH   128
-#define MOTION_IMAGE_HEIGHT  64
+#define MOTION_IMAGE_WIDTH         128
+#define MOTION_IMAGE_HEIGHT        128
+#define MOTION_MAX_ATTENTION_BOXES 10
 
 using namespace std;
 
@@ -37,6 +39,10 @@ protected:
 	unsigned char* curr;
 	unsigned char* movement;
 	bool first_update;
+	int *horizontal;
+
+	int no_of_attention_boxes;
+	int *attention_box;
 
 	int get_orientation_offset();
 	void grab(
@@ -44,6 +50,14 @@ protected:
 		int img_width,
 		int img_height);
 public:
+
+	void attention_boxes(
+		unsigned char* img,
+		int img_width,
+		int img_height,
+		int ty, int by,
+		bool clear,
+		bool show);
 
 	void update(
 		unsigned char* img,
