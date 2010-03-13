@@ -157,7 +157,7 @@ void stackedstereo::match_unwarped(
             int xx3 = ray_map[n1+4];
             int yy3 = ray_map[n1+5];
         	omni::intersection(xx0,yy0,xx1,yy1,xx2,yy2,xx3,yy3,ix,iy);
-        	printf("%d %d    %d %d %d  %d %d   %f %f\n", n0,n1, ray_map[n0], xx2,yy2,xx3,yy3,ix,iy);
+        	//printf("%d %d    %d %d %d  %d %d   %f %f\n", n0,n1, ray_map[n0], xx2,yy2,xx3,yy3,ix,iy);
         	//printf("%f %f\n", ix,iy);
 
         	if ((ix > -max_range_mm) && (ix < max_range_mm) &&

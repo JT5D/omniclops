@@ -1326,7 +1326,7 @@ void omni::create_ray_map(
 					raw_radius = calibration_radius[idx];
 					raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 					raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-					n = (((img_height/2)-(y/2)) * img_width)+x;
+					n = (((img_height/2)-(y/4)) * img_width)+x;
 					n2 = (raw_y * img_width)+raw_x;
 					if ((n2 > -1) && (n2 < pixels) &&
 						(n > -1) && (n < pixels)) {
@@ -1340,7 +1340,7 @@ void omni::create_ray_map(
 						raw_radius = calibration_radius[idx];
 						raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 						raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-						n = ((img_height-1-y) * img_width)+x;
+						n = ((img_height-1-((y/2)+(img_height*25/100))) * img_width)+x;
 						n2 = (raw_y * img_width)+raw_x;
 						if ((n2 > -1) && (n2 < pixels) &&
 							(n > -1) && (n < pixels)) {
