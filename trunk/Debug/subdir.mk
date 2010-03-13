@@ -11,6 +11,7 @@ CPP_SRCS += \
 ../libcam.cpp \
 ../linefit.cpp \
 ../main.cpp \
+../motion.cpp \
 ../omni.cpp \
 ../polynomial.cpp \
 ../stackedstereo.cpp 
@@ -23,6 +24,7 @@ OBJS += \
 ./libcam.o \
 ./linefit.o \
 ./main.o \
+./motion.o \
 ./omni.o \
 ./polynomial.o \
 ./stackedstereo.o 
@@ -35,6 +37,7 @@ CPP_DEPS += \
 ./libcam.d \
 ./linefit.d \
 ./main.d \
+./motion.d \
 ./omni.d \
 ./polynomial.d \
 ./stackedstereo.d 

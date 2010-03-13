@@ -1,7 +1,7 @@
 /*
     omniclops
     A command line utility for omnidirectional vision
-    Copyright (C) 2009 Bob Mottram
+    Copyright (C) 2010 Bob Mottram
     fuzzgun@gmail.com
 
     Requires packages:
@@ -38,6 +38,7 @@
 #include "libcam.h"
 #include "harris.h"
 #include "stackedstereo.h"
+#include "motion.h"
 
 #define VERSION 0.3
 
@@ -156,6 +157,7 @@ int main(int argc, char* argv[]) {
   bool unwarp_features = false;
   bool show_harris_corners = false;
   bool show_stereo_disparity = false;
+  bool show_motion = false;
 
   float outer_radius = 90;
   float inner_radius = 30;
@@ -174,46 +176,49 @@ int main(int argc, char* argv[]) {
   opt->addUsage( " " );
   opt->addUsage( "Usage: " );
   opt->addUsage( "" );
-  opt->addUsage( "     --dev                  Video device to be used");
-  opt->addUsage( " -w  --width                Image width in pixels");
-  opt->addUsage( " -h  --height               Image height in pixels");
-  opt->addUsage( "     --diam                 Diameter of the spherical mirror in millimetres");
-  opt->addUsage( "     --dist                 Distance from camera lens to nearest point on the mirror surface in millimetres");
-  opt->addUsage( "     --distupper            Distance from camera lens to nearest point on the upper mirror surface in millimetres for a stacked configuration");
-  opt->addUsage( "     --focal                Focal length in millimetres");
-  opt->addUsage( "     --elevation            Height of the camera above the ground in millimetres");
-  opt->addUsage( "     --radius               Outer radius as a percentage of the image width");
-  opt->addUsage( "     --radiusupper          Outer radius of the upper mirror as a percentage of the image width");
-  opt->addUsage( "     --inner                Inner radius as a percentage of the image width");
-  opt->addUsage( "     --features             Show edge features");
-  opt->addUsage( "     --circles              Show circles for inner radius");
-  opt->addUsage( "     --stereodisparity      Show stereo disparity for stacked mirror configuration");
-  opt->addUsage( "     --lines                Show radial lines");
-  opt->addUsage( "     --groundfeatures       Show edge features on the ground plane");
-  opt->addUsage( "     --ground               Show ground plane");
-  opt->addUsage( "     --range                Maximum range when displaying ground plane");
-  opt->addUsage( "     --fast                 Show FAST corners");
-  opt->addUsage( "     --harris <filename>    Show Harris corners and save them to the given filename");
-  opt->addUsage( "     --harrisfeatures       Show Harris corners");
-  opt->addUsage( "     --descriptors          Saves feature descriptor for each FAST corner");
-  opt->addUsage( "     --raypaths             Saves image showing ray paths");
-  opt->addUsage( "     --rays                 Saves file containing rays for each observed edge feature");
-  opt->addUsage( "     --fov                  Field of view in degrees");
-  opt->addUsage( " -f  --fps                  Frames per second");
-  opt->addUsage( " -s  --skip                 Skip this number of frames");
-  opt->addUsage( " -V  --version              Show version number");
-  opt->addUsage( "     --save                 Save raw image");
-  opt->addUsage( "     --savecalib            Save calibration image");
-  opt->addUsage( "     --saveedges            Save edges to file");
-  opt->addUsage( "     --saveflow             Save optical flow vectors");
-  opt->addUsage( "     --saveradial           Save radial lines to file");
-  opt->addUsage( "     --flip                 Flip the image");
-  opt->addUsage( "     --unwarp               Unwarp the image");
-  opt->addUsage( "     --unwarpfeatures       Unwarp edge features");
-  opt->addUsage( "     --flow                 Compute optical flow");
-  opt->addUsage( "     --stream               Stream output using gstreamer");
-  opt->addUsage( "     --headless             Disable video output (for use with --stream)");
-  opt->addUsage( "     --help                 Show help");
+  opt->addUsage( "     --dev                   Video device to be used");
+  opt->addUsage( " -w  --width                 Image width in pixels");
+  opt->addUsage( " -h  --height                Image height in pixels");
+  opt->addUsage( "     --diam                  Diameter of the spherical mirror in millimetres");
+  opt->addUsage( "     --dist                  Distance from camera lens to nearest point on the mirror surface in millimetres");
+  opt->addUsage( "     --distupper             Distance from camera lens to nearest point on the upper mirror surface in millimetres for a stacked configuration");
+  opt->addUsage( "     --focal                 Focal length in millimetres");
+  opt->addUsage( "     --elevation             Height of the camera above the ground in millimetres");
+  opt->addUsage( "     --radius                Outer radius as a percentage of the image width");
+  opt->addUsage( "     --radiusupper           Outer radius of the upper mirror as a percentage of the image width");
+  opt->addUsage( "     --inner                 Inner radius as a percentage of the image width");
+  opt->addUsage( "     --features              Show edge features");
+  opt->addUsage( "     --circles               Show circles for inner radius");
+  opt->addUsage( "     --stereodisparity       Show stereo disparity for stacked mirror configuration");
+  opt->addUsage( "     --lines                 Show radial lines");
+  opt->addUsage( "     --groundfeatures        Show edge features on the ground plane");
+  opt->addUsage( "     --ground                Show ground plane");
+  opt->addUsage( "     --range                 Maximum range when displaying ground plane");
+  opt->addUsage( "     --fast                  Show FAST corners");
+  opt->addUsage( "     --motion                Show motion");
+  opt->addUsage( "     --loadmotion <filename> Load motion file");
+  opt->addUsage( "     --harris <filename>     Show Harris corners and save them to the given filename");
+  opt->addUsage( "     --harrisfeatures        Show Harris corners");
+  opt->addUsage( "     --descriptors           Saves feature descriptor for each FAST corner");
+  opt->addUsage( "     --raypaths              Saves image showing ray paths");
+  opt->addUsage( "     --rays                  Saves file containing rays for each observed edge feature");
+  opt->addUsage( "     --fov                   Field of view in degrees");
+  opt->addUsage( " -f  --fps                   Frames per second");
+  opt->addUsage( " -s  --skip                  Skip this number of frames");
+  opt->addUsage( " -V  --version               Show version number");
+  opt->addUsage( "     --save                  Save raw image");
+  opt->addUsage( "     --savemotion            Save motion data to file");
+  opt->addUsage( "     --savecalib             Save calibration image");
+  opt->addUsage( "     --saveedges             Save edges to file");
+  opt->addUsage( "     --saveflow              Save optical flow vectors");
+  opt->addUsage( "     --saveradial            Save radial lines to file");
+  opt->addUsage( "     --flip                  Flip the image");
+  opt->addUsage( "     --unwarp                Unwarp the image");
+  opt->addUsage( "     --unwarpfeatures        Unwarp edge features");
+  opt->addUsage( "     --flow                  Compute optical flow");
+  opt->addUsage( "     --stream                Stream output using gstreamer");
+  opt->addUsage( "     --headless              Disable video output (for use with --stream)");
+  opt->addUsage( "     --help                  Show help");
   opt->addUsage( "" );
 
   opt->setOption(  "fast" );
@@ -233,6 +238,8 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "savecalib" );
   opt->setOption(  "saveedges" );
   opt->setOption(  "saveradial" );
+  opt->setOption(  "savemotion" );
+  opt->setOption(  "loadmotion" );
   opt->setOption(  "saveflow" );
   opt->setOption(  "fps", 'f' );
   opt->setOption(  "dev" );
@@ -257,6 +264,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "harrisfeatures" );
   opt->setFlag(  "stereodisparity" );
   opt->setFlag(  "circles" );
+  opt->setFlag(  "motion" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -311,6 +319,12 @@ int main(int argc, char* argv[]) {
   	  save_image = true;
   }
 
+  std::string save_motion_filename = "";
+  if( opt->getValue( "savemotion" ) != NULL  ) {
+  	  save_motion_filename = opt->getValue("savemotion");
+  	  if (save_motion_filename == "") save_motion_filename = "motion.dat";
+  }
+
   std::string calibration_image_filename = "";
   if( opt->getValue( "savecalib" ) != NULL  ) {
 	  calibration_image_filename = opt->getValue("savecalib");
@@ -341,7 +355,22 @@ int main(int argc, char* argv[]) {
       return(0);
   }
 
+  string load_motion_filename = "";
+  if( ( opt->getFlag( "motion" ) ) || ( opt->getValue( "loadmotion" ) != NULL  ) ) {
+	  if ( opt->getValue( "loadmotion" ) != NULL  ) load_motion_filename = opt->getValue("loadmotion");
+	  show_motion = true;
+	  show_stereo_disparity = false;
+  	  show_harris_corners = false;
+	  show_lines = false;
+	  show_ground = false;
+	  show_ground_features = false;
+	  show_features = false;
+	  show_FAST = false;
+	  unwarp_features = false;
+  }
+
   if( opt->getFlag( "stereodisparity" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = true;
   	  show_harris_corners = false;
 	  show_lines = false;
@@ -355,6 +384,7 @@ int main(int argc, char* argv[]) {
   std::string harris_filename = "";
   if( opt->getValue( "harris" ) != NULL  || opt->getFlag( "harrisfeatures" )) {
 	  if (opt->getValue( "harris" ) != NULL) harris_filename = opt->getValue("harris");
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = true;
 	  show_lines = false;
@@ -366,6 +396,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "ground" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = false;
 	  show_lines = false;
@@ -382,6 +413,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "features" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = true;
 	  show_lines = false;
@@ -393,6 +425,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "unwarpfeatures" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = true;
 	  show_lines = false;
@@ -404,6 +437,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "lines" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = true;
 	  show_lines = true;
@@ -415,6 +449,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( opt->getFlag( "groundfeatures" ) ) {
+	  show_motion = false;
 	  show_stereo_disparity = false;
   	  show_harris_corners = true;
 	  show_lines = false;
@@ -629,18 +664,20 @@ int main(int argc, char* argv[]) {
   }
 
   lcam->create_ray_map(
-      	mirror_diameter,
-      	dist_to_mirror,
-      	dist_to_upper_mirror,
-      	focal_length,
-      	inner_radius,
-      	outer_radius,
-      	upper_mirror_outer_radius,
-      	camera_height,
-        ww, hh);
+		mirror_diameter,
+		dist_to_mirror,
+		dist_to_upper_mirror,
+		focal_length,
+		inner_radius,
+		outer_radius,
+		upper_mirror_outer_radius,
+		camera_height,
+		ww, hh);
 
   // Harris corners
   vector<int> harris_features;
+
+  motion* motion_detector = new motion();
 
   while(1){
 
@@ -727,11 +764,11 @@ int main(int argc, char* argv[]) {
 
 	}
 
-    if ((unwarp_image) && (!show_stereo_disparity)) {
+    if ((unwarp_image) && (!show_stereo_disparity) && (!show_motion)) {
     	lcam->unwarp(l_,ww,hh,3);
     }
 
-    if ((unwarp_features) && (!show_stereo_disparity)) {
+    if ((unwarp_features) && (!show_stereo_disparity) && (!show_motion)) {
     	lcam->unwarp_features(l_,ww,hh,3,no_of_feats,no_of_feats_horizontal);
     }
 
@@ -815,6 +852,30 @@ int main(int argc, char* argv[]) {
 			max_range_mm,
 			points,
 			show_feats);
+	}
+
+	if (show_motion) {
+		// unwarp the mirror images
+		lcam->unwarp(l_,ww,hh,3);
+
+		// load previous motion file
+		if (load_motion_filename != "") {
+			motion_detector->load(load_motion_filename);
+			load_motion_filename = "";
+		}
+
+		// update motion
+		motion_detector->update(l_,ww,hh,20);
+
+		// display motion
+		motion_detector->show(l_,ww,hh);
+
+		// save to motion file
+		if (save_motion_filename != "") {
+			motion_detector->save(save_motion_filename);
+			printf("Motion data saved to %s\n", save_motion_filename.c_str());
+			break;
+		}
 	}
 
 	if (show_circles) {
@@ -926,6 +987,7 @@ int main(int argc, char* argv[]) {
 
   delete lcam;
   delete corners;
+  delete motion_detector;
 
   return 0;
 }
