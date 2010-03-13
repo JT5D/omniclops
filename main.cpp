@@ -867,8 +867,24 @@ int main(int argc, char* argv[]) {
 		// update motion
 		motion_detector->update(l_,ww,hh,20);
 
-		// display motion
-		motion_detector->show(l_,ww,hh);
+		if (dist_to_upper_mirror > -1) {
+
+			// attention boxes for the lower mirror
+			motion_detector->attention_boxes(
+				l_, ww,hh,
+				hh/2, hh*75/100, true,false);
+
+			// attention boxes for the upper mirror
+			motion_detector->attention_boxes(
+				l_, ww,hh,
+				hh*29/100, hh/2, false,true);
+		}
+		else {
+			// attention boxes
+			motion_detector->attention_boxes(
+				l_, ww,hh,
+				0, hh, true,true);
+		}
 
 		// save to motion file
 		if (save_motion_filename != "") {
