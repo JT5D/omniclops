@@ -26,10 +26,11 @@
 #include <stdio.h>
 #include <sstream>
 #include "drawing.h"
+#include "omni.h"
 
 #define MOTION_IMAGE_WIDTH         128
-#define MOTION_IMAGE_HEIGHT        128
-#define MOTION_MAX_ATTENTION_BOXES 10
+#define MOTION_IMAGE_HEIGHT        256
+#define MOTION_MAX_ATTENTION_BOXES 8
 
 using namespace std;
 
@@ -49,8 +50,24 @@ protected:
 		unsigned char* img,
 		int img_width,
 		int img_height);
+	void get_range_point(
+		int x,
+		int y_upper,
+		int y_lower,
+		int img_width,
+		int* unwarp_lookup,
+		int* ray_map,
+		int &range_mm,
+		int &elevation_mm);
+
 public:
 
+	void stereo_range(
+		int img_width,
+		int img_height,
+		int* unwarp_lookup,
+		int* ray_map,
+		int max_range_mm);
 	void attention_boxes(
 		unsigned char* img,
 		int img_width,

@@ -34,12 +34,6 @@ using namespace std;
 
 class stackedstereo {
 public:
-	static short get_feature_similarity(
-		short* edge_magnitude,
-		short* magnitude,
-	    int r0,
-	    int r1);
-
 	static int get_features_from_unwarped(
 		unsigned char* unwarped_img,
 		int img_width,
@@ -53,9 +47,7 @@ public:
 		int x,
 		int no_of_features,
 		short* features,
-		short* magnitude,
-		short* edge_magnitude,
-		int* unwarp_lookup_reverse,
+		int* unwarp_lookup,
 		int* ray_map,
 		int img_width,
 		int img_height,
@@ -66,7 +58,7 @@ public:
 		unsigned char* unwarped_img,
 		int img_width,
 		int img_height,
-		int* unwarp_lookup_reverse,
+		int* unwarp_lookup,
 		int* ray_map,
 		int max_range_mm,
 		vector<short> &points,

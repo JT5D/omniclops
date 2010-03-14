@@ -144,7 +144,6 @@ optical_flow_termination_criteria, 0);
 	}
 }
 
-
 int main(int argc, char* argv[]) {
   int ww = 640;
   int hh = 480;
@@ -837,7 +836,6 @@ int main(int argc, char* argv[]) {
     }
 
 	if (show_stereo_disparity) {
-		int max_disparity_pixels = hh*10/100;
 		bool show_feats = true;
 		int max_range_mm = 3000;
 		vector<short> points;
@@ -847,7 +845,7 @@ int main(int argc, char* argv[]) {
 
 		stackedstereo::get_point_cloud(
 			l_,ww,hh,
-			lcam->unwarp_lookup_reverse,
+			lcam->unwarp_lookup,
 			lcam->ray_map,
 			max_range_mm,
 			points,
@@ -865,7 +863,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		// update motion
-		motion_detector->update(l_,ww,hh,20);
+		motion_detector->update(l_,ww,hh,30);
 
 		if (dist_to_upper_mirror > -1) {
 
@@ -878,6 +876,13 @@ int main(int argc, char* argv[]) {
 			motion_detector->attention_boxes(
 				l_, ww,hh,
 				hh*29/100, hh/2, false,true);
+
+			int max_range_mm = 3000;
+			motion_detector->stereo_range(
+				ww, hh,
+				lcam->unwarp_lookup,
+				lcam->ray_map,
+				max_range_mm);
 		}
 		else {
 			// attention boxes

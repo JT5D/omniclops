@@ -52,7 +52,8 @@ static int xioctl(int fd, int request, void *arg)
 {
         int r;
 
-        do r = ioctl (fd, request, arg);
+        do
+        	r = ioctl (fd, request, arg);
         while (-1 == r && EINTR == errno);
 
         return r;
@@ -673,22 +674,19 @@ unsigned char *Camera::Get() {
             return 0;
           case EIO:
           default:
-            errno_exit ("VIDIOC_DQBUF");
+            return 0; //errno_exit ("VIDIOC_DQBUF");
         }
       }
 
       assert((int)buf.index < n_buffers);
 
-//process_image(buffers[buf.index].start);
-
-//printf("** LENGHT ** : %d\n", buffers[buf.index].length);
-memcpy(data, (unsigned char *)buffers[buf.index].start, buffers[buf.index].length);
-
+      memcpy(data, (unsigned char *)buffers[buf.index].start, buffers[buf.index].length);
 
       if(-1 == xioctl (fd, VIDIOC_QBUF, &buf))
-        errno_exit ("VIDIOC_QBUF");
+          return 0;
+          //errno_exit ("VIDIOC_QBUF");
 
-return data;
+      return data;
 
 
       break;

@@ -216,7 +216,8 @@ void motion::attention_boxes(
 				x2--;
 				if (x2 < 0) x2 += MOTION_IMAGE_WIDTH;
 			}
-			if (no_of_attention_boxes < MOTION_MAX_ATTENTION_BOXES) {
+			if ((no_of_attention_boxes < MOTION_MAX_ATTENTION_BOXES) &&
+				(max > min+1)) {
 			    attention_box[no_of_attention_boxes*4] = x2;
 			    attention_box[no_of_attention_boxes*4+1] = min;
 			    attention_box[no_of_attention_boxes*4+2] = x;
@@ -236,10 +237,122 @@ void motion::attention_boxes(
 			int bx = (attention_box[i*4+2]+1) * 2 * img_width / (MOTION_IMAGE_WIDTH*2);
 			int by = (attention_box[i*4+3]+1) * 2 * img_height / (MOTION_IMAGE_HEIGHT*2);
 			if (bx > tx) {
-			    drawing::drawLine(img, img_width, img_height, tx,ty,bx,ty, r,g,b, 0, false);
-			    drawing::drawLine(img, img_width, img_height, tx,by,bx,by, r,g,b, 0, false);
-			    drawing::drawLine(img, img_width, img_height, tx,ty,tx,by, r,g,b, 0, false);
-			    drawing::drawLine(img, img_width, img_height, bx,ty,bx,by, r,g,b, 0, false);
+			    drawing::drawLine(img, img_width, img_height, tx,ty,bx,ty, r,g,b, 1, false);
+			    drawing::drawLine(img, img_width, img_height, tx,by,bx,by, r,g,b, 1, false);
+			    drawing::drawLine(img, img_width, img_height, tx,ty,tx,by, r,g,b, 1, false);
+			    drawing::drawLine(img, img_width, img_height, bx,ty,bx,by, r,g,b, 1, false);
+			}
+		}
+	}
+}
+
+/*!
+ * \brief transforms pixel coordinates on the upper and lower mirrors into a triangulated point in cartesian space
+ * \param x x pixel coordinate in the unwarped image
+ * \param y_upper y pixel coordinate for the upper mirror within the unwarped image
+ * \param y_lower y pixel coordinate for the lower mirror within the unwarped image
+ * \param img_width width of teh unwarped image
+ * \param unwarp_lookup lookup table for the unwarped image
+ * \param ray_map lookup for ray vectors
+ * \param range_mm returned horizontal range to the interception point
+ * \param elevation_mm returned vertical position of the interception point
+ */
+void motion::get_range_point(
+	int x,
+	int y_upper,
+	int y_lower,
+	int img_width,
+	int* unwarp_lookup,
+	int* ray_map,
+	int &range_mm,
+	int &elevation_mm)
+{
+	int n_upper = y_upper*img_width + x;
+	n_upper = unwarp_lookup[n_upper]*6;
+	int ray_x0 = ray_map[n_upper];
+	int ray_y0 = ray_map[n_upper+1];
+	int ray_z0 = ray_map[n_upper+2];
+	int ray_x1 = ray_map[n_upper+3];
+	int ray_y1 = ray_map[n_upper+4];
+	int ray_z1 = ray_map[n_upper+5];
+	int dist0 = (int)sqrt(ray_x0*ray_x0 + ray_y0*ray_y0);
+	int dist1 = (int)sqrt(ray_x1*ray_x1 + ray_y1*ray_y1);
+
+	int n_lower = y_lower*img_width + x;
+	n_lower = unwarp_lookup[n_lower]*6;
+	int ray_x2 = ray_map[n_lower];
+	int ray_y2 = ray_map[n_lower+1];
+	int ray_z2 = ray_map[n_lower+2];
+	int ray_x3 = ray_map[n_lower+3];
+	int ray_y3 = ray_map[n_lower+4];
+	int ray_z3 = ray_map[n_lower+5];
+	int dist2 = (int)sqrt(ray_x2*ray_x2 + ray_y2*ray_y2);
+	int dist3 = (int)sqrt(ray_x3*ray_x3 + ray_y3*ray_y3);
+
+	float ix=0, iz=0;
+	omni::intersection(dist0,ray_z0,dist1,ray_z1, dist2,ray_z2,dist3,ray_z3, ix,iz);
+	range_mm = abs((int)ix);
+	elevation_mm = abs((int)iz);
+}
+
+void motion::stereo_range(
+	int img_width,
+	int img_height,
+	int* unwarp_lookup,
+	int* ray_map,
+	int max_range_mm)
+{
+	int h = img_height/2;
+	for (int i = 0; i < no_of_attention_boxes; i++) {
+		int ty0 = (attention_box[i*4+1]+1) * 2 * img_height / (MOTION_IMAGE_HEIGHT*2);
+		if (ty0 > h) {
+			int tx0 = (attention_box[i*4]+1) * 2 * img_width / (MOTION_IMAGE_WIDTH*2);
+			int bx0 = (attention_box[i*4+2]+1) * 2 * img_width / (MOTION_IMAGE_WIDTH*2);
+			int by0 = (attention_box[i*4+3]+1) * 2 * img_height / (MOTION_IMAGE_HEIGHT*2);
+
+			int x_lower = tx0 + ((bx0 - tx0)/2);
+			int y_lower1 = ty0;
+			int y_lower2 = by0;
+
+	    	for (int j = 0; j < no_of_attention_boxes; j++) {
+				int ty1 = (attention_box[j*4+1]+1) * 2 * img_height / (MOTION_IMAGE_HEIGHT*2);
+				if (ty1 < h) {
+					int tx1 = (attention_box[j*4]+1) * 2 * img_width / (MOTION_IMAGE_WIDTH*2);
+					int bx1 = (attention_box[j*4+2]+1) * 2 * img_width / (MOTION_IMAGE_WIDTH*2);
+					int by1 = (attention_box[j*4+3]+1) * 2 * img_height / (MOTION_IMAGE_HEIGHT*2);
+				    if (((tx1 > tx0) && (tx1 < bx0)) ||
+				    	((bx1 > tx0) && (bx1 < bx0))) {
+				    	int x_upper = tx1 + ((bx1 - tx1)/2);
+				    	int y_upper1 = ty1;
+				    	int y_upper2 = by1;
+
+				    	int range_mm = 0;
+				    	int elevation_mm = 0;
+                        get_range_point(
+                        	x_lower,
+                        	y_upper1,
+                        	y_lower1,
+                        	img_width,
+                        	unwarp_lookup,
+                        	ray_map,
+                        	range_mm,
+                        	elevation_mm);
+
+				    	int range_mm2 = 0;
+				    	int elevation_mm2 = 0;
+                        get_range_point(
+                        	x_lower,
+                        	y_upper2,
+                        	y_lower2,
+                        	img_width,
+                        	unwarp_lookup,
+                        	ray_map,
+                        	range_mm2,
+                        	elevation_mm);
+
+                        printf("range_mm %d %d\n", range_mm, range_mm2);
+				    }
+				}
 			}
 		}
 	}
