@@ -161,6 +161,7 @@ int main(int argc, char* argv[]) {
   float outer_radius = 90;
   float inner_radius = 30;
   float upper_mirror_outer_radius = 40;
+  float upper_mirror_scale_percent = 150;
   //int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
@@ -181,6 +182,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --diam                  Diameter of the spherical mirror in millimetres");
   opt->addUsage( "     --dist                  Distance from camera lens to nearest point on the mirror surface in millimetres");
   opt->addUsage( "     --distupper             Distance from camera lens to nearest point on the upper mirror surface in millimetres for a stacked configuration");
+  opt->addUsage( "     --scaleupper            A scaling percentage used to enlarge the vertical scale of the upper unwarped mirror image");
   opt->addUsage( "     --focal                 Focal length in millimetres");
   opt->addUsage( "     --elevation             Height of the camera above the ground in millimetres");
   opt->addUsage( "     --radius                Outer radius as a percentage of the image width");
@@ -247,6 +249,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "skip", 's' );
   opt->setOption(  "fov" );
   opt->setOption(  "harris" );
+  opt->setOption(  "scaleupper");
 
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
@@ -486,6 +489,10 @@ int main(int argc, char* argv[]) {
 	  mirror_diameter = atof(opt->getValue("diam"));
   }
 
+  if( opt->getValue( "scaleupper" ) != NULL  ) {
+	  upper_mirror_scale_percent = atof(opt->getValue("scaleupper"));
+  }
+
   // distance between the camera and closest point on the mirror
   float dist_to_mirror = 60;
   if( opt->getValue( "dist" ) != NULL  ) {
@@ -670,6 +677,7 @@ int main(int argc, char* argv[]) {
 		inner_radius,
 		outer_radius,
 		upper_mirror_outer_radius,
+		upper_mirror_scale_percent,
 		camera_height,
 		ww, hh);
 
@@ -843,13 +851,38 @@ int main(int argc, char* argv[]) {
 		// unwarp the mirror images
 		lcam->unwarp(l_,ww,hh,3);
 
-		stackedstereo::get_point_cloud(
-			l_,ww,hh,
-			lcam->unwarp_lookup,
-			lcam->ray_map,
-			max_range_mm,
-			points,
-			show_feats);
+		// detect harris corners
+	    int minimum_separation = 8;
+	    int sensitivity_percent = 99;
+
+		int centre_x = ww/2;
+		int centre_y = hh/2;
+		int outer_radius_pixels = (int)(ww * outer_radius / 200)*90/100;
+
+	    harris::get_features(
+			l,
+		    frame1_1C,
+			eig_image,
+			temp_image,
+			pyramid1,
+			minimum_separation,
+			centre_x, centre_y,
+			outer_radius_pixels,
+			sensitivity_percent,
+			harris_filename,
+			harris_features);
+
+	    // match harris features
+		int max_ssd = 500000;
+		vector<int> matches;
+		stackedstereo::match_corner_features(
+			l_, ww, hh,
+			max_ssd,
+			harris_features,
+			matches);
+
+		stackedstereo::show(l_,ww,hh,matches);
+		//printf("matches %d\n", (int)matches.size()/4);
 	}
 
 	if (show_motion) {
