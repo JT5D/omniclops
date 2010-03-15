@@ -161,7 +161,7 @@ int main(int argc, char* argv[]) {
   float outer_radius = 90;
   float inner_radius = 30;
   float upper_mirror_outer_radius = 40;
-  float upper_mirror_scale_percent = 150;
+  float upper_mirror_scale_percent = 160;
   //int FOV_degrees = 50;
 
   // Port to start streaming from - second video will be on this + 1
@@ -853,7 +853,7 @@ int main(int argc, char* argv[]) {
 
 		// detect harris corners
 	    int minimum_separation = 8;
-	    int sensitivity_percent = 99;
+	    int sensitivity_percent = 100;
 
 		int centre_x = ww/2;
 		int centre_y = hh/2;
@@ -873,15 +873,15 @@ int main(int argc, char* argv[]) {
 			harris_features);
 
 	    // match harris features
-		int max_ssd = 500000;
+		int max_matches = 200;
 		vector<int> matches;
 		stackedstereo::match_corner_features(
 			l_, ww, hh,
-			max_ssd,
+			max_matches,
 			harris_features,
 			matches);
 
-		stackedstereo::show(l_,ww,hh,matches);
+		stackedstereo::show(l_,ww,hh,max_matches,matches);
 		//printf("matches %d\n", (int)matches.size()/4);
 	}
 
