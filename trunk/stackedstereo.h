@@ -58,7 +58,7 @@ public:
 		unsigned char *img,
 		int img_width,
 		int img_height,
-		int max_ssd,
+		int max_matches,
 		vector<int> &features,
 		vector<int> &matches);
 
@@ -66,6 +66,7 @@ public:
 		unsigned char* img,
 		int img_width,
 		int img_height,
+		int no_of_matches,
 		vector<int> &matches);
 };
 

@@ -84,7 +84,7 @@ int stackedstereo::SSD(
 	for (int dx = -patch_radius_pixels; dx <= patch_radius_pixels; dx++) {
 		int xx0 = x0 + dx;
 		int xx1 = x1 + dx;
-		for (int dy = -patch_radius_pixels; dy <= patch_radius_pixels; dy++) {
+		for (int dy = -patch_radius_pixels*2; dy <= patch_radius_pixels*2; dy++) {
 			int yy0 = y0 + dy;
 			int yy1 = y1 + dy;
             int n0 = (yy0*img_width + xx0)*3;
@@ -103,33 +103,56 @@ void stackedstereo::match_corner_features(
 	unsigned char *img,
 	int img_width,
 	int img_height,
-	int max_ssd,
+	int max_matches,
 	vector<int> &features,
 	vector<int> &matches)
 {
+	int offset_x = 0;
 	matches.clear();
 
-	// bucket the features so that subsequent searching is reduced
-	vector<int> features_lower[img_width/2 + 1];
-	vector<int> features_upper[img_width/2 + 1];
+	const int downsample_factor = 5;
 
+	// bucket the features so that subsequent searching is reduced
+	vector<int> features_lower[img_width/downsample_factor + 1];
+	vector<int> features_upper[img_width/downsample_factor + 1];
+	vector<int> scores;
+
+	int minimum_match_length = img_height*20/100;
+	const int border = 10;
 	int h = img_height/2;
 	for (int f = (int)features.size()-2; f >= 0; f -= 2) {
 		int x = features[f];
 		int y = features[f + 1];
-        if (y < h) {
-        	features_upper[x/2].push_back(x);
-        	features_upper[x/2].push_back(y);
-        }
-        else {
-        	features_lower[x/2].push_back(x);
-        	features_lower[x/2].push_back(y);
-        }
+
+		bool is_border = false;
+		if (y > border) {
+			int n = ((y-border)*img_width + x)*3;
+			if ((img[n] == 0) && (img[n+1] == 0) && (img[n+2] == 0)) is_border = true;
+		}
+		if (y < img_height-1-border) {
+			int n = ((y+border)*img_width + x)*3;
+			if ((img[n] == 0) && (img[n+1] == 0) && (img[n+2] == 0)) is_border = true;
+		}
+
+		if (!is_border) {
+			if (y < h) {
+				int idx = x/downsample_factor;
+				features_upper[idx].push_back(x);
+				features_upper[idx].push_back(y);
+			}
+			else {
+				int idx = (x + offset_x)/downsample_factor;
+				if (idx < 0) idx += img_width/downsample_factor;
+				if (idx >= img_width/downsample_factor) idx -= img_width/downsample_factor;
+				features_lower[idx].push_back(x);
+				features_lower[idx].push_back(y);
+			}
+		}
 	}
 
 	const int horizontal_tollerance = 1;
 	const int patch_radius_pixels = 5;
-	for (int i = (img_width/2) - 4; i >= 2; i--) {
+	for (int i = (img_width/downsample_factor) - 4; i >= 2; i--) {
 		if ((int)features_upper[i].size() > 0) {
 			// for each feature in the upper mirror
 			for (int f_upper = (int)features_upper[i].size()-2; f_upper >= 0; f_upper -= 2) {
@@ -137,15 +160,14 @@ void stackedstereo::match_corner_features(
 				int y0 = features_upper[i][f_upper+1];
 				int matched_x = -1;
 				int matched_y = -1;
-				int min_ssd = max_ssd;
+				int min_ssd = 50000000;
 				// compare to features in the lower mirror, with some horizontal tollerance
 		        for (int i2 = i-horizontal_tollerance; i2 <= i+horizontal_tollerance; i2++) {
 		        	for (int f_lower = (int)features_lower[i2].size()-2; f_lower >= 0; f_lower -= 2) {
 						int x1 = features_lower[i2][f_lower];
 						int y1 = features_lower[i2][f_lower+1];
 
-						int n = ((y1-5)*img_width + x1)*3;
-						if (!((img[n] == 0) && (img[n+1] == 0) && (img[n+2] == 0))) {
+						if (y1 - y0 > minimum_match_length) {
 							int ssd = SSD(img, img_width, img_height, x0, y0, x1, y1, patch_radius_pixels);
 							if (ssd < min_ssd) {
 								min_ssd = ssd;
@@ -156,70 +178,59 @@ void stackedstereo::match_corner_features(
 		        	}
 		        }
 
-		        if (matched_x > -1) {
+		        if (matched_x != -1) {
 		        	matches.push_back(x0);
 		        	matches.push_back(y0);
 		        	matches.push_back(matched_x);
 		        	matches.push_back(matched_y);
+		        	scores.push_back(min_ssd);
 		        }
 
 			}
 		}
 	}
+
+	int no_of_matches = (int)scores.size();
+    int max = max_matches;
+    if ((int)scores.size() < max) max = (int)scores.size();
+    for (int i = 0; i < max; i++) {
+    	int sc = scores[i];
+    	int winner = -1;
+    	for (int j = i + 1; j < no_of_matches; j++) {
+    		if (scores[j] < sc) {
+    			sc = scores[j];
+    			winner = j;
+    		}
+    	}
+        if (winner > -1) {
+        	int temp = scores[i];
+        	scores[i] = scores[winner];
+        	scores[winner] = temp;
+        	for (int k = 0; k < 4; k++) {
+        		temp = matches[i*4 + k];
+        		matches[i*4 + k] = matches[winner*4 + k];
+        		matches[winner*4 + k] = temp;
+        	}
+        }
+    }
+
 }
 
 void stackedstereo::show(
 	unsigned char* img,
 	int img_width,
 	int img_height,
+	int no_of_matches,
 	vector<int> &matches)
 {
-	int n = 0,r = 0, g = 255, b = 0;
-	for (int i = (int)matches.size()-4; i >= 0; i -= 4, n++) {
-        int x0 = matches[i];
-        int y0 = matches[i+1];
-        int x1 = matches[i+2];
-        int y1 = matches[i+3];
-        /*
-        switch(n % 6) {
-        case 0: {
-        	r = 255;
-        	g = 0;
-        	b = 0;
-        	break;
-        }
-        case 1: {
-        	r = 0;
-        	g = 255;
-        	b = 0;
-        	break;
-        }
-        case 2: {
-        	r = 0;
-        	g = 0;
-        	b = 255;
-        	break;
-        }
-        case 3: {
-        	r = 255;
-        	g = 0;
-        	b = 255;
-        	break;
-        }
-        case 4: {
-        	r = 255;
-        	g = 255;
-        	b = 0;
-        	break;
-        }
-        case 5: {
-        	r = 0;
-        	g = 255;
-        	b = 255;
-        	break;
-        }
-        }
-        */
+	if ((int)matches.size()/4 < no_of_matches) no_of_matches = (int)matches.size()/4;
+
+	int r = 255, g = 0, b = 0;
+	for (int i = 0; i < no_of_matches; i++) {
+        int x0 = matches[i*4];
+        int y0 = matches[i*4+1];
+        int x1 = matches[i*4+2];
+        int y1 = matches[i*4+3];
         drawing::drawLine(img, img_width, img_height, x0, y0, x1, y1, r, g, b, 0, false);
 	}
 }
