@@ -133,6 +133,7 @@ public:
     	float focal_length,
     	float inner_radius_percent,
     	float outer_radius_percent,
+    	float upper_mirror_scale_percent,
     	float camera_height,
         int img_width,
         int img_height,
@@ -147,6 +148,7 @@ public:
     	float inner_radius_percent,
     	float outer_radius_percent,
     	float upper_mirror_outer_radius_percent,
+    	float upper_mirror_scale_percent,
     	float camera_height_mm,
         int img_width,
         int img_height);

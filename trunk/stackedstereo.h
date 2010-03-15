@@ -34,6 +34,8 @@ using namespace std;
 
 class stackedstereo {
 public:
+
+	/*
 	static int get_features_from_unwarped(
 		unsigned char* unwarped_img,
 		int img_width,
@@ -42,30 +44,29 @@ public:
 		short* magnitude,
 		short* edge_magnitude,
 		short* features);
+		*/
 
-	static void match_unwarped(
-		int x,
-		int no_of_features,
-		short* features,
-		int* unwarp_lookup,
-		int* ray_map,
+	static int SSD(
+		unsigned char *img,
 		int img_width,
 		int img_height,
-		int max_range_mm,
-		vector<short> &points);
+		int x0, int y0,
+		int x1, int y1,
+		int patch_radius_pixels);
 
-	static void get_point_cloud(
-		unsigned char* unwarped_img,
+	static void match_corner_features(
+		unsigned char *img,
 		int img_width,
 		int img_height,
-		int* unwarp_lookup,
-		int* ray_map,
-		int max_range_mm,
-		vector<short> &points,
-		bool show);
+		int max_ssd,
+		vector<int> &features,
+		vector<int> &matches);
 
-	stackedstereo();
-	virtual ~stackedstereo();
+	static void show(
+		unsigned char* img,
+		int img_width,
+		int img_height,
+		vector<int> &matches);
 };
 
 #endif /* STACKEDSTEREO_H_ */

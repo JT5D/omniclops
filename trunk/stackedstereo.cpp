@@ -19,13 +19,7 @@
 
 #include "stackedstereo.h"
 
-stackedstereo::stackedstereo() {
-
-}
-
-stackedstereo::~stackedstereo() {
-}
-
+/*
 int stackedstereo::get_features_from_unwarped(
 	unsigned char* unwarped_img,
 	int img_width,
@@ -75,173 +69,157 @@ int stackedstereo::get_features_from_unwarped(
 	}
 	return(no_of_features);
 }
+*/
 
-void stackedstereo::match_unwarped(
-	int x,
-	int no_of_features,
-	short* features,
-	int* unwarp_lookup,
-	int* ray_map,
+int stackedstereo::SSD(
+	unsigned char *img,
 	int img_width,
 	int img_height,
-	int max_range_mm,
-	vector<short> &points)
+	int x0, int y0,
+	int x1, int y1,
+	int patch_radius_pixels)
 {
-	int max_upper_index = 0;
-	for (int f = 0; f < no_of_features; f++) {
-        int y = features[f];
-        if (y >= img_height/2) {
-        	max_upper_index = f;
-        	break;
-        }
+	int ssd = 0;
+
+	for (int dx = -patch_radius_pixels; dx <= patch_radius_pixels; dx++) {
+		int xx0 = x0 + dx;
+		int xx1 = x1 + dx;
+		for (int dy = -patch_radius_pixels; dy <= patch_radius_pixels; dy++) {
+			int yy0 = y0 + dy;
+			int yy1 = y1 + dy;
+            int n0 = (yy0*img_width + xx0)*3;
+            int n1 = (yy1*img_width + xx1)*3;
+            int b = img[n0] - img[n1];
+            int g = img[n0+1] - img[n1+1];
+            int r = img[n0+2] - img[n1+2];
+            ssd += r*r + g*g + b*b;
+		}
 	}
-
-	vector<int> best_points;
-	vector<int> projected_lower_mirror_features;
-	vector<int> projected_upper_mirror_features;
-
-	int min_range_mm = 300;
-	int best_range_mm = 0;
-	int max_hits = 0;
-	for (int range_mm = min_range_mm; range_mm < max_range_mm; range_mm += 5) {
-		// project the lower features
-		projected_lower_mirror_features.clear();
-	    for (int f_lower = no_of_features-1; f_lower > max_upper_index; f_lower--) {
-
-	    	// get the edge feature position
-            int y_lower = features[f_lower];
-            int n_lower = unwarp_lookup[y_lower*img_width + x]*6;
-
-            int x0_lower = ray_map[n_lower];
-            int y0_lower = ray_map[n_lower+1];
-            int x1_lower = ray_map[n_lower+3];
-            int y1_lower = ray_map[n_lower+4];
-
-            // get the ray vector and length
-            int dx = x1_lower - x0_lower;
-            int dy = y1_lower - y0_lower;
-            int ray_length_mm = (int)sqrt(dx*dx + dy*dy);
-
-            if (ray_length_mm > 0) {
-                int z0_lower = ray_map[n_lower+2];
-                int z1_lower = ray_map[n_lower+5];
-                int dz = z1_lower - z0_lower;
-                // project the ray to this desired range
-                int projected_x = x0_lower + (range_mm * dx / ray_length_mm);
-                int projected_y = y0_lower + (range_mm * dy / ray_length_mm);
-                int projected_z = z0_lower + (range_mm * dz / ray_length_mm);
-                projected_lower_mirror_features.push_back(projected_x);
-                projected_lower_mirror_features.push_back(projected_y);
-                projected_lower_mirror_features.push_back(projected_z);
-            }
-	    }
-
-	    // project the upper features
-		projected_upper_mirror_features.clear();
-	    for (int f_upper = max_upper_index; f_upper >= 0; f_upper--) {
-
-	    	// get the edge feature position
-            int y_upper = features[f_upper];
-            int n_upper = unwarp_lookup[y_upper*img_width + x]*6;
-
-            int x0_upper = ray_map[n_upper];
-            int y0_upper = ray_map[n_upper+1];
-            int x1_upper = ray_map[n_upper+3];
-            int y1_upper = ray_map[n_upper+4];
-
-            // get the ray vector and length
-            int dx = x1_upper - x0_upper;
-            int dy = y1_upper - y0_upper;
-            int ray_length_mm = (int)sqrt(dx*dx + dy*dy);
-
-            if (ray_length_mm > 0) {
-                int z0_upper = ray_map[n_upper+2];
-                int z1_upper = ray_map[n_upper+5];
-                int dz = z1_upper - z0_upper;
-                // project the ray to this desired range
-                int projected_x = x0_upper + (range_mm * dx / ray_length_mm);
-                int projected_y = y0_upper + (range_mm * dy / ray_length_mm);
-                int projected_z = z0_upper + (range_mm * dz / ray_length_mm);
-                projected_upper_mirror_features.push_back(projected_x);
-                projected_upper_mirror_features.push_back(projected_y);
-                projected_upper_mirror_features.push_back(projected_z);
-            }
-	    }
-
-	    // match the feature positions
-        int max_separation = 20;
-	    int hits = 0;
-	    for (int f_lower = (int)projected_lower_mirror_features.size()-3; f_lower >= 0; f_lower -= 3) {
-            int lower_z = projected_lower_mirror_features[f_lower + 2];
-            for (int f_upper = (int)projected_upper_mirror_features.size()-3; f_upper >= 0; f_upper -= 3) {
-                int upper_z = projected_upper_mirror_features[f_upper + 2];
-                int dz = abs(upper_z - lower_z);
-                if (dz < max_separation) {
-                	hits++;
-                	//break;
-                }
-            }
-	    }
-
-	    int threshold = 0;//((int)projected_lower_mirror_features.size()/3) * 70/100;
-
-        if ((hits > threshold) && (hits > max_hits)) {
-        	max_hits = hits;
-        	best_range_mm = range_mm;
-        	best_points.clear();
-    	    for (int f_lower = (int)projected_lower_mirror_features.size()-3; f_lower >= 0; f_lower -= 3) {
-                best_points.push_back(projected_lower_mirror_features[f_lower]);
-                best_points.push_back(projected_lower_mirror_features[f_lower + 1]);
-                best_points.push_back(projected_lower_mirror_features[f_lower + 2]);
-    	    }
-        }
-	}
-
-	for (int i = 0; i < (int)best_points.size(); i++) {
-		points.push_back(best_points[i]);
-	}
-
-	printf("range %d (%d/%d)\n", best_range_mm, max_hits, (int)projected_lower_mirror_features.size()/3);
+	return(ssd);
 }
 
-void stackedstereo::get_point_cloud(
-	unsigned char* unwarped_img,
+
+void stackedstereo::match_corner_features(
+	unsigned char *img,
 	int img_width,
 	int img_height,
-	int* unwarp_lookup,
-	int* ray_map,
-	int max_range_mm,
-	vector<short> &points,
-	bool show)
+	int max_ssd,
+	vector<int> &features,
+	vector<int> &matches)
 {
-	points.clear();
-	short magnitude[img_height];
-	short edge_magnitude[img_height];
-	short features[MAX_STACKED_STEREO_FEATURES];
+	matches.clear();
 
-	memset((void*)magnitude, '\0', img_height*sizeof(short));
-	memset((void*)edge_magnitude, '\0', img_height*sizeof(short));
+	// bucket the features so that subsequent searching is reduced
+	vector<int> features_lower[img_width/2 + 1];
+	vector<int> features_upper[img_width/2 + 1];
 
-	for (int x = 0; x < img_width; x++) {
-		int no_of_features = get_features_from_unwarped(
-			unwarped_img,
-			img_width,
-			img_height,
-			x,
-			magnitude,
-			edge_magnitude,
-			features);
-
-		match_unwarped(
-			x,
-			no_of_features,
-			features,
-			unwarp_lookup,
-			ray_map,
-			img_width,
-			img_height,
-			max_range_mm,
-			points);
+	int h = img_height/2;
+	for (int f = (int)features.size()-2; f >= 0; f -= 2) {
+		int x = features[f];
+		int y = features[f + 1];
+        if (y < h) {
+        	features_upper[x/2].push_back(x);
+        	features_upper[x/2].push_back(y);
+        }
+        else {
+        	features_lower[x/2].push_back(x);
+        	features_lower[x/2].push_back(y);
+        }
 	}
 
+	const int horizontal_tollerance = 1;
+	const int patch_radius_pixels = 5;
+	for (int i = (img_width/2) - 4; i >= 2; i--) {
+		if ((int)features_upper[i].size() > 0) {
+			// for each feature in the upper mirror
+			for (int f_upper = (int)features_upper[i].size()-2; f_upper >= 0; f_upper -= 2) {
+				int x0 = features_upper[i][f_upper];
+				int y0 = features_upper[i][f_upper+1];
+				int matched_x = -1;
+				int matched_y = -1;
+				int min_ssd = max_ssd;
+				// compare to features in the lower mirror, with some horizontal tollerance
+		        for (int i2 = i-horizontal_tollerance; i2 <= i+horizontal_tollerance; i2++) {
+		        	for (int f_lower = (int)features_lower[i2].size()-2; f_lower >= 0; f_lower -= 2) {
+						int x1 = features_lower[i2][f_lower];
+						int y1 = features_lower[i2][f_lower+1];
+
+						int n = ((y1-5)*img_width + x1)*3;
+						if (!((img[n] == 0) && (img[n+1] == 0) && (img[n+2] == 0))) {
+							int ssd = SSD(img, img_width, img_height, x0, y0, x1, y1, patch_radius_pixels);
+							if (ssd < min_ssd) {
+								min_ssd = ssd;
+								matched_x = x1;
+								matched_y = y1;
+							}
+						}
+		        	}
+		        }
+
+		        if (matched_x > -1) {
+		        	matches.push_back(x0);
+		        	matches.push_back(y0);
+		        	matches.push_back(matched_x);
+		        	matches.push_back(matched_y);
+		        }
+
+			}
+		}
+	}
+}
+
+void stackedstereo::show(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	vector<int> &matches)
+{
+	int n = 0,r = 0, g = 255, b = 0;
+	for (int i = (int)matches.size()-4; i >= 0; i -= 4, n++) {
+        int x0 = matches[i];
+        int y0 = matches[i+1];
+        int x1 = matches[i+2];
+        int y1 = matches[i+3];
+        /*
+        switch(n % 6) {
+        case 0: {
+        	r = 255;
+        	g = 0;
+        	b = 0;
+        	break;
+        }
+        case 1: {
+        	r = 0;
+        	g = 255;
+        	b = 0;
+        	break;
+        }
+        case 2: {
+        	r = 0;
+        	g = 0;
+        	b = 255;
+        	break;
+        }
+        case 3: {
+        	r = 255;
+        	g = 0;
+        	b = 255;
+        	break;
+        }
+        case 4: {
+        	r = 255;
+        	g = 255;
+        	b = 0;
+        	break;
+        }
+        case 5: {
+        	r = 0;
+        	g = 255;
+        	b = 255;
+        	break;
+        }
+        }
+        */
+        drawing::drawLine(img, img_width, img_height, x0, y0, x1, y1, r, g, b, 0, false);
+	}
 }

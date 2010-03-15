@@ -1150,6 +1150,7 @@ void omni::create_ray_map(
 	float inner_radius_percent,
 	float outer_radius_percent,
 	float upper_mirror_outer_radius_percent,
+	float upper_mirror_scale_percent,
 	float camera_height_mm,
     int img_width,
     int img_height)
@@ -1162,6 +1163,7 @@ void omni::create_ray_map(
 			focal_length,
 			0,
 			outer_radius_percent,
+			0,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1178,6 +1180,7 @@ void omni::create_ray_map(
 			focal_length,
 			0,
 			upper_mirror_outer_radius_percent,
+			upper_mirror_scale_percent,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1190,6 +1193,7 @@ void omni::create_ray_map(
 			focal_length,
 			inner_radius_percent,
 			outer_radius_percent,
+			upper_mirror_scale_percent,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1204,6 +1208,7 @@ void omni::create_ray_map(
 	float focal_length,
 	float inner_radius_percent,
 	float outer_radius_percent,
+	float upper_mirror_scale_percent,
 	float camera_height_mm,
     int img_width,
     int img_height,
@@ -1304,6 +1309,11 @@ void omni::create_ray_map(
 			}
     	}
     	else {
+    		// a scale factor applied to teh upper mirror
+    		// which equalises the vertical scale for the two mirrors
+    		if (upper_mirror_scale_percent <= 0) upper_mirror_scale_percent = 1.5f;
+    		float upper_mirror_scale = upper_mirror_scale_percent / 100.0f;
+
     		// unwarp for stacked mirrors
     		int idx, raw_x,raw_y,n2;
     		float raw_radius;
@@ -1319,14 +1329,14 @@ void omni::create_ray_map(
 				angle = x * 3.1415927f*2 / img_width;
 				float sin_ang = (float)sin(angle);
 				float cos_ang = (float)cos(angle);
-				for (int y = 0; y < img_height; y++) {
+				for (float y = 0; y < img_height; y+=0.5f) {
 
 					// upper
-					idx = y * inner_rad / img_height;
+					idx = (int)(y * inner_rad / img_height);
 					raw_radius = calibration_radius[idx];
 					raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 					raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-					n = (((img_height/2)-(y/4)) * img_width)+x;
+					n = (((img_height/2)-(int)((y/4.0f)*upper_mirror_scale)) * img_width)+x;
 					n2 = (raw_y * img_width)+raw_x;
 					if ((n2 > -1) && (n2 < pixels) &&
 						(n > -1) && (n < pixels)) {
@@ -1336,11 +1346,11 @@ void omni::create_ray_map(
 
 					// lower
 					if (y < img_height/2) {
-						idx = inner_rad + (y * (img_height - inner_rad) / img_height);
+						idx = inner_rad + (int)(y * (img_height - inner_rad) / img_height);
 						raw_radius = calibration_radius[idx];
 						raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 						raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-						n = ((img_height-1-((y/2)+(img_height*25/100))) * img_width)+x;
+						n = ((img_height-1-(int)((y/2)+(img_height*25/100))) * img_width)+x;
 						n2 = (raw_y * img_width)+raw_x;
 						if ((n2 > -1) && (n2 < pixels) &&
 							(n > -1) && (n < pixels)) {
