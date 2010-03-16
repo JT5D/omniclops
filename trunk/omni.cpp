@@ -33,6 +33,7 @@ omni::omni(int width, int height) {
 	feature_radius_index = NULL;
 	unwarp_lookup = NULL;
 	unwarp_lookup_reverse = NULL;
+	stereo_lookup = NULL;
 
 	/* array storing the number of features detected on each row */
 	features_per_row = new unsigned short int[OMNI_MAX_IMAGE_HEIGHT
@@ -61,6 +62,9 @@ omni::~omni() {
 	delete[] features_per_row;
 	delete[] row_sum;
 	delete[] row_peaks;
+	if (stereo_lookup != NULL) {
+		delete[] stereo_lookup;
+	}
 	if (unwarp_lookup != NULL) {
 		delete[] unwarp_lookup;
 		delete[] unwarp_lookup_reverse;
@@ -1199,6 +1203,79 @@ void omni::create_ray_map(
 			img_height,
 			false, true, true);
 
+		// generate a lookup table so that we can easily convert y a pair of y coordinates
+		// within the unwarped image into a stereo range and elevation value
+		create_stereo_lookup(img_width, img_height);
+	}
+}
+
+/*!
+ * \brief creates a range/elevation lookup table for the unwarped image when using stacked mirrors
+ * \param img_width width of the image
+ * \param img_height height of the image
+ */
+void omni::create_stereo_lookup(
+    int img_width,
+    int img_height)
+{
+	int h = img_height/2;
+	if (stereo_lookup == NULL) {
+		stereo_lookup = new int[h*h*2];
+		memset((void*)stereo_lookup, '\0', h*h*2);
+	}
+
+	int x = 0;
+	int y = h+2;
+	for (x = 2; x < img_width; x++) {
+		int n = y*img_width + x;
+		if ((unwarp_lookup[n] != 0) && (unwarp_lookup[n-2] != 0)) {
+			break;
+		}
+	}
+
+	for (int y_upper = 0; y_upper < h; y_upper++) {
+		int n_upper = y_upper*img_width + x;
+		if (unwarp_lookup[n_upper] > 0) {
+			int n_ray_upper = unwarp_lookup[n_upper]*6;
+			if (n_ray_upper > 0) {
+				int x0 = ray_map[n_ray_upper];
+				int y0 = ray_map[n_ray_upper + 1];
+				int z0 = ray_map[n_ray_upper + 2];
+				int x1 = ray_map[n_ray_upper + 3];
+				int y1 = ray_map[n_ray_upper + 4];
+				int z1 = ray_map[n_ray_upper + 5];
+				int ray_length0a = (int)sqrt(x0*x0 + y0*y0);
+				int ray_length0b = (int)sqrt(x1*x1 + y1*y1);
+				for (int y_lower = 0; y_lower < h-2; y_lower++) {
+					int n_lower = ((y_lower + h)*img_width) + x;
+					if (unwarp_lookup[n_lower] > 0) {
+						int n_ray_lower = unwarp_lookup[n_lower]*6;
+						if (n_ray_lower > 0) {
+							int x2 = ray_map[n_ray_lower];
+							int y2 = ray_map[n_ray_lower + 1];
+							int z2 = ray_map[n_ray_lower + 2];
+							int x3 = ray_map[n_ray_lower + 3];
+							int y3 = ray_map[n_ray_lower + 4];
+							int z3 = ray_map[n_ray_lower + 5];
+							int ray_length1a = (int)sqrt(x2*x2 + y2*y2);
+							int ray_length1b = (int)sqrt(x3*x3 + y3*y3);
+
+							float ix=0, iz=0;
+							omni::intersection(
+								ray_length0a,z0, ray_length0b,z1,
+								ray_length1a,z2, ray_length1b,z3,
+								ix, iz);
+
+							if (ix != 9999) {
+							    int idx = (y_upper*h + y_lower)*2;
+                                stereo_lookup[idx] = (int)abs(ix);
+                                stereo_lookup[idx+1] = (int)iz;
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 }
 

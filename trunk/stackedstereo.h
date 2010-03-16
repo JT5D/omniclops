@@ -62,7 +62,25 @@ public:
 		vector<int> &features,
 		vector<int> &matches);
 
-	static void show(
+	static void matches_to_rays(
+		unsigned char *img,
+		int img_width,
+		int img_height,
+		int uncertainty_pixels,
+		int* stereo_lookup,
+		int max_range_mm,
+		int max_matches,
+		vector<int> &matches,
+		vector<int> &rays);
+
+	static void show_rays(
+		unsigned char* img,
+		int img_width,
+		int img_height,
+		int max_range_mm,
+		vector<int> &rays);
+
+	static void show_matches(
 		unsigned char* img,
 		int img_width,
 		int img_height,

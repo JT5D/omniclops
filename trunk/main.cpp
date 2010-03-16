@@ -844,7 +844,6 @@ int main(int argc, char* argv[]) {
     }
 
 	if (show_stereo_disparity) {
-		bool show_feats = true;
 		int max_range_mm = 3000;
 		vector<short> points;
 
@@ -881,8 +880,22 @@ int main(int argc, char* argv[]) {
 			harris_features,
 			matches);
 
-		stackedstereo::show(l_,ww,hh,max_matches,matches);
-		//printf("matches %d\n", (int)matches.size()/4);
+		vector<int> rays;
+		int uncertainty_pixels = 2;
+		stackedstereo::matches_to_rays(
+			l_, ww, hh,
+			uncertainty_pixels,
+			lcam->stereo_lookup,
+			max_range_mm,
+			max_matches,
+			matches,
+			rays);
+
+		//stackedstereo::show_matches(l_,ww,hh,max_matches,matches);
+		stackedstereo::show_rays(
+			l_, ww, hh,
+			max_range_mm,
+			rays);
 	}
 
 	if (show_motion) {
