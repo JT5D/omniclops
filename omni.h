@@ -79,6 +79,9 @@ public:
     int* unwarp_lookup;
     int* unwarp_lookup_reverse;
 
+    /* stereo vision */
+    int* stereo_lookup;
+
     int epipole;
 
     static bool intersection(
@@ -126,6 +129,10 @@ public:
         std::string direction);
 
     unsigned char* img_buffer;
+
+    void create_stereo_lookup(
+        int img_width,
+        int img_height);
 
     void create_ray_map(
     	float mirror_diameter,
