@@ -281,6 +281,15 @@ void stackedstereo::calibrate(
     }
 }
 
+/*!
+ * \brief shows matched features
+ * \param img colour image
+ * \param img_width width of the image
+ * \param img_height height of the image
+ * \param max_disparity_percent maximum disparity
+ * \param no_of_matches number of stereo matches
+ * \param matches stereo matches
+ */
 void stackedstereo::show_matched_features(
 	unsigned char* img,
 	int img_width,
@@ -301,6 +310,52 @@ void stackedstereo::show_matched_features(
 	}
 }
 
+/*!
+ * \brief sorts matches in descending order of correlation score
+ * \param no_of_matches the number of matches
+ * \param desired_no_of_matches the ideal number of matches desired
+ * \param matches array containing stereo matches (correlation,x,y,disparity)
+ * \return number of matches
+ */
+int stackedstereo::sort_matches(
+	int no_of_matches,
+	int desired_no_of_matches,
+	int* matches)
+{
+	// sort matches in descending order of correlation value
+	if (no_of_matches < desired_no_of_matches) desired_no_of_matches = no_of_matches;
+    for (int i = 0; i < desired_no_of_matches; i++) {
+    	int best_correlation = matches[i*4];
+    	int winner = -1;
+    	for (int j = i+1; j < no_of_matches; j++) {
+    		if (matches[j*4] > best_correlation) {
+    			best_correlation = matches[j*4];
+    			winner = j;
+    		}
+    	}
+    	if (winner > -1) {
+    		for (int j = 0; j < 4; j++) {
+    			int temp = matches[i*4 + j];
+    			matches[i*4 + j] = matches[winner*4 + j];
+    			matches[winner*4 + j] = temp;
+    		}
+    	}
+    }
+    return(desired_no_of_matches);
+}
+
+/*!
+ * \brief performs feature based stereo correspondence between the upper and lower mirrors
+ * \param img colour image
+ * \param img_width width of the image
+ * \param img_height height of the image
+ * \param offset_y calibration Y offset to alogn upper and lower images
+ * \param step_x sub-sampling step size across teh width of the image
+ * \param max_disparity_percent maximum disparity as a percentage value
+ * \param desired_no_of_matches the ideal number of matched features to be returned
+ * \param matches returned matches (correlation,x,y,disparity)
+ * \return the number of matches found
+ */
 int stackedstereo::stereo_match(
 	unsigned char* img,
 	int img_width,
@@ -372,25 +427,51 @@ int stackedstereo::stereo_match(
 	    }
 	}
 
-	// sort matches in descending order of correlation value
-	if (no_of_matches < desired_no_of_matches) desired_no_of_matches = no_of_matches;
-    for (int i = 0; i < desired_no_of_matches; i++) {
-    	int best_correlation = matches[i*4];
-    	int winner = -1;
-    	for (int j = i+1; j < no_of_matches; j++) {
-    		if (matches[j*4] > best_correlation) {
-    			best_correlation = matches[j*4];
-    			winner = j;
-    		}
-    	}
-    	if (winner > -1) {
-    		for (int j = 0; j < 4; j++) {
-    			int temp = matches[i*4 + j];
-    			matches[i*4 + j] = matches[winner*4 + j];
-    			matches[winner*4 + j] = temp;
-    		}
-    	}
-    }
+	//filter(no_of_matches, matches, img_width);
 
-    return(desired_no_of_matches);
+	// sort matches in descending order of correlation value
+	no_of_matches = sort_matches(no_of_matches, desired_no_of_matches, matches);
+
+    return(no_of_matches);
+}
+
+void stackedstereo::filter(
+	int no_of_matches,
+	int* matches,
+	int img_width)
+{
+    const int no_of_groups = 30;
+    int disparity_histogram[256];
+    int disparities[no_of_groups];
+
+    int n = 0, prev_n = 0;
+    int w = img_width / 20;
+    for (int g = 0; g < no_of_groups; g++) {
+    	memset((void*)disparity_histogram, '\0', 256*sizeof(int));
+    	int start_x = (g * img_width / no_of_groups) - w;
+    	int end_x = start_x + (w*2);
+    	for (int x = start_x; x <= end_x; x++) {
+    		int x2 = x;
+    		if (x2 < 0) x2 = 0;
+    		if (x2 >= img_width) x2 = img_width-1;
+    		while (n < no_of_matches) {
+    			if (matches[n*4 + 1] >= end_x) break;
+    			int disp = matches[n*4 + 3];
+    			if (disp > 2)
+    			    disparity_histogram[disp]++;
+    			n++;
+    		}
+    	}
+
+    	int max_histogram_response = 0;
+    	for (int i = 0; i < 256; i++) {
+    		if (disparity_histogram[i] > max_histogram_response) {
+    			max_histogram_response = disparity_histogram[i];
+    			disparities[g] = i;
+    		}
+    	}
+    	printf("%d   d %d\n", g, disparities[g]);
+
+    	prev_n = n;
+    }
 }

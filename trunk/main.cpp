@@ -896,11 +896,11 @@ int main(int argc, char* argv[]) {
 
 	if (show_stereo_disparity) {
 		int max_disparity_percent = 30;
-		int desired_no_of_matches = 2600;
+		int desired_no_of_matches = 500;
 		int no_of_matches = stackedstereo::stereo_match(
 			l_, ww, hh,
 			stereo_offset_y,
-			8,
+			4,
 			max_disparity_percent,
 			desired_no_of_matches,
 			stereo_matches);

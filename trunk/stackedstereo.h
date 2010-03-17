@@ -77,6 +77,16 @@ public:
 		int img_height,
 		int offset_y);
 
+	static int sort_matches(
+		int no_of_matches,
+		int desired_no_of_matches,
+		int* matches);
+
+	static void filter(
+		int no_of_matches,
+		int* matches,
+		int img_width);
+
 	static int stereo_match(
 		unsigned char* img,
 		int img_width,
