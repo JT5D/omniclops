@@ -549,7 +549,7 @@ int main(int argc, char* argv[]) {
 
   // Y axis offset in pixels within the unwarped image for dual mirror system
   if( opt->getValue( "offsety" ) != NULL  ) {
-	  stereo_offset_y = atoi(opt->getValue("offset"));
+	  stereo_offset_y = atoi(opt->getValue("offsety"));
   }
 
   // outer radius as a percent of image width
@@ -718,6 +718,11 @@ int main(int argc, char* argv[]) {
 
   motion* motion_detector = new motion();
 
+  int *stereo_matches = NULL;
+  if (show_stereo_disparity) {
+      stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
+  }
+
   while(1){
 
     while(c.Get()==0) usleep(100);
@@ -880,10 +885,8 @@ int main(int argc, char* argv[]) {
     }
 
 	if (calibrate) {
-
-		int offset_y = 0;
-		stackedstereo::calibrate(l_, ww, hh, offset_y);
-		printf("Calibration Y offset: %d\n", offset_y);
+		stackedstereo::calibrate(l_, ww, hh, stereo_offset_y);
+		printf("Calibration Y offset: %d\n", stereo_offset_y);
 		break;
 	}
 
@@ -893,7 +896,25 @@ int main(int argc, char* argv[]) {
 
 	if (show_stereo_disparity) {
 
-		stackedstereo::anaglyph(l_, ww, hh, stereo_offset_y);
+		//stackedstereo::anaglyph(l_, ww, hh, stereo_offset_y);
+
+		int max_disparity_percent = 30;
+		int desired_no_of_matches = 2600;
+		int no_of_matches = stackedstereo::stereo_match(
+			l_, ww, hh,
+			stereo_offset_y,
+			8,
+			max_disparity_percent,
+			desired_no_of_matches,
+			stereo_matches);
+
+		stackedstereo::show_stereo_matches(
+			l_, ww, hh,
+			max_disparity_percent,
+			no_of_matches,
+			stereo_matches);
+
+		//printf("matches %d\n", no_of_matches);
 
 		/*
 		int max_range_mm = 3000;
@@ -1101,6 +1122,7 @@ int main(int argc, char* argv[]) {
   delete lcam;
   delete corners;
   delete motion_detector;
+  if (stereo_matches != NULL) delete[] stereo_matches;
 
   return 0;
 }
