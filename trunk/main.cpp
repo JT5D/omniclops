@@ -158,11 +158,20 @@ int main(int argc, char* argv[]) {
   bool show_stereo_disparity = false;
   bool show_motion = false;
 
+  // outer mirror radius as a percentage of image width
   float outer_radius = 90;
+
+  // inner mirror radius as a percentage of image width
   float inner_radius = 30;
+
+  // outer radius for the upper mirror as a percentage of image width for a stacked system
   float upper_mirror_outer_radius = 40;
-  float upper_mirror_scale_percent = 160;
-  //int FOV_degrees = 50;
+
+  // vertical scaling factor for upper mirror image in unwarped image
+  float upper_mirror_scale_percent = 170;
+
+  // vertical alignment offset for stacked omnidirectional stereo
+  int stereo_offset_y = 41;
 
   // Port to start streaming from - second video will be on this + 1
   int start_port = 5000;
@@ -204,6 +213,9 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --raypaths              Saves image showing ray paths");
   opt->addUsage( "     --rays                  Saves file containing rays for each observed edge feature");
   opt->addUsage( "     --fov                   Field of view in degrees");
+  opt->addUsage( "     --calibrate             Calibrate a stacked dual mirror system");
+  opt->addUsage( "     --offsety <y>           Y axis offset in pixels for stacked dual mirror system");
+  opt->addUsage( "     --anaglyph              Stereo anaglyph from a stacked dual mirror system");
   opt->addUsage( " -f  --fps                   Frames per second");
   opt->addUsage( " -s  --skip                  Skip this number of frames");
   opt->addUsage( " -V  --version               Show version number");
@@ -250,6 +262,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "fov" );
   opt->setOption(  "harris" );
   opt->setOption(  "scaleupper");
+  opt->setOption(  "offsety");
 
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
@@ -267,6 +280,8 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "stereodisparity" );
   opt->setFlag(  "circles" );
   opt->setFlag(  "motion" );
+  opt->setFlag(  "calibrate" );
+  opt->setFlag(  "anaglyph" );
 
   opt->processCommandArgs(argc, argv);
 
@@ -311,6 +326,18 @@ int main(int argc, char* argv[]) {
   if( opt->getFlag( "unwarp" ) )
   {
 	  unwarp_image = true;
+  }
+
+  bool calibrate = false;
+  if( opt->getFlag( "calibrate" ) )
+  {
+	  calibrate = true;
+  }
+
+  bool anaglyph = false;
+  if( opt->getFlag( "anaglyph" ) )
+  {
+	  anaglyph = true;
   }
 
   bool save_image = false;
@@ -518,6 +545,11 @@ int main(int argc, char* argv[]) {
 	      delete opt;
 	      return(0);
 	  }
+  }
+
+  // Y axis offset in pixels within the unwarped image for dual mirror system
+  if( opt->getValue( "offsety" ) != NULL  ) {
+	  stereo_offset_y = atoi(opt->getValue("offset"));
   }
 
   // outer radius as a percent of image width
@@ -771,7 +803,11 @@ int main(int argc, char* argv[]) {
 
 	}
 
-    if ((unwarp_image) && (!show_stereo_disparity) && (!show_motion)) {
+    if ((unwarp_image) ||
+    	(show_stereo_disparity) ||
+    	(show_motion) ||
+    	(anaglyph) ||
+    	(calibrate)) {
     	lcam->unwarp(l_,ww,hh,3);
     }
 
@@ -843,12 +879,25 @@ int main(int argc, char* argv[]) {
         memcpy((void*)l_,flow_,ww*hh*3);
     }
 
+	if (calibrate) {
+
+		int offset_y = 0;
+		stackedstereo::calibrate(l_, ww, hh, offset_y);
+		printf("Calibration Y offset: %d\n", offset_y);
+		break;
+	}
+
+	if (anaglyph) {
+		stackedstereo::anaglyph(l_, ww, hh, stereo_offset_y);
+	}
+
 	if (show_stereo_disparity) {
+
+		stackedstereo::anaglyph(l_, ww, hh, stereo_offset_y);
+
+		/*
 		int max_range_mm = 3000;
 		vector<short> points;
-
-		// unwarp the mirror images
-		lcam->unwarp(l_,ww,hh,3);
 
 		// detect harris corners
 	    int minimum_separation = 8;
@@ -872,7 +921,7 @@ int main(int argc, char* argv[]) {
 			harris_features);
 
 	    // match harris features
-		int max_matches = 200;
+		int max_matches = 20;
 		vector<int> matches;
 		stackedstereo::match_corner_features(
 			l_, ww, hh,
@@ -891,16 +940,13 @@ int main(int argc, char* argv[]) {
 			matches,
 			rays);
 
-		//stackedstereo::show_matches(l_,ww,hh,max_matches,matches);
-		stackedstereo::show_rays(
-			l_, ww, hh,
-			max_range_mm,
-			rays);
+		stackedstereo::show_matches(l_,ww,hh,max_matches,matches);
+		//stackedstereo::show_rays(l_, ww, hh, max_range_mm, rays);
+
+		 */
 	}
 
 	if (show_motion) {
-		// unwarp the mirror images
-		lcam->unwarp(l_,ww,hh,3);
 
 		// load previous motion file
 		if (load_motion_filename != "") {

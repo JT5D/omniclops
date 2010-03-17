@@ -46,13 +46,21 @@ public:
 		short* features);
 		*/
 
-	static int SSD(
+	static unsigned int SSD(
 		unsigned char *img,
 		int img_width,
 		int img_height,
 		int x0, int y0,
 		int x1, int y1,
-		int patch_radius_pixels);
+		int patch_width_pixels,
+		int patch_height_pixels,
+		int sampling_step);
+
+	static void calibrate(
+		unsigned char* img,
+		int img_width,
+		int img_height,
+		int &offset_y);
 
 	static void match_corner_features(
 		unsigned char *img,
@@ -86,6 +94,12 @@ public:
 		int img_height,
 		int no_of_matches,
 		vector<int> &matches);
+
+	static void anaglyph(
+		unsigned char* img,
+		int img_width,
+		int img_height,
+		int offset_y);
 };
 
 #endif /* STACKEDSTEREO_H_ */

@@ -71,28 +71,34 @@ int stackedstereo::get_features_from_unwarped(
 }
 */
 
-int stackedstereo::SSD(
+unsigned int stackedstereo::SSD(
 	unsigned char *img,
 	int img_width,
 	int img_height,
 	int x0, int y0,
 	int x1, int y1,
-	int patch_radius_pixels)
+	int patch_width_pixels,
+	int patch_height_pixels,
+	int sampling_step)
 {
-	int ssd = 0;
+	unsigned int ssd = 0;
 
-	for (int dx = -patch_radius_pixels; dx <= patch_radius_pixels; dx++) {
+	for (int dx = -patch_width_pixels; dx <= patch_width_pixels; dx += sampling_step) {
 		int xx0 = x0 + dx;
 		int xx1 = x1 + dx;
-		for (int dy = -patch_radius_pixels; dy <= patch_radius_pixels; dy++) {
-			int yy0 = y0 + dy;
-			int yy1 = y1 + dy;
-            int n0 = (yy0*img_width + xx0)*3;
-            int n1 = (yy1*img_width + xx1)*3;
-            int b = img[n0] - img[n1];
-            int g = img[n0+1] - img[n1+1];
-            int r = img[n0+2] - img[n1+2];
-            ssd += r*r + g*g + b*b;
+		if ((xx0 > -1) && (xx1 > -1) && (xx0 < img_width) && (xx1 < img_width)) {
+			for (int dy = -patch_height_pixels; dy <= patch_height_pixels; dy += sampling_step) {
+				int yy0 = y0 + dy;
+				int yy1 = y1 + dy;
+				if ((yy0 > -1) && (yy1 > -1) && (yy0 < img_height) && (yy1 < img_height)) {
+					int n0 = (yy0*img_width + xx0)*3;
+					int n1 = (yy1*img_width + xx1)*3;
+					int b = img[n0] - img[n1];
+					int g = img[n0+1] - img[n1+1];
+					int r = img[n0+2] - img[n1+2];
+					ssd += (unsigned int)(r*r + g*g + b*b);
+				}
+			}
 		}
 	}
 	return(ssd);
@@ -115,7 +121,7 @@ void stackedstereo::match_corner_features(
 	// bucket the features so that subsequent searching is reduced
 	vector<int> features_lower[img_width/downsample_factor + 1];
 	vector<int> features_upper[img_width/downsample_factor + 1];
-	vector<int> scores;
+	vector<unsigned int> scores;
 
 	int minimum_match_length = img_height*20/100;
 	const int border = 10;
@@ -160,7 +166,7 @@ void stackedstereo::match_corner_features(
 				int y0 = features_upper[i][f_upper+1];
 				int matched_x = -1;
 				int matched_y = -1;
-				int min_ssd = 50000000;
+				unsigned int min_ssd = 50000000;
 				// compare to features in the lower mirror, with some horizontal tollerance
 		        for (int i2 = i-horizontal_tollerance; i2 <= i+horizontal_tollerance; i2++) {
 		        	for (int f_lower = (int)features_lower[i2].size()-2; f_lower >= 0; f_lower -= 2) {
@@ -168,7 +174,7 @@ void stackedstereo::match_corner_features(
 						int y1 = features_lower[i2][f_lower+1];
 
 						if (y1 - y0 > minimum_match_length) {
-							int ssd = SSD(img, img_width, img_height, x0, y0, x1, y1, patch_radius_pixels);
+							unsigned int ssd = SSD(img, img_width, img_height, x0, y0, x1, y1, patch_radius_pixels, patch_radius_pixels, 1);
 							if (ssd < min_ssd) {
 								min_ssd = ssd;
 								matched_x = x1;
@@ -194,7 +200,7 @@ void stackedstereo::match_corner_features(
     int max = max_matches;
     if ((int)scores.size() < max) max = (int)scores.size();
     for (int i = 0; i < max; i++) {
-    	int sc = scores[i];
+    	unsigned int sc = scores[i];
     	int winner = -1;
     	for (int j = i + 1; j < no_of_matches; j++) {
     		if (scores[j] < sc) {
@@ -203,7 +209,7 @@ void stackedstereo::match_corner_features(
     		}
     	}
         if (winner > -1) {
-        	int temp = scores[i];
+        	unsigned int temp = scores[i];
         	scores[i] = scores[winner];
         	scores[winner] = temp;
         	for (int k = 0; k < 4; k++) {
@@ -355,4 +361,76 @@ void stackedstereo::matches_to_rays(
 			}
 		}
 	}
+}
+
+void stackedstereo::anaglyph(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	int offset_y)
+{
+	int h = img_height/2;
+	for (int y = h; y < img_height; y++) {
+		int y2 = y - h + offset_y;
+		if (y2 > -1) {
+			for (int x = 0; x < img_width; x++) {
+				int n_lower = (y*img_width + x)*3;
+				if (!((img[n_lower] == 0) && (img[n_lower+1] == 0) && (img[n_lower+2] == 0))) {
+					int n_upper = (y2*img_width + x)*3;
+					img[n_upper] = img[n_lower];
+					img[n_upper+1] = 0;
+					//img[n_upper+1] = img[n_lower+1];// + ((img[n_upper+1] - img[n_lower+1])/2);
+					img[n_lower] = 0;
+					img[n_lower+1] = 0;
+					img[n_lower+2] = 0;
+				}
+			}
+		}
+	}
+
+	int n = 0;
+	for (int y = 0; y < img_height; y++) {
+		for (int x = 0; x < img_width; x++, n += 3) {
+			if (img[n+1] != 0) {
+				img[n] = 0;
+				img[n+1] = 0;
+				img[n+2] = 0;
+			}
+			else {
+				//img[n+1] = img[n];
+			}
+		}
+	}
+}
+
+void stackedstereo::calibrate(
+	unsigned char* img,
+	int img_width,
+	int img_height,
+	int &offset_y)
+{
+	int patch_width_pixels = img_width/2;
+	int patch_height_pixels = img_height/4;
+	int min_offset_y = -img_height/8;
+	int max_offset_y = img_height/8;
+
+	int step = 4;
+	unsigned int min_ssd = 0;
+	int x = img_width/2;
+    for (int offset = min_offset_y; offset <= max_offset_y; offset++) {
+    	int y_upper = patch_height_pixels;
+    	int y_lower = (img_height/2) + patch_height_pixels + offset;
+        unsigned int ssd = SSD(
+        	img, img_width, img_height,
+        	x, y_upper,
+        	x, y_lower,
+        	patch_width_pixels,
+        	patch_height_pixels,
+        	step);
+        if ((ssd < min_ssd) || (min_ssd == 0)) {
+        	min_ssd = ssd;
+        	offset_y = -offset;
+        	printf("SSD %d\n", min_ssd);
+        }
+    }
 }
