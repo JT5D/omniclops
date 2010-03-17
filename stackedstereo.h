@@ -71,39 +71,6 @@ public:
 		int img_height,
 		int &offset_y);
 
-	static void match_corner_features(
-		unsigned char *img,
-		int img_width,
-		int img_height,
-		int max_matches,
-		vector<int> &features,
-		vector<int> &matches);
-
-	static void matches_to_rays(
-		unsigned char *img,
-		int img_width,
-		int img_height,
-		int uncertainty_pixels,
-		int* stereo_lookup,
-		int max_range_mm,
-		int max_matches,
-		vector<int> &matches,
-		vector<int> &rays);
-
-	static void show_rays(
-		unsigned char* img,
-		int img_width,
-		int img_height,
-		int max_range_mm,
-		vector<int> &rays);
-
-	static void show_matches(
-		unsigned char* img,
-		int img_width,
-		int img_height,
-		int no_of_matches,
-		vector<int> &matches);
-
 	static void anaglyph(
 		unsigned char* img,
 		int img_width,
@@ -120,7 +87,7 @@ public:
 		int desired_no_of_matches,
 		int *matches);
 
-	static void show_stereo_matches(
+	static void show_matched_features(
 		unsigned char* img,
 		int img_width,
 		int img_height,
