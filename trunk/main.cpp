@@ -895,9 +895,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_stereo_disparity) {
-
-		//stackedstereo::anaglyph(l_, ww, hh, stereo_offset_y);
-
 		int max_disparity_percent = 30;
 		int desired_no_of_matches = 2600;
 		int no_of_matches = stackedstereo::stereo_match(
@@ -908,63 +905,13 @@ int main(int argc, char* argv[]) {
 			desired_no_of_matches,
 			stereo_matches);
 
-		stackedstereo::show_stereo_matches(
+		stackedstereo::show_matched_features(
 			l_, ww, hh,
 			max_disparity_percent,
 			no_of_matches,
 			stereo_matches);
 
 		//printf("matches %d\n", no_of_matches);
-
-		/*
-		int max_range_mm = 3000;
-		vector<short> points;
-
-		// detect harris corners
-	    int minimum_separation = 8;
-	    int sensitivity_percent = 100;
-
-		int centre_x = ww/2;
-		int centre_y = hh/2;
-		int outer_radius_pixels = (int)(ww * outer_radius / 200)*90/100;
-
-	    harris::get_features(
-			l,
-		    frame1_1C,
-			eig_image,
-			temp_image,
-			pyramid1,
-			minimum_separation,
-			centre_x, centre_y,
-			outer_radius_pixels,
-			sensitivity_percent,
-			harris_filename,
-			harris_features);
-
-	    // match harris features
-		int max_matches = 20;
-		vector<int> matches;
-		stackedstereo::match_corner_features(
-			l_, ww, hh,
-			max_matches,
-			harris_features,
-			matches);
-
-		vector<int> rays;
-		int uncertainty_pixels = 2;
-		stackedstereo::matches_to_rays(
-			l_, ww, hh,
-			uncertainty_pixels,
-			lcam->stereo_lookup,
-			max_range_mm,
-			max_matches,
-			matches,
-			rays);
-
-		stackedstereo::show_matches(l_,ww,hh,max_matches,matches);
-		//stackedstereo::show_rays(l_, ww, hh, max_range_mm, rays);
-
-		 */
 	}
 
 	if (show_motion) {
