@@ -371,13 +371,14 @@ int stackedstereo::stereo_match(
 	short edge_magnitude[img_height];
 	short features[MAX_STACKED_STEREO_FEATURES];
 
-	const int patch_width = 2;
-	const int patch_height = 8;
+	const int patch_width = 8;
+	const int patch_height = 16;
+	const int patch_step = 2;
 	int half_height = img_height/2;
 	int min_disparity_pixels = -3;
 	int max_disparity_pixels = half_height * max_disparity_percent / 100;
 
-	for (int x = 0; x < img_width; x += step_x) {
+	for (int x = patch_width; x < img_width-patch_width; x += step_x) {
 
 		// detect edge features
 		int no_of_features = get_features_from_unwarped(
@@ -399,31 +400,33 @@ int stackedstereo::stereo_match(
 	    // compute possible correspondences
 	    for (int i = 0; i < first_lower_mirror_feature_index; i++) {
 	    	int y_upper = features[i];
-	    	int max_correlation = 0;
-	    	int best_disparity = -1;
-		    for (int j = first_lower_mirror_feature_index; j < no_of_features; j++) {
-		    	int y_lower = features[j] - half_height + offset_y;
-		    	int disparity = y_upper - y_lower;
-		    	if ((disparity > min_disparity_pixels) &&
-		    		(disparity < max_disparity_pixels)) {
-		    		if (disparity < 0) disparity = 0;
-		    		// compute a correlation value for these two features
-                    int correlation = Correlation(img, img_width, img_height, x, y_upper, x, features[j], patch_width, patch_height, 1);
-                    if (correlation > max_correlation) {
-                    	max_correlation = correlation;
-                    	best_disparity = disparity;
-                    }
-		    	}
-		    }
-		    if ((best_disparity > -1) &&
-		    	(no_of_matches < MAX_STACKED_STEREO_MATCHES)) {
-		    	// store possible match
-		    	matches[no_of_matches*4] = max_correlation;
-		    	matches[no_of_matches*4+1] = x;
-		    	matches[no_of_matches*4+2] = y_upper;
-		    	matches[no_of_matches*4+3] = best_disparity;
-		    	no_of_matches++;
-		    }
+	    	if (y_upper < half_height - offset_y) {
+				int max_correlation = 0;
+				int best_disparity = -1;
+				for (int j = first_lower_mirror_feature_index; j < no_of_features; j++) {
+					int y_lower = features[j] - half_height + offset_y;
+					int disparity = y_upper - y_lower;
+					if ((disparity > min_disparity_pixels) &&
+						(disparity < max_disparity_pixels)) {
+						if (disparity < 0) disparity = 0;
+						// compute a correlation value for these two features
+						int correlation = Correlation(img, img_width, img_height, x, y_upper, x, features[j], patch_width, patch_height, patch_step);
+						if (correlation > max_correlation) {
+							max_correlation = correlation;
+							best_disparity = disparity;
+						}
+					}
+				}
+				if ((best_disparity > -1) &&
+					(no_of_matches < MAX_STACKED_STEREO_MATCHES)) {
+					// store possible match
+					matches[no_of_matches*4] = max_correlation;
+					matches[no_of_matches*4+1] = x;
+					matches[no_of_matches*4+2] = y_upper;
+					matches[no_of_matches*4+3] = best_disparity;
+					no_of_matches++;
+				}
+	    	}
 	    }
 	}
 
