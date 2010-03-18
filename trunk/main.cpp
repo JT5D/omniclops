@@ -895,8 +895,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_stereo_disparity) {
-		int max_disparity_percent = 30;
-		int desired_no_of_matches = 500;
+		int max_disparity_percent = 50;
+		int desired_no_of_matches = 1000;
 		int no_of_matches = stackedstereo::stereo_match(
 			l_, ww, hh,
 			stereo_offset_y,
