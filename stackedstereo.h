@@ -20,8 +20,9 @@
 #ifndef STACKEDSTEREO_H_
 #define STACKEDSTEREO_H_
 
-#define MAX_STACKED_STEREO_FEATURES   128
-#define MAX_STACKED_STEREO_MATCHES    4096
+#define MAX_STACKED_STEREO_FEATURES     128
+#define MAX_STACKED_STEREO_MATCHES      4096
+#define STACKED_STEREO_FILTER_SAMPLING  40
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +86,12 @@ public:
 	static void filter(
 		int no_of_matches,
 		int* matches,
-		int img_width);
+		int img_width,
+		int img_height,
+		int max_disparity_pixels,
+		unsigned char *valid_quadrants,
+		int* disparity_histogram_plane,
+		int* disparity_plane_fit);
 
 	static int stereo_match(
 		unsigned char* img,
@@ -95,6 +101,9 @@ public:
 		int step_x,
 		int max_disparity_percent,
 		int desired_no_of_matches,
+		unsigned char *valid_quadrants,
+		int* disparity_histogram_plane,
+		int* disparity_plane_fit,
 		int *matches);
 
 	static void show_matched_features(
