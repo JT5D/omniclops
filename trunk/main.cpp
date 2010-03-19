@@ -38,6 +38,7 @@
 #include "libcam.h"
 #include "harris.h"
 #include "stackedstereo.h"
+#include "stackedstereodense.h"
 #include "motion.h"
 
 #define VERSION 0.3
@@ -168,7 +169,7 @@ int main(int argc, char* argv[]) {
   float upper_mirror_outer_radius = 40;
 
   // vertical scaling factor for upper mirror image in unwarped image
-  float upper_mirror_scale_percent = 170;
+  float upper_mirror_scale_percent = 168;
 
   // vertical alignment offset for stacked omnidirectional stereo
   int stereo_offset_y = 41;
@@ -719,8 +720,23 @@ int main(int argc, char* argv[]) {
   motion* motion_detector = new motion();
 
   int *stereo_matches = NULL;
+  int *disparity_histogram_plane = NULL;
+  int *disparity_plane_fit = NULL;
+  unsigned char *valid_quadrants = NULL;
+
+  int* disparity_space = NULL;
+  int* disparity_map = NULL;
+  int disparity_map_x_step = 8;
+  int disparity_map_correlation_radius = 10;
+  int disparity_map_smoothing_radius = 8;
   if (show_stereo_disparity) {
-      stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
+      //stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
+      //disparity_histogram_plane = new int[(ww / STACKED_STEREO_FILTER_SAMPLING) * (ww / 2)];
+      //disparity_plane_fit = new int[ww / STACKED_STEREO_FILTER_SAMPLING];
+      //valid_quadrants = new unsigned char[MAX_STACKED_STEREO_MATCHES];
+
+	  disparity_space = new int[(ww/disparity_map_x_step)*(hh/2)];
+	  disparity_map = new int[(ww/disparity_map_x_step)*(hh/2)*2];
   }
 
   while(1){
@@ -895,14 +911,35 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (show_stereo_disparity) {
-		int max_disparity_percent = 50;
-		int desired_no_of_matches = 1000;
+
+		int max_disparity_percent = 100;
+		stackedstereodense::update_disparity_map(
+			l_,ww,hh,
+			stereo_offset_y,
+			disparity_map_x_step,
+			max_disparity_percent,
+			disparity_map_correlation_radius,
+			disparity_map_smoothing_radius,
+			disparity_space,
+			disparity_map);
+
+		stackedstereodense::show(
+			l_,ww,hh,
+			disparity_map_x_step,
+			max_disparity_percent,
+			disparity_map);
+
+		/*
+		int desired_no_of_matches = 800;
 		int no_of_matches = stackedstereo::stereo_match(
 			l_, ww, hh,
 			stereo_offset_y,
 			4,
 			max_disparity_percent,
 			desired_no_of_matches,
+			valid_quadrants,
+			disparity_histogram_plane,
+			disparity_plane_fit,
 			stereo_matches);
 
 		stackedstereo::show_matched_features(
@@ -910,6 +947,7 @@ int main(int argc, char* argv[]) {
 			max_disparity_percent,
 			no_of_matches,
 			stereo_matches);
+	    */
 
 		//printf("matches %d\n", no_of_matches);
 	}
@@ -1069,7 +1107,13 @@ int main(int argc, char* argv[]) {
   delete lcam;
   delete corners;
   delete motion_detector;
+  if (disparity_space != NULL) delete[] disparity_space;
+  if (disparity_map != NULL) delete[] disparity_map;
+
   if (stereo_matches != NULL) delete[] stereo_matches;
+  if (disparity_histogram_plane != NULL) delete[] disparity_histogram_plane;
+  if (disparity_plane_fit != NULL) delete[] disparity_plane_fit;
+  if (valid_quadrants != NULL) delete[] valid_quadrants;
 
   return 0;
 }

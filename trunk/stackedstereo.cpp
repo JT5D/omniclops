@@ -76,6 +76,7 @@ int stackedstereo::get_features_from_unwarped(
 			}
 		}
 	}
+
 	return(no_of_features);
 }
 
@@ -171,27 +172,36 @@ int stackedstereo::Correlation(
 					average += img[n0] + img[n0+1] + img[n0+2];
 					hits += 3;
 					correlation += r*r + g*g + b*b;
+
+					if (((img[n0] == 0) && (img[n0+1] == 0) && (img[n0+2] == 0)) ||
+						((img[n1] == 0) && (img[n1+1] == 0) && (img[n1+2] == 0))) {
+						dx = patch_width_pixels+1;
+						correlation = 0;
+						break;
+					}
 				}
 			}
 		}
 	}
-	if (hits > 0) average /= hits;
+	if (correlation > 0) {
+		if (hits > 0) average /= hits;
 
-	// compute anticorrelation
-	for (int dx = -patch_width_pixels; dx <= patch_width_pixels; dx += sampling_step) {
-		int xx0 = x0 + dx;
-		int xx1 = x1 + dx;
-		if ((xx0 > -1) && (xx1 > -1) && (xx0 < img_width) && (xx1 < img_width)) {
-			for (int dy = -patch_height_pixels; dy <= patch_height_pixels; dy += sampling_step) {
-				int yy0 = y0 + dy;
-				int yy1 = y1 + dy;
-				if ((yy0 > -1) && (yy1 > -1) && (yy0 < img_height) && (yy1 < img_height)) {
-					int n0 = (yy0*img_width + xx0)*3;
-					int n1 = (yy1*img_width + xx1)*3;
-					int b = 255 - ((average - (img[n0] - average)) - img[n1]);
-					int g = 255 - ((average - (img[n0+1] - average)) - img[n1+1]);
-					int r = 255 - ((average - (img[n0+2] - average)) - img[n1+2]);
-					anticorrelation += r*r + g*g + b*b;
+		// compute anticorrelation
+		for (int dx = -patch_width_pixels; dx <= patch_width_pixels; dx += sampling_step) {
+			int xx0 = x0 + dx;
+			int xx1 = x1 + dx;
+			if ((xx0 > -1) && (xx1 > -1) && (xx0 < img_width) && (xx1 < img_width)) {
+				for (int dy = -patch_height_pixels; dy <= patch_height_pixels; dy += sampling_step) {
+					int yy0 = y0 + dy;
+					int yy1 = y1 + dy;
+					if ((yy0 > -1) && (yy1 > -1) && (yy0 < img_height) && (yy1 < img_height)) {
+						int n0 = (yy0*img_width + xx0)*3;
+						int n1 = (yy1*img_width + xx1)*3;
+						int b = 255 - ((average - (img[n0] - average)) - img[n1]);
+						int g = 255 - ((average - (img[n0+1] - average)) - img[n1+1]);
+						int r = 255 - ((average - (img[n0+2] - average)) - img[n1+2]);
+						anticorrelation += r*r + g*g + b*b;
+					}
 				}
 			}
 		}
@@ -334,10 +344,20 @@ int stackedstereo::sort_matches(
     		}
     	}
     	if (winner > -1) {
+    		if (matches[winner*4] == 0) {
+    			desired_no_of_matches = i;
+    			break;
+    		}
     		for (int j = 0; j < 4; j++) {
     			int temp = matches[i*4 + j];
     			matches[i*4 + j] = matches[winner*4 + j];
     			matches[winner*4 + j] = temp;
+    		}
+    	}
+    	else {
+    		if (best_correlation == 0) {
+    			desired_no_of_matches = i;
+    			break;
     		}
     	}
     }
@@ -353,6 +373,9 @@ int stackedstereo::sort_matches(
  * \param step_x sub-sampling step size across teh width of the image
  * \param max_disparity_percent maximum disparity as a percentage value
  * \param desired_no_of_matches the ideal number of matched features to be returned
+ * \param valid_quadrants array used for filtering
+ * \param disparity_histogram_plane array used for planar disparity histogram
+ * \param disparity_plane_fit array used for plane fitting
  * \param matches returned matches (correlation,x,y,disparity)
  * \return the number of matches found
  */
@@ -364,6 +387,9 @@ int stackedstereo::stereo_match(
 	int step_x,
 	int max_disparity_percent,
 	int desired_no_of_matches,
+	unsigned char *valid_quadrants,
+	int* disparity_histogram_plane,
+	int* disparity_plane_fit,
 	int *matches)
 {
 	int no_of_matches = 0;
@@ -371,9 +397,9 @@ int stackedstereo::stereo_match(
 	short edge_magnitude[img_height];
 	short features[MAX_STACKED_STEREO_FEATURES];
 
-	const int patch_width = 8;
-	const int patch_height = 16;
-	const int patch_step = 2;
+	const int patch_width = 4;
+	const int patch_height = 8;
+	const int patch_step = 1;
 	int half_height = img_height/2;
 	int min_disparity_pixels = -3;
 	int max_disparity_pixels = half_height * max_disparity_percent / 100;
@@ -430,7 +456,17 @@ int stackedstereo::stereo_match(
 	    }
 	}
 
-	//filter(no_of_matches, matches, img_width);
+	/*
+	filter(
+		no_of_matches,
+		matches,
+		img_width,
+		img_height,
+		max_disparity_pixels,
+		valid_quadrants,
+		disparity_histogram_plane,
+		disparity_plane_fit);
+		*/
 
 	// sort matches in descending order of correlation value
 	no_of_matches = sort_matches(no_of_matches, desired_no_of_matches, matches);
@@ -441,40 +477,220 @@ int stackedstereo::stereo_match(
 void stackedstereo::filter(
 	int no_of_matches,
 	int* matches,
-	int img_width)
+	int img_width,
+	int img_height,
+	int max_disparity_pixels,
+	unsigned char *valid_quadrants,
+	int* disparity_histogram_plane,
+	int* disparity_plane_fit)
 {
-    const int no_of_groups = 30;
-    int disparity_histogram[256];
-    int disparities[no_of_groups];
+    int i, hf, hist_max, w = STACKED_STEREO_FILTER_SAMPLING, w2, n, horizontal = 0;
+    int x, y, disp, tx = 0, ty = 0, bx = 0, by = 0;
+    int hist_thresh, hist_mean, hist_mean_hits, mass, disp2;
+    int min_ww, max_ww, m, ww, d;
+    int ww0, ww1, disp0, disp1, cww, dww, ddisp;
 
-    int n = 0, prev_n = 0;
-    int w = img_width / 20;
-    for (int g = 0; g < no_of_groups; g++) {
-    	memset((void*)disparity_histogram, '\0', 256*sizeof(int));
-    	int start_x = (g * img_width / no_of_groups) - w;
-    	int end_x = start_x + (w*2);
-    	for (int x = start_x; x <= end_x; x++) {
-    		int x2 = x;
-    		if (x2 < 0) x2 = 0;
-    		if (x2 >= img_width) x2 = img_width-1;
-    		while (n < no_of_matches) {
-    			if (matches[n*4 + 1] >= end_x) break;
-    			int disp = matches[n*4 + 3];
-    			if (disp > 2)
-    			    disparity_histogram[disp]++;
-    			n++;
-    		}
-    	}
+    // clear quadrants
+    memset(valid_quadrants, 0, no_of_matches);
 
-    	int max_histogram_response = 0;
-    	for (int i = 0; i < 256; i++) {
-    		if (disparity_histogram[i] > max_histogram_response) {
-    			max_histogram_response = disparity_histogram[i];
-    			disparities[g] = i;
-    		}
-    	}
-    	printf("%d   d %d\n", g, disparities[g]);
+    const int no_of_zones = 5;
+    // tx, ty, bx, by, horizontal
+    int zone[] = {
+        0,                0, img_width*30/100, img_height,   1,  // overall horizontal
+        0,                0, img_width*30/100, img_height/2, 0,  // overall horizontal
+        0,                img_height/2, img_width*30/100, img_height, 0,  // overall horizontal
+        img_width*20/100, 0, img_width*40/100, img_height,   0,  // overall vertical
+        img_width*40/100, 0, img_width*60/100, img_height,   1,  // left hemifield 1
+    };
 
-    	prev_n = n;
+    // create disparity histograms within different
+    // zones of the image
+    for (hf = 0; hf < no_of_zones; hf++) {
+
+        tx = zone[hf*5];
+        ty = zone[hf*5+1];
+        bx = zone[hf*5+2];
+        by = zone[hf*5+3];
+        horizontal = zone[hf*5+4];
+        if (horizontal != 0) {
+        	w = bx - tx;
+        }
+        else {
+        	w = by - ty;
+        }
+
+        // clear the histogram
+        w2 = w / STACKED_STEREO_FILTER_SAMPLING;
+        if (w2 < 1) w2 = 1;
+        memset((void*) disparity_histogram_plane, '\0', w2 * max_disparity_pixels * sizeof(int));
+        memset((void*) disparity_plane_fit, '\0', w2 * sizeof(int));
+        hist_max = 0;
+
+        // update the disparity histogram
+        n = 0;
+        for (i = no_of_matches-1; i >= 0; i--) {
+            x = matches[i * 4 + 1];
+            if ((x > tx) && (x < bx)) {
+                y = matches[i * 4 + 2];
+                if ((y > ty) && (y < by)) {
+                    disp = matches[i * 4 + 3];
+                    if ((int) disp < max_disparity_pixels) {
+                        if (horizontal != 0) {
+                            n = (((x - tx) / STACKED_STEREO_FILTER_SAMPLING)
+                                 * max_disparity_pixels) + disp;
+                        } else {
+                            n = (((y - ty) / STACKED_STEREO_FILTER_SAMPLING)
+                                 * max_disparity_pixels) + disp;
+                        }
+                        disparity_histogram_plane[n]++;
+                        if (disparity_histogram_plane[n] > hist_max)
+                            hist_max = disparity_histogram_plane[n];
+                    }
+                }
+            }
+        }
+
+        // find peak disparities along a range of positions
+        hist_thresh = hist_max / 4;
+        hist_mean = 0;
+        hist_mean_hits = 0;
+        disp2 = 0;
+        min_ww = w2;
+        max_ww = 0;
+        for (ww = 0; ww < (int) w2; ww++) {
+            mass = 0;
+            disp2 = 0;
+            for (d = 1; d < max_disparity_pixels - 1; d++) {
+                n = ww * max_disparity_pixels + d;
+                if (disparity_histogram_plane[n] > hist_thresh) {
+                    m = disparity_histogram_plane[n]
+                        + disparity_histogram_plane[n - 1]
+                        + disparity_histogram_plane[n + 1];
+                    mass += m;
+                    disp2 += m * d;
+                }
+                if (disparity_histogram_plane[n] > 0) {
+                    hist_mean += disparity_histogram_plane[n];
+                    hist_mean_hits++;
+                }
+            }
+            if (mass > 0) {
+                // peak disparity at this position
+                disparity_plane_fit[ww] = disp2 / mass;
+                if (min_ww == (int) w2)
+                    min_ww = ww;
+                if (ww > max_ww)
+                    max_ww = ww;
+            }
+        }
+        if (hist_mean_hits > 0)
+            hist_mean /= hist_mean_hits;
+
+        // fit a line to the disparity values
+        ww0 = 0;
+        ww1 = 0;
+        disp0 = 0;
+        disp1 = 0;
+        int hits0, hits1;
+        if (max_ww >= min_ww) {
+            cww = min_ww + ((max_ww - min_ww) / 2);
+            hits0 = 0;
+            hits1 = 0;
+            for (ww = min_ww; ww <= max_ww; ww++) {
+                if (ww < cww) {
+                    disp0 += disparity_plane_fit[ww];
+                    ww0 += ww;
+                    hits0++;
+                } else {
+                    disp1 += disparity_plane_fit[ww];
+                    ww1 += ww;
+                    hits1++;
+                }
+            }
+            if (hits0 > 0) {
+                disp0 /= hits0;
+                ww0 /= hits0;
+            }
+            if (hits1 > 0) {
+                disp1 /= hits1;
+                ww1 /= hits1;
+            }
+        }
+        dww = ww1 - ww0;
+        ddisp = disp1 - disp0;
+
+        // find inliers
+        int plane_tx = img_width;
+        int plane_ty = 0;
+        int plane_bx = img_height;
+        int plane_by = 0;
+        int plane_disp0 = 0;
+        int plane_disp1 = 0;
+        int hits = 0;
+        for (i = no_of_matches-1; i >= 0; i--) {
+            x = matches[i * 4 + 1];
+            if ((x > tx) && (x < bx)) {
+                y = matches[i * 4 + 2];
+                if ((y > ty) && (y < by)) {
+                    disp = matches[i * 4 + 3];
+
+                    if (horizontal != 0) {
+                        ww = (x - tx) / STACKED_STEREO_FILTER_SAMPLING;
+                        n = ww * max_disparity_pixels + disp;
+                    } else {
+                        ww = (y - ty) / STACKED_STEREO_FILTER_SAMPLING;
+                        n = ww * max_disparity_pixels + disp;
+                    }
+
+                    if (dww > 0) {
+                        disp2 = disp0 + ((ww - ww0) * ddisp / dww);
+                    }
+                    else {
+                        disp2 = disp0;
+                    }
+
+                    // check how far this is from the plane
+                    if (((int)disp >= disp2-2) &&
+                            ((int)disp <= disp2+2) &&
+                            ((int)disp < max_disparity_pixels)) {
+
+                        // inlier detected - this disparity lies along the plane
+                        valid_quadrants[i]++;
+                        hits++;
+
+                        // keep note of the bounds of the plane
+                        if (x < plane_tx) {
+                            plane_tx = x;
+                            if (horizontal == 1) plane_disp0 = disp2;
+                        }
+                        if (y < plane_ty) {
+                            plane_ty = y;
+                            if (horizontal == 0) plane_disp0 = disp2;
+                        }
+                        if (x > plane_bx) {
+                            plane_bx = x;
+                            if (horizontal == 1) plane_disp1 = disp2;
+                        }
+                        if (y > plane_by) {
+                            plane_by = y;
+                            if (horizontal == 0) plane_disp1 = disp2;
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    // deal with the outliers
+    int victims = 0;
+    for (i = no_of_matches-1; i >= 0; i--) {
+        if (valid_quadrants[i] == 0) {
+
+            // by default set outlier probability to zero,
+            // which eliminates it from further inquiries
+            matches[i * 4] = 0;
+            victims++;
+        }
+    }
+    printf("victims %d/%d\n",victims,no_of_matches);
 }

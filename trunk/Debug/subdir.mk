@@ -14,7 +14,8 @@ CPP_SRCS += \
 ../motion.cpp \
 ../omni.cpp \
 ../polynomial.cpp \
-../stackedstereo.cpp 
+../stackedstereo.cpp \
+../stackedstereodense.cpp 
 
 OBJS += \
 ./anyoption.o \
@@ -27,7 +28,8 @@ OBJS += \
 ./motion.o \
 ./omni.o \
 ./polynomial.o \
-./stackedstereo.o 
+./stackedstereo.o \
+./stackedstereodense.o 
 
 CPP_DEPS += \
 ./anyoption.d \
@@ -40,7 +42,8 @@ CPP_DEPS += \
 ./motion.d \
 ./omni.d \
 ./polynomial.d \
-./stackedstereo.d 
+./stackedstereo.d \
+./stackedstereodense.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
