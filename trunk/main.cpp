@@ -8,6 +8,8 @@
 		libgstreamer-plugins-base0.10-dev
 		libgst-dev
 
+	sudo apt-get install libcv4 libhighgui4 libcvaux4 libcv-dev libcvaux-dev libhighgui-dev libgstreamer-plugins-base0.10-dev libgst-dev
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -727,7 +729,7 @@ int main(int argc, char* argv[]) {
   int* disparity_space = NULL;
   int* disparity_map = NULL;
   int disparity_map_x_step = 8;
-  int disparity_map_correlation_radius = 10;
+  int disparity_map_correlation_radius = 6;
   int disparity_map_smoothing_radius = 8;
   if (show_stereo_disparity) {
       //stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
