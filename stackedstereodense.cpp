@@ -31,16 +31,6 @@ void stackedstereodense::get_sums(
 	sums[0] = 0;
 	for (int y = 1; y < img_height; y++, n += stride) {
 		sums[y] = sums[y-1] + unwarped_img[n] + unwarped_img[n+1] + unwarped_img[n+2];
-		if (x > 2) {
-			sums[y] += unwarped_img[n-3] + unwarped_img[n-2] + unwarped_img[n-1];
-			sums[y] += unwarped_img[n-6] + unwarped_img[n-5] + unwarped_img[n-4];
-			sums[y] += unwarped_img[n-9] + unwarped_img[n-8] + unwarped_img[n-7];
-		}
-		if (x < img_width - 3) {
-			sums[y] += unwarped_img[n+3] + unwarped_img[n+4] + unwarped_img[n+5];
-			sums[y] += unwarped_img[n+6] + unwarped_img[n+7] + unwarped_img[n+8];
-			sums[y] += unwarped_img[n+9] + unwarped_img[n+10] + unwarped_img[n+11];
-		}
 	}
 }
 
@@ -90,7 +80,6 @@ void stackedstereodense::update_disparity_map(
 	int sums[img_height];
 
 	int img_width2 = img_width / x_step;
-	int x2 = 0;
 	int stride = img_width*3;
 	int correlation_radius_inner = correlation_radius/2;
 
@@ -98,11 +87,12 @@ void stackedstereodense::update_disparity_map(
 	while (disparity < max_disparity) {
 
 		// insert correlation values into the buffer
+		int x2 = 0;
 		for (int x = 0; x < img_width; x += x_step, x2++) {
 
 			get_sums(unwarped_img, img_width, img_height, x, sums);
 
-			int y_lower = half_height;
+			int y_lower = half_height + offset_y;
 			for (int y_upper = disparity; y_upper < half_height - offset_y; y_upper++, y_lower++) {
 
 				int upper_response =
@@ -113,7 +103,7 @@ void stackedstereodense::update_disparity_map(
 					(sums[y_lower + correlation_radius] - sums[y_lower - correlation_radius]) -
 					((sums[y_lower + correlation_radius_inner] - sums[y_lower - correlation_radius_inner])*4);
 
-				disparity_space[y_upper*img_width2 + x2] = -abs(upper_response - lower_response);
+			    disparity_space[y_upper*img_width2 + x2] = 10000 - abs(upper_response - lower_response);
 			}
 		}
 
@@ -138,7 +128,7 @@ void stackedstereodense::update_disparity_map(
 			}
 		}
 
-		disparity += 10;// + ((max_disparity - disparity)/8);
+		disparity += 1 + ((max_disparity - disparity)/8);
 	}
 }
 
