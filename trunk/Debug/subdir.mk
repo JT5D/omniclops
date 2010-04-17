@@ -15,7 +15,8 @@ CPP_SRCS += \
 ../omni.cpp \
 ../polynomial.cpp \
 ../stackedstereo.cpp \
-../stackedstereodense.cpp 
+../stackedstereodense.cpp \
+../stereodense.cpp 
 
 OBJS += \
 ./anyoption.o \
@@ -29,7 +30,8 @@ OBJS += \
 ./omni.o \
 ./polynomial.o \
 ./stackedstereo.o \
-./stackedstereodense.o 
+./stackedstereodense.o \
+./stereodense.o 
 
 CPP_DEPS += \
 ./anyoption.d \
@@ -43,14 +45,15 @@ CPP_DEPS += \
 ./omni.d \
 ./polynomial.d \
 ./stackedstereo.d \
-./stackedstereodense.d 
+./stackedstereodense.d \
+./stereodense.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
 %.o: ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -I/usr/include/opencv -I/usr/include/gstreamer-0.10 -O0 -g3 -Wall -c -fmessage-length=0 -lcam -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs gstreamer-0.10` -L/usr/lib -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs glib-2.0` `pkg-config --cflags --libs gstreamer-plugins-base-0.10` -lgstapp-0.10 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
+	g++ -I/usr/include/opencv -I/usr/include/gstreamer-0.10 -O0 -g3 -Wall -c -fopenmp -fmessage-length=0 -lcam -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs gstreamer-0.10` -L/usr/lib -lcv -lcxcore -lcvaux -lhighgui `pkg-config --cflags --libs glib-2.0` `pkg-config --cflags --libs gstreamer-plugins-base-0.10` -lgstapp-0.10 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

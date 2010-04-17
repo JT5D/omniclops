@@ -1,5 +1,5 @@
 /*
-    Dense stereo correspondence for stacked omnidirectional vision
+    Stacked omnidirectional dense stereo correspondence
     Copyright (C) 2010 Bob Mottram
     fuzzgun@gmail.com
 
@@ -19,139 +19,236 @@
 
 #include "stackedstereodense.h"
 
-void stackedstereodense::get_sums(
-	unsigned char* unwarped_img,
+/*!
+ * \brief converts the unwarped image to a set of conventional stereo images.  This means that a conventional stereo algorithm can be applied.
+ * \param img_unwarped unwarped colour image
+ * \param img_width_unwarped width of the unwarped image
+ * \param img_height_unwarped height of the unwarped image
+ * \param offset_y_unwarped vertical calibration adjustment
+ * \param img_left left image for conventional stereo
+ * \param img_right right image for conventional stereo
+ * \param img_width width of the conventional stereo image
+ * \param img_height height of the conventional stereo image
+ */
+void stackedstereodense::unwarped_to_stereo_images(
+	unsigned char* img_unwarped,
+	int img_width_unwarped,
+	int img_height_unwarped,
+	int offset_y_unwarped,
+	unsigned char* img_left,
+	unsigned char* img_right,
 	int img_width,
-	int img_height,
-	int x,
-	int* sums)
+	int img_height)
 {
-	int n = x*3;
-	int stride = img_width*3;
-	sums[0] = 0;
-	for (int y = 1; y < img_height; y++, n += stride) {
-		sums[y] = sums[y-1] + unwarped_img[n] + unwarped_img[n+1] + unwarped_img[n+2];
+	int lower_mirror_ty = img_height_unwarped/2;
+	int lower_mirror_by = img_height_unwarped;
+	int upper_mirror_ty = offset_y_unwarped;
+	int upper_mirror_by = (img_height_unwarped/2) + offset_y_unwarped;
+	if (upper_mirror_by > img_height_unwarped/2) {
+		upper_mirror_by = img_height_unwarped/2;
 	}
+
+    for (int mirror = 0; mirror < 2; mirror++) {
+
+    	unsigned char* img = img_left;
+    	int ty = lower_mirror_ty;
+    	int by = lower_mirror_by;
+    	if (mirror > 0) {
+    		img = img_right;
+        	ty = upper_mirror_ty;
+        	by = upper_mirror_by;
+    	}
+
+    	for (int y = 0; y < img_height; y++) {
+    		int xx = y * (img_width_unwarped-1) / img_height;
+        	for (int x = 0; x < img_width; x++) {
+        		int yy = by - (x * (by - ty) / img_width);
+        		if ((yy > 0) && (yy < img_height_unwarped)) {
+					int n = (y*img_width + x)*3;
+					int n_unwarped = (yy*img_width_unwarped + xx)*3;
+					img[n] = img_unwarped[n_unwarped];
+					img[n+1] = img_unwarped[n_unwarped+1];
+					img[n+2] = img_unwarped[n_unwarped+2];
+        		}
+        	}
+    	}
+
+    }
 }
 
-int stackedstereodense::get_correlation(
-	unsigned char* magnitude,
-	int y0,
-	int y1,
-	int patch_radius)
+/*!
+ * \brief show the disparity map
+ * \param img_unwarped unwarped colour image data
+ * \param img_width_unwarped width of the unwarped image
+ * \param img_height_unwarped height of the unwarped image
+ * \param img_width width of the image
+ * \param img_height height of the image
+ * \param vertical_sampling vertical sampling rate
+ * \param smoothing_radius radius in pixels used for disparity space smoothing
+ * \param max_disparity_percent maximum disparity as a percentage of image width
+ * \param disparity_map disparity map to be shown
+ */
+void stackedstereodense::show(
+	unsigned char* img_unwarped,
+	int img_width_unwarped,
+	int img_height_unwarped,
+	int img_width,
+	int img_height,
+	int vertical_sampling,
+	int smoothing_radius,
+	int max_disparity_percent,
+	unsigned int *disparity_map)
 {
-	int correlation = 0;
-	int anticorrelation = 0;
+	int max_disparity_pixels = img_width * max_disparity_percent * STEREO_DENSE_SUB_PIXEL / 100;
+	int width2 = img_width/smoothing_radius;
 
-	for (int y = -patch_radius; y <= patch_radius; y++) {
-		int yy0 = y0 + y;
-		int yy1 = y1 + y;
+	memset((void*)img_unwarped, '\0', img_width_unwarped*img_height_unwarped*3);
 
-		if ((magnitude[yy0] != 0) && (magnitude[yy1] != 0)) {
-			int diff = magnitude[yy0] - magnitude[yy1];
-			if (diff < 0) diff = -diff;
-			correlation += 255 - diff;
+	for (int y = 0; y < img_height; y++) {
+		int x_unwarped = y * img_width_unwarped / img_height;
+		int n2 = ((y/vertical_sampling)/STEREO_DENSE_SMOOTH_VERTICAL)*width2;
+		for (int x = 0; x < img_width; x++) {
+			int y_unwarped = x * img_height_unwarped / (img_width*2);
 
-			//diff = magnitude[yy0] - (255 - magnitude[yy1]);
-			//if (diff < 0) diff = -diff;
-			//anticorrelation += 255 - diff;
+			int n = ((y_unwarped*img_width) + x_unwarped)*3;
+			int n2b = (n2 + (x/smoothing_radius))*2;
+            unsigned char disparity = (unsigned char)((int)disparity_map[n2b + 1] * 255  / max_disparity_pixels);
+            img_unwarped[n] = disparity;
+            img_unwarped[n+1] = disparity;
+            img_unwarped[n+2] = disparity;
 		}
 	}
-
-   	correlation = correlation - anticorrelation;
-
-	return(correlation);
 }
 
+/*!
+ * \brief creates a disparity map for stacked omnidirectional stereo vision
+ * \param img_unwarped unwarped colour image
+ * \param img_width_unwarped width of the unwarped image
+ * \param img_height_unwarped height of the unwarped image
+ * \param offset_y_unwarped vertical calibration adjustment
+ * \param img_left left image for conventional stereo
+ * \param img_right right image for conventional stereo
+ * \param img_width width of the conventional stereo image
+ * \param img_height height of the conventional stereo image
+ * \param offset_x calibration offset x
+ * \param offset_y calibration offset y
+ * \param vertical_sampling vertical sampling rate - we don't need every row
+ * \param max_disparity_percent maximum disparity as a percentage of image width
+ * \param correlation_radius radius in pixels used for patch matching
+ * \param smoothing_radius radius in pixels used for smoothing of the disparity space
+ * \param disparity_step step size for sampling different disparities
+ * \param disparity_threshold_percent a threshold applied to the disparity map
+ * \param despeckle optionally apply despeckling to clean up the disparity map
+ * \param disparity_space array used for the disparity space
+ * \param disparity_map returned disparity map
+ */
 void stackedstereodense::update_disparity_map(
-	unsigned char* unwarped_img,
+	unsigned char* img_unwarped,
+	int img_width_unwarped,
+	int img_height_unwarped,
+	int offset_y_unwarped,
+	unsigned char* img_left,
+	unsigned char* img_right,
 	int img_width,
 	int img_height,
+	int offset_x,
 	int offset_y,
-	int x_step,
+	int vertical_sampling,
 	int max_disparity_percent,
 	int correlation_radius,
 	int smoothing_radius,
-	int *disparity_space,
-	int *disparity_map)
+	int disparity_step,
+	int disparity_threshold_percent,
+	bool despeckle,
+	int cross_checking_threshold,
+	unsigned int *disparity_space,
+	unsigned int *disparity_map)
 {
-	int half_height = img_height/2;
-	int max_disparity = max_disparity_percent * half_height / 100;
-	int sums[img_height];
+	// create a pair of conventional stereo images
+	unwarped_to_stereo_images(
+		img_unwarped,
+		img_width_unwarped,
+		img_height_unwarped,
+		offset_y_unwarped,
+		img_left,
+		img_right,
+		img_width,
+		img_height);
 
-	int img_width2 = img_width / x_step;
-	int stride = img_width*3;
-	int correlation_radius_inner = correlation_radius/2;
+	// create the disparity map
+	stereodense::update_disparity_map(
+		img_left,
+		img_right,
+		img_width,
+		img_height,
+		offset_x,
+		offset_y,
+		vertical_sampling,
+		max_disparity_percent,
+		correlation_radius,
+		smoothing_radius,
+		disparity_step,
+		disparity_threshold_percent,
+		despeckle,
+		cross_checking_threshold,
+		disparity_space,
+		disparity_map);
 
-	int disparity = 0;
-	while (disparity < max_disparity) {
-
-		// insert correlation values into the buffer
-		int x2 = 0;
-		for (int x = 0; x < img_width; x += x_step, x2++) {
-
-			get_sums(unwarped_img, img_width, img_height, x, sums);
-
-			int y_lower = half_height + offset_y;
-			for (int y_upper = disparity; y_upper < half_height - offset_y; y_upper++, y_lower++) {
-
-				int upper_response =
-					(sums[y_upper + correlation_radius] - sums[y_upper - correlation_radius]) -
-					((sums[y_upper + correlation_radius_inner] - sums[y_upper - correlation_radius_inner])*4);
-
-				int lower_response =
-					(sums[y_lower + correlation_radius] - sums[y_lower - correlation_radius]) -
-					((sums[y_lower + correlation_radius_inner] - sums[y_lower - correlation_radius_inner])*4);
-
-			    disparity_space[y_upper*img_width2 + x2] = 10000 - abs(upper_response - lower_response);
-			}
-		}
-
-		// update the disparity map
-		int smoothing_radius_horizontal = 1;
-		for (int x = smoothing_radius_horizontal; x <= img_width2 - smoothing_radius_horizontal; x++) {
-			for (int y = smoothing_radius; y < half_height - smoothing_radius; y++) {
-
-				int area_correlation = 0;
-				for (int y2 = y - smoothing_radius; y2 < y + smoothing_radius; y2++) {
-				    for (x2 = x - smoothing_radius_horizontal; x2 <= x + smoothing_radius_horizontal; x2++) {
-					    int n2 = y2*img_width2 + x2;
-					    area_correlation += disparity_space[n2];
-				    }
-				}
-
-				int n = (y*img_width2 + x)*2;
-				if ((area_correlation > disparity_map[n]) || (disparity == 0)) {
-					disparity_map[n] = area_correlation;
-					disparity_map[n + 1] = disparity;
-				}
-			}
-		}
-
-		disparity += 1 + ((max_disparity - disparity)/8);
-	}
 }
 
-void stackedstereodense::show(
-	unsigned char* img,
+/*!
+ * \brief shows the strereo images
+ * \param img_unwarped unwarped colour image
+ * \param img_width_unwarped width of the unwarped image
+ * \param img_height_unwarped height of the unwarped image
+ * \param offset_y_unwarped vertical calibration adjustment
+ * \param img_left left image for conventional stereo
+ * \param img_right right image for conventional stereo
+ * \param img_width width of the conventional stereo image
+ * \param img_height height of the conventional stereo image
+ */
+void stackedstereodense::show_stereo_images(
+	unsigned char* img_unwarped,
+	int img_width_unwarped,
+	int img_height_unwarped,
+	int offset_y_unwarped,
+	unsigned char* img_left,
+	unsigned char* img_right,
 	int img_width,
-	int img_height,
-	int x_step,
-	int max_disparity_percent,
-	int *disparity_map)
+	int img_height)
 {
-	int half_height = img_height/2;
-	int img_width2 = img_width / x_step;
-	int max_disparity = half_height * max_disparity_percent / 100;
+	// create a pair of conventional stereo images
+	unwarped_to_stereo_images(
+		img_unwarped,
+		img_width_unwarped,
+		img_height_unwarped,
+		offset_y_unwarped,
+		img_left,
+		img_right,
+		img_width,
+		img_height);
 
-	for (int y = 0; y < half_height; y++) {
-		for (int x = 0; x < img_width; x++) {
-			int n = ((y*img_width) + x)*3;
-			int n2 = ((y*img_width2) + (x/x_step))*2;
-            int disparity = disparity_map[n2 + 1] * 255  / max_disparity;
-            img[n] = (unsigned char)disparity;
-            img[n+1] = (unsigned char)disparity;
-            img[n+2] = (unsigned char)disparity;
-		}
-	}
+	memset((void*)img_unwarped, '\0', img_width_unwarped*img_height_unwarped*3);
+
+    for (int mirror = 0; mirror < 2; mirror++) {
+    	int tx = 0;
+    	int bx = img_width_unwarped/2;
+    	unsigned char* img = img_left;
+    	if (mirror > 0) {
+    		tx = bx;
+    		bx = img_width_unwarped;
+    		img = img_right;
+    	}
+    	for (int y = 0; y < img_height_unwarped; y++) {
+    		int yy = y * (img_height-1) / img_height_unwarped;
+    		for (int x = tx; x < bx; x++) {
+    			int xx = (x - tx) * (img_width-1) / (bx - tx);
+    			int n = (yy*img_width + xx)*3;
+    			int n_unwarped = (y*img_width_unwarped + x)*3;
+    			img_unwarped[n_unwarped] = img[n];
+    			img_unwarped[n_unwarped + 1] = img[n + 1];
+    			img_unwarped[n_unwarped + 2] = img[n + 2];
+    		}
+    	}
+    }
 }

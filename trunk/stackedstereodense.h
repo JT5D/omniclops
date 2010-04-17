@@ -1,5 +1,5 @@
 /*
-    Dense stereo correspondence for stacked omnidirectional vision
+    Stacked omnidirectional dense stereo correspondence
     Copyright (C) 2010 Bob Mottram
     fuzzgun@gmail.com
 
@@ -26,48 +26,66 @@
 #include <math.h>
 #include <fstream>
 #include <vector>
-#include "drawing.h"
-#include "omni.h"
+#include "stereodense.h"
+
 using namespace std;
 
 class stackedstereodense {
-protected:
-
-	static void get_sums(
-		unsigned char* unwarped_img,
-		int img_width,
-		int img_height,
-		int x,
-		int* sums);
-
-	static int get_correlation(
-		unsigned char* magnitude,
-		int y0,
-		int y1,
-		int patch_radius);
-
 public:
 
-	static void update_disparity_map(
-		unsigned char* unwarped_img,
+	static void unwarped_to_stereo_images(
+		unsigned char* img_unwarped,
+		int img_width_unwarped,
+		int img_height_unwarped,
+		int offset_y_unwarped,
+		unsigned char* img_left,
+		unsigned char* img_right,
+		int img_width,
+		int img_height);
+
+	static void show(
+		unsigned char* img_unwarped,
+		int img_width_unwarped,
+		int img_height_unwarped,
 		int img_width,
 		int img_height,
+		int vertical_sampling,
+		int smoothing_radius,
+		int max_disparity_percent,
+		unsigned int *disparity_map);
+
+	static void show_stereo_images(
+		unsigned char* img_unwarped,
+		int img_width_unwarped,
+		int img_height_unwarped,
+		int offset_y_unwarped,
+		unsigned char* img_left,
+		unsigned char* img_right,
+		int img_width,
+		int img_height);
+
+	static void update_disparity_map(
+		unsigned char* img_unwarped,
+		int img_width_unwarped,
+		int img_height_unwarped,
+		int offset_y_unwarped,
+		unsigned char* img_left,
+		unsigned char* img_right,
+		int img_width,
+		int img_height,
+		int offset_x,
 		int offset_y,
-		int x_step,
+		int vertical_sampling,
 		int max_disparity_percent,
 		int correlation_radius,
 		int smoothing_radius,
-		int *disparity_space,
-		int *disparity_map);
-
-	static void show(
-		unsigned char* img,
-		int img_width,
-		int img_height,
-		int x_step,
-		int max_disparity_percent,
-		int *disparity_map);
+		int disparity_step,
+		int disparity_threshold_percent,
+		bool despeckle,
+		int cross_checking_threshold,
+		unsigned int *disparity_space,
+		unsigned int *disparity_map);
 
 };
 
-#endif /* STACKEDSTEREODENSE_H_ */
+#endif
