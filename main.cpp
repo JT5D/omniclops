@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --inner                 Inner radius as a percentage of the image width");
   opt->addUsage( "     --features              Show edge features");
   opt->addUsage( "     --circles               Show circles for inner radius");
-  opt->addUsage( "     --stereodisparity       Show stereo disparity for stacked mirror configuration");
+  opt->addUsage( "     --disparitymap          Show stereo disparity map for stacked mirror configuration");
   opt->addUsage( "     --lines                 Show radial lines");
   opt->addUsage( "     --groundfeatures        Show edge features on the ground plane");
   opt->addUsage( "     --ground                Show ground plane");
@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
   opt->setFlag(  "groundfeatures" );
   opt->setFlag(  "ground" );
   opt->setFlag(  "harrisfeatures" );
-  opt->setFlag(  "stereodisparity" );
+  opt->setFlag(  "disparitymap" );
   opt->setFlag(  "circles" );
   opt->setFlag(  "motion" );
   opt->setFlag(  "calibrate" );
@@ -401,7 +401,7 @@ int main(int argc, char* argv[]) {
 	  unwarp_features = false;
   }
 
-  if( opt->getFlag( "stereodisparity" ) ) {
+  if( opt->getFlag( "disparitymap" ) ) {
 	  show_motion = false;
 	  show_stereo_disparity = true;
   	  show_harris_corners = false;
@@ -726,6 +726,12 @@ int main(int argc, char* argv[]) {
   int *disparity_plane_fit = NULL;
   unsigned char *valid_quadrants = NULL;
 
+  // stereo image pair
+  int stereo_img_width = hh/2;
+  int stereo_img_height = ww;
+  unsigned char* stereo_img_left = NULL;
+  unsigned char* stereo_img_right = NULL;
+
   int* disparity_space = NULL;
   int* disparity_map = NULL;
   int disparity_map_x_step = 8;
@@ -737,8 +743,8 @@ int main(int argc, char* argv[]) {
       //disparity_plane_fit = new int[ww / STACKED_STEREO_FILTER_SAMPLING];
       //valid_quadrants = new unsigned char[MAX_STACKED_STEREO_MATCHES];
 
-	  disparity_space = new int[(ww/disparity_map_x_step)*(hh/2)];
-	  disparity_map = new int[(ww/disparity_map_x_step)*(hh/2)*2];
+	  disparity_space = new int[(stereo_img_width/disparity_map_x_step)*(stereo_img_height/2)];
+	  disparity_map = new int[(stereo_img_width/disparity_map_x_step)*(stereo_img_height/2)*2];
   }
 
   while(1){
@@ -914,44 +920,26 @@ int main(int argc, char* argv[]) {
 
 	if (show_stereo_disparity) {
 
-		int max_disparity_percent = 100;
-		stackedstereodense::update_disparity_map(
+		int max_disparity_percent = 50;
+
+		if (stereo_img_left == NULL) {
+			stereo_img_left = new unsigned char[stereo_img_width*stereo_img_height*3];
+			stereo_img_right = new unsigned char[stereo_img_width*stereo_img_height*3];
+		}
+
+		stackedstereodense::unwarped_to_stereo_images(
 			l_,ww,hh,
 			stereo_offset_y,
-			disparity_map_x_step,
-			max_disparity_percent,
-			disparity_map_correlation_radius,
-			disparity_map_smoothing_radius,
-			disparity_space,
-			disparity_map);
+			stereo_img_left,
+			stereo_img_right,
+			stereo_img_width, stereo_img_height);
 
-		stackedstereodense::show(
+		stackedstereodense::show_stereo_images(
 			l_,ww,hh,
-			disparity_map_x_step,
-			max_disparity_percent,
-			disparity_map);
-
-		/*
-		int desired_no_of_matches = 800;
-		int no_of_matches = stackedstereo::stereo_match(
-			l_, ww, hh,
 			stereo_offset_y,
-			4,
-			max_disparity_percent,
-			desired_no_of_matches,
-			valid_quadrants,
-			disparity_histogram_plane,
-			disparity_plane_fit,
-			stereo_matches);
-
-		stackedstereo::show_matched_features(
-			l_, ww, hh,
-			max_disparity_percent,
-			no_of_matches,
-			stereo_matches);
-	    */
-
-		//printf("matches %d\n", no_of_matches);
+			stereo_img_left,
+			stereo_img_right,
+			stereo_img_width, stereo_img_height);
 	}
 
 	if (show_motion) {
@@ -1116,6 +1104,10 @@ int main(int argc, char* argv[]) {
   if (disparity_histogram_plane != NULL) delete[] disparity_histogram_plane;
   if (disparity_plane_fit != NULL) delete[] disparity_plane_fit;
   if (valid_quadrants != NULL) delete[] valid_quadrants;
+  if (stereo_img_left != NULL) {
+	  delete[] stereo_img_left;
+	  delete[] stereo_img_right;
+  }
 
   return 0;
 }
