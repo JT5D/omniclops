@@ -919,7 +919,29 @@ int main(int argc, char* argv[]) {
 
 	if (show_stereo_disparity) {
 
+		const int step_x = 10;
 		int max_disparity_percent = 50;
+		int desired_no_of_matches = 400;
+
+		if (stereo_matches == NULL) {
+			stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
+		}
+
+		int no_of_matches = stackedstereo::stereo_match(
+			l_,ww,hh,
+			stereo_offset_y,
+			step_x,
+			max_disparity_percent,
+			desired_no_of_matches,
+			stereo_matches);
+
+		stackedstereo::show_matched_features(
+			l_,ww,hh,
+			max_disparity_percent,
+			no_of_matches,
+			stereo_matches);
+
+/*
 		int lower_mirror_height = hh/2;
 		int upper_mirror_height	= hh/2;
 		int calibration_offset_x = 0;
@@ -927,9 +949,9 @@ int main(int argc, char* argv[]) {
 		int vertical_sampling = 2;
 		int correlation_radius = 1;
 		int smoothing_radius = 2;
-		int disparity_step = 8;
+		int disparity_step = 4;
 		int disparity_threshold_percent = 0;
-		int cross_checking_threshold = 30;
+		int cross_checking_threshold = 60;
 
 		const int MAX_IMAGE_WIDTH = 480;
 		const int MAX_IMAGE_HEIGHT = 640;
@@ -944,7 +966,7 @@ int main(int argc, char* argv[]) {
 			disparity_space = new unsigned int[disparity_space_length];
 			disparity_map = new unsigned int[disparity_map_length];
 		}
-/*
+
 		stackedstereodense::unwarped_to_stereo_images(
 			l_,ww,hh,
 			stereo_offset_y,
@@ -962,7 +984,6 @@ int main(int argc, char* argv[]) {
 			stereo_img_width, stereo_img_height,
 		    lower_mirror_height,
 		    upper_mirror_height);
-*/
 
 		stackedstereodense::update_disparity_map(
 			l_, ww, hh,
@@ -996,7 +1017,7 @@ int main(int argc, char* argv[]) {
 			smoothing_radius,
 			max_disparity_percent,
 			disparity_map);
-
+*/
 
 	}
 
