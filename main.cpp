@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
   float upper_mirror_outer_radius = 40;
 
   // vertical scaling factor for upper mirror image in unwarped image
-  float upper_mirror_scale_percent = 168;
+  float upper_mirror_scale_percent = 200;
 
   // vertical alignment offset for stacked omnidirectional stereo
   int stereo_offset_y = 41;
@@ -218,6 +218,7 @@ int main(int argc, char* argv[]) {
   opt->addUsage( "     --fov                   Field of view in degrees");
   opt->addUsage( "     --calibrate             Calibrate a stacked dual mirror system");
   opt->addUsage( "     --offsety <y>           Y axis offset in pixels for stacked dual mirror system");
+  opt->addUsage( "     --verticalcrop <v>      Vertical percentage crop made to upper mirror image to remove visible camera base");
   opt->addUsage( "     --anaglyph              Stereo anaglyph from a stacked dual mirror system");
   opt->addUsage( " -f  --fps                   Frames per second");
   opt->addUsage( " -s  --skip                  Skip this number of frames");
@@ -266,6 +267,7 @@ int main(int argc, char* argv[]) {
   opt->setOption(  "harris" );
   opt->setOption(  "scaleupper");
   opt->setOption(  "offsety");
+  opt->setOption(  "verticalcrop");
 
   opt->setFlag(  "help" );
   opt->setFlag(  "flip" );
@@ -551,8 +553,16 @@ int main(int argc, char* argv[]) {
   }
 
   // Y axis offset in pixels within the unwarped image for dual mirror system
+  // This is used for image alignment in anaglyphs
   if( opt->getValue( "offsety" ) != NULL  ) {
 	  stereo_offset_y = atoi(opt->getValue("offsety"));
+  }
+
+  // Cropping adjustment made to the upper mirror vertical in the unwarped image
+  // This is intended to remove the area around the camera base
+  float upper_mirror_vertical_adjust_percent = 30;
+  if( opt->getValue( "verticalcrop" ) != NULL  ) {
+	  upper_mirror_vertical_adjust_percent = atof(opt->getValue("verticalcrop"));
   }
 
   // outer radius as a percent of image width
@@ -713,6 +723,7 @@ int main(int argc, char* argv[]) {
 		outer_radius,
 		upper_mirror_outer_radius,
 		upper_mirror_scale_percent,
+		upper_mirror_vertical_adjust_percent,
 		camera_height,
 		ww, hh);
 
@@ -732,20 +743,8 @@ int main(int argc, char* argv[]) {
   unsigned char* stereo_img_left = NULL;
   unsigned char* stereo_img_right = NULL;
 
-  int* disparity_space = NULL;
-  int* disparity_map = NULL;
-  int disparity_map_x_step = 8;
-  int disparity_map_correlation_radius = 6;
-  int disparity_map_smoothing_radius = 8;
-  if (show_stereo_disparity) {
-      //stereo_matches = new int[MAX_STACKED_STEREO_MATCHES*4];
-      //disparity_histogram_plane = new int[(ww / STACKED_STEREO_FILTER_SAMPLING) * (ww / 2)];
-      //disparity_plane_fit = new int[ww / STACKED_STEREO_FILTER_SAMPLING];
-      //valid_quadrants = new unsigned char[MAX_STACKED_STEREO_MATCHES];
-
-	  disparity_space = new int[(stereo_img_width/disparity_map_x_step)*(stereo_img_height/2)];
-	  disparity_map = new int[(stereo_img_width/disparity_map_x_step)*(stereo_img_height/2)*2];
-  }
+  unsigned int* disparity_space = NULL;
+  unsigned int* disparity_map = NULL;
 
   while(1){
 
@@ -921,25 +920,84 @@ int main(int argc, char* argv[]) {
 	if (show_stereo_disparity) {
 
 		int max_disparity_percent = 50;
+		int lower_mirror_height = hh/2;
+		int upper_mirror_height	= hh/2;
+		int calibration_offset_x = 0;
+		int calibration_offset_y = 0;
+		int vertical_sampling = 2;
+		int correlation_radius = 1;
+		int smoothing_radius = 2;
+		int disparity_step = 8;
+		int disparity_threshold_percent = 0;
+		int cross_checking_threshold = 30;
+
+		const int MAX_IMAGE_WIDTH = 480;
+		const int MAX_IMAGE_HEIGHT = 640;
+
+		int max_disparity_pixels = MAX_IMAGE_WIDTH * max_disparity_percent / 100;
+		int disparity_space_length = (max_disparity_pixels / disparity_step) * MAX_IMAGE_WIDTH * ((MAX_IMAGE_HEIGHT/vertical_sampling)/smoothing_radius) * 2;
+		int disparity_map_length = MAX_IMAGE_WIDTH * ((MAX_IMAGE_HEIGHT/vertical_sampling)/smoothing_radius) * 2;
 
 		if (stereo_img_left == NULL) {
 			stereo_img_left = new unsigned char[stereo_img_width*stereo_img_height*3];
 			stereo_img_right = new unsigned char[stereo_img_width*stereo_img_height*3];
+			disparity_space = new unsigned int[disparity_space_length];
+			disparity_map = new unsigned int[disparity_map_length];
 		}
-
+/*
 		stackedstereodense::unwarped_to_stereo_images(
 			l_,ww,hh,
 			stereo_offset_y,
 			stereo_img_left,
 			stereo_img_right,
-			stereo_img_width, stereo_img_height);
+			stereo_img_width, stereo_img_height,
+			lower_mirror_height,
+			upper_mirror_height);
 
 		stackedstereodense::show_stereo_images(
 			l_,ww,hh,
 			stereo_offset_y,
 			stereo_img_left,
 			stereo_img_right,
-			stereo_img_width, stereo_img_height);
+			stereo_img_width, stereo_img_height,
+		    lower_mirror_height,
+		    upper_mirror_height);
+*/
+
+		stackedstereodense::update_disparity_map(
+			l_, ww, hh,
+			lower_mirror_height,
+			upper_mirror_height,
+			stereo_offset_y,
+			stereo_img_left,
+			stereo_img_right,
+			stereo_img_width,
+			stereo_img_height,
+			calibration_offset_x,
+			calibration_offset_y,
+			vertical_sampling,
+			max_disparity_percent,
+			correlation_radius,
+			smoothing_radius,
+			disparity_step,
+			disparity_threshold_percent,
+			true,
+			cross_checking_threshold,
+			disparity_space,
+			disparity_map);
+
+		stackedstereodense::show(
+			l_,
+			ww,
+			hh,
+			stereo_img_width,
+			stereo_img_height,
+			vertical_sampling,
+			smoothing_radius,
+			max_disparity_percent,
+			disparity_map);
+
+
 	}
 
 	if (show_motion) {

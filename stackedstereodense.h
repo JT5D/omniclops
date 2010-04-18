@@ -41,7 +41,9 @@ public:
 		unsigned char* img_left,
 		unsigned char* img_right,
 		int img_width,
-		int img_height);
+		int img_height,
+		int lower_mirror_height,
+		int upper_mirror_height);
 
 	static void show(
 		unsigned char* img_unwarped,
@@ -62,12 +64,16 @@ public:
 		unsigned char* img_left,
 		unsigned char* img_right,
 		int img_width,
-		int img_height);
+		int img_height,
+	    int lower_mirror_height,
+	    int upper_mirror_height);
 
 	static void update_disparity_map(
 		unsigned char* img_unwarped,
 		int img_width_unwarped,
 		int img_height_unwarped,
+		int lower_mirror_height,
+		int upper_mirror_height,
 		int offset_y_unwarped,
 		unsigned char* img_left,
 		unsigned char* img_right,

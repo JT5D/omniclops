@@ -1155,6 +1155,7 @@ void omni::create_ray_map(
 	float outer_radius_percent,
 	float upper_mirror_outer_radius_percent,
 	float upper_mirror_scale_percent,
+	float upper_mirror_vertical_adjust_percent,
 	float camera_height_mm,
     int img_width,
     int img_height)
@@ -1167,7 +1168,7 @@ void omni::create_ray_map(
 			focal_length,
 			0,
 			outer_radius_percent,
-			0,
+			0, 0,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1185,6 +1186,7 @@ void omni::create_ray_map(
 			0,
 			upper_mirror_outer_radius_percent,
 			upper_mirror_scale_percent,
+			upper_mirror_vertical_adjust_percent,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1198,6 +1200,7 @@ void omni::create_ray_map(
 			inner_radius_percent,
 			outer_radius_percent,
 			upper_mirror_scale_percent,
+			upper_mirror_vertical_adjust_percent,
 			camera_height_mm,
 			img_width,
 			img_height,
@@ -1286,6 +1289,7 @@ void omni::create_ray_map(
 	float inner_radius_percent,
 	float outer_radius_percent,
 	float upper_mirror_scale_percent,
+	float upper_mirror_vertical_adjust_percent,
 	float camera_height_mm,
     int img_width,
     int img_height,
@@ -1386,7 +1390,7 @@ void omni::create_ray_map(
 			}
     	}
     	else {
-    		// a scale factor applied to teh upper mirror
+    		// a scale factor applied to the upper mirror
     		// which equalises the vertical scale for the two mirrors
     		if (upper_mirror_scale_percent <= 0) upper_mirror_scale_percent = 1.5f;
     		float upper_mirror_scale = upper_mirror_scale_percent / 100.0f;
@@ -1413,7 +1417,7 @@ void omni::create_ray_map(
 					raw_radius = calibration_radius[idx];
 					raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 					raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-					n = (((img_height/2)-(int)((y/4.0f)*upper_mirror_scale)) * img_width)+x;
+					n = (((img_height/2)-(int)((y/2)*upper_mirror_scale) + (int)(img_height*upper_mirror_vertical_adjust_percent/100)) * img_width)+x;
 					n2 = (raw_y * img_width)+raw_x;
 					if ((n2 > -1) && (n2 < pixels) &&
 						(n > -1) && (n < pixels)) {
@@ -1427,8 +1431,8 @@ void omni::create_ray_map(
 						raw_radius = calibration_radius[idx];
 						raw_x = (img_width/2) + (int)(raw_radius * sin_ang);
 						raw_y = (img_height/2) + (int)(raw_radius * cos_ang);
-						n = ((img_height-1-(int)((y/2)+(img_height*25/100))) * img_width)+x;
-						n2 = (raw_y * img_width)+raw_x;
+						n = ((img_height-1-(int)y) * img_width) + x;
+						n2 = raw_y*img_width + raw_x;
 						if ((n2 > -1) && (n2 < pixels) &&
 							(n > -1) && (n < pixels)) {
 							unwarp_lookup[n] = n2;
