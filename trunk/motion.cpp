@@ -148,7 +148,7 @@ void motion::load(string filename)
 {
 	FILE *file = fopen(filename.c_str(), "rb");
 	if (file != NULL) {
-		fread(prev, sizeof(unsigned char), MOTION_IMAGE_WIDTH*MOTION_IMAGE_HEIGHT, file);
+		int retval = fread(prev, sizeof(unsigned char), MOTION_IMAGE_WIDTH*MOTION_IMAGE_HEIGHT, file);
 		fclose(file);
 		first_update = false;
 	}

@@ -79,9 +79,6 @@ public:
     int* unwarp_lookup;
     int* unwarp_lookup_reverse;
 
-    /* stereo vision */
-    int* stereo_lookup;
-
     int epipole;
 
     static bool intersection(
@@ -108,8 +105,14 @@ public:
     	int img_width,
     	int img_height,
     	int bytes_per_pixel,
+	int centre_x,
+	int centre_y,
     	float outer_radius_percent,
-    	float inner_radius_percent);
+    	float inner_radius_percent,
+	float inner_aspect,
+	int no_of_struts,
+	float * strut_angles,
+	float strut_width);
 
     bool FileExists(std::string filename);
     void save_edges(std::string filename, int no_of_feats_vertical, int no_of_feats_horizontal);
@@ -130,34 +133,23 @@ public:
 
     unsigned char* img_buffer;
 
-    void create_stereo_lookup(
-        int img_width,
-        int img_height);
-
     void create_ray_map(
-    	float mirror_diameter,
-    	float dist_to_mirror,
-    	float focal_length,
+    	float mirror_diameter_mm,
+    	float dist_to_mirror_mm,
+    	float focal_length_mm,
     	float inner_radius_percent,
     	float outer_radius_percent,
-    	float upper_mirror_scale_percent,
-    	float upper_mirror_vertical_adjust_percent,
-    	float camera_height,
+    	float camera_height_mm,
         int img_width,
         int img_height,
         bool clear_map,
-        bool update_unwarp,
-        bool unwarp_stacked);
+        bool update_unwarp);
     void create_ray_map(
-    	float mirror_diameter,
-    	float dist_to_mirror,
-    	float dist_to_upper_mirror,
-    	float focal_length,
+    	float mirror_diameter_mm,
+    	float dist_to_mirror_mm,
+    	float focal_length_mm,
     	float inner_radius_percent,
     	float outer_radius_percent,
-    	float upper_mirror_outer_radius_percent,
-    	float upper_mirror_scale_percent,
-    	float upper_mirror_vertical_adjust_percent,
     	float camera_height_mm,
         int img_width,
         int img_height);
