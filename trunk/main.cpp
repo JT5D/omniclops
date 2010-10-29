@@ -32,6 +32,12 @@
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappbuffer.h>
 #include <sstream>
+#include <cstdio>
+#include <cstdlib>
+
+#include <image.h>
+#include <misc.h>
+#include "segment-image.h"
 
 #include "anyoption.h"
 #include "drawing.h"
@@ -40,6 +46,7 @@
 #include "libcam.h"
 #include "harris.h"
 #include "motion.h"
+
 
 #define VERSION 0.3
 
@@ -159,10 +166,10 @@ int main(int argc, char* argv[]) {
 	bool show_motion = false;
 
 	// outer mirror radius as a percentage of image width
-	float outer_radius = 90;
+	float outer_radius = 93;
 
 	// inner mirror radius as a percentage of image width
-	float inner_radius = 30;
+	float inner_radius = 32;
 
 	// Port to start streaming from - second video will be on this + 1
 	int start_port = 5000;
@@ -179,6 +186,7 @@ int main(int argc, char* argv[]) {
 	opt->addUsage( "     --dev                   Video device to be used");
 	opt->addUsage( " -w  --width                 Image width in pixels");
 	opt->addUsage( " -h  --height                Image height in pixels");
+	opt->addUsage( "     --segment               Segmentation");
 	opt->addUsage( "     --centrex               Location of the centre of the camera in pixels");
 	opt->addUsage( "     --centrey               Location of the centre of the camera in pixels");
 	opt->addUsage( "     --strut1                Angle of strut 1 in degrees");
@@ -272,6 +280,7 @@ int main(int argc, char* argv[]) {
 	opt->setFlag(  "harrisfeatures" );
 	opt->setFlag(  "circles" );
 	opt->setFlag(  "motion" );
+	opt->setFlag(  "segment" );
 	opt->setFlag(  "calibrate" );
 
 	opt->processCommandArgs(argc, argv);
@@ -306,6 +315,12 @@ int main(int argc, char* argv[]) {
 	{
 		flip_image = true;
 	}
+
+	bool segmentation = false;
+	if( opt->getFlag( "segment" ) )
+	{
+		segmentation = true;
+  	}
 
 	bool show_circles = false;
 	if( opt->getFlag( "circles" ) )
@@ -544,7 +559,7 @@ int main(int argc, char* argv[]) {
 		skip_frames = atoi(opt->getValue("skip"));
 	}
 
-	float centre_x = ww/2;
+	float centre_x = 300*ww/640;
 	if( opt->getValue( "centrex" ) != NULL  ) {
 		centre_x = atof(opt->getValue("centrex"));
 	}
@@ -554,14 +569,16 @@ int main(int argc, char* argv[]) {
 		centre_y = atof(opt->getValue("centrey"));
 	}
 
-	float inner_aspect=0;
+	float inner_aspect=0.5;
 	if( opt->getValue( "inneraspect" ) != NULL  ) {
 		inner_aspect = atof(opt->getValue("inneraspect"));
 	}
 
 
-	float strut_width=0, strut_angles[3];
-	int no_of_struts=0;
+	float strut_width=20, strut_angles[3];
+	int no_of_struts=2;
+	strut_angles[0] = 90;
+	strut_angles[1] = 270;
 	if( opt->getValue( "strut1" ) != NULL  ) {
 		strut_angles[0] = atof(opt->getValue("strut1"));
 		no_of_struts=1;
@@ -671,6 +688,8 @@ int main(int argc, char* argv[]) {
 	vector<int> harris_features;
 
 	motion* motion_detector = new motion();
+
+	image<rgb> *segmented_image = NULL;
 
 	while(1){
 
@@ -862,6 +881,17 @@ int main(int argc, char* argv[]) {
 			drawing::drawCircle(l_,ww,hh,ww/2,hh/2,outer_radius_pixels, 0,255,0, 0);
 		}
 
+		if (segmentation) {
+			if (segmented_image == NULL) {
+				segmented_image = new image<rgb>(ww, hh);
+			}
+			memcpy((void*)imPtr(segmented_image, 0, 0),(void*)l_,ww*hh*3);
+			int num_ccs;
+			image<rgb> *seg = segment_image(segmented_image, 0.5, 200, 20, &num_ccs); 
+			memcpy((void*)l_,(void*)imPtr(seg, 0, 0),ww*hh*3);
+			delete seg;
+		}
+
 		if (show_harris_corners) {
 			// detect corners
 			int minimum_separation = 8;
@@ -956,6 +986,7 @@ int main(int argc, char* argv[]) {
 	delete lcam;
 	delete corners;
 	delete motion_detector;
+	if (segmented_image != NULL) delete segmented_image;
 
 	return 0;
 }
